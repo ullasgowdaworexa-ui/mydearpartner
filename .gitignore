@@ -1,0 +1,32 @@
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Python cache & test files
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node cache & dependencies
+node_modules/
+dist/
+build/
+.vite/
+.next/
+test-results/
+*.tsbuildinfo
+
+# Media & private storage
+media/private/
+logs/
+*.log
+
+# OS & Editor generated files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

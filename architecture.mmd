@@ -1,0 +1,55 @@
+flowchart LR
+    Browser[Browser\nNext pages + in-memory access JWT]
+
+    subgraph Edge[Application edge]
+        Nginx[Nginx reverse proxy]
+    end
+
+    subgraph Frontend[Frontend]
+        Next[Next.js App Router\nport 3000]
+        BFF[Same-origin BFF\n/api/proxy/*]
+    end
+
+    subgraph Backend[Django services]
+        Daphne[Django REST + Channels\nDaphne port 8000]
+        Migrate[One-shot migrate + collectstatic]
+        Worker[Celery worker]
+        Beat[Celery beat]
+    end
+
+    subgraph State[Data and storage]
+        Postgres[(PostgreSQL)]
+        Redis[(Redis cache + broker)]
+        Static[Collected static]
+        PublicMedia[Public media]
+        PrivateMedia[Private media / S3]
+    end
+
+    subgraph External[Optional external services]
+        Razorpay[Razorpay\nwhen PAYMENT_MODE=online]
+        Email[Email provider]
+        SMS[SMS / OTP provider]
+    end
+
+    Browser -->|/, /_next/*| Nginx
+    Browser -->|same-origin API| Nginx
+    Browser -->|/ws/* subprotocol auth| Nginx
+    Nginx -->|pages and assets| Next
+    Next --> BFF
+    BFF -->|server-to-server /api/v1/*| Daphne
+    Nginx -->|/api/*, /django-admin/*| Daphne
+    Nginx -->|WebSocket upgrade| Daphne
+    Nginx -->|/static/*| Static
+    Nginx -->|public /media/*| PublicMedia
+
+    Migrate --> Postgres
+    Migrate --> Static
+    Daphne --> Postgres
+    Daphne --> Redis
+    Daphne --> PrivateMedia
+    Worker --> Redis
+    Worker --> Postgres
+    Beat --> Redis
+    Daphne --> Razorpay
+    Daphne --> Email
+    Daphne --> SMS

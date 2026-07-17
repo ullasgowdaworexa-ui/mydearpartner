@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@import "../legacy/index.css";
+@import "../legacy/components/Footer.css";
+@import "../legacy/components/home/HeroSection.css";
+@import "../legacy/pages/HomePage.css";
+@import "../legacy/pages/AuthPages.css";
+@import "../legacy/pages/MembershipPage.css";
+@import "../legacy/pages/SuccessStoriesPage.css";
+@import "../legacy/pages/SupportPage.css";
+@import "../legacy/pages/AdminPage.css";
+
+@source "../legacy/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "./**/*.{ts,tsx}";
+
+:root {
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-heading: "Manrope", system-ui, sans-serif;
+}
+
+html { min-width: 320px; }
+body { font-family: var(--font-body); }
+h1, h2, h3, h4, h5, h6, .font-display, .lc-logo-text { font-family: var(--font-heading) !important; }
+
+:focus-visible {
+  outline: 3px solid var(--gold-400);
+  outline-offset: 3px;
+}
+
+.route-skeleton {
+  min-height: 100vh;
+  padding: 7rem clamp(1rem, 4vw, 4rem) 3rem;
+  background: var(--cream-100);
+}
+.route-skeleton-inner { width: min(1180px, 100%); margin: auto; }
+.skeleton-line, .skeleton-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #eadfd4;
+}
+.skeleton-line::after, .skeleton-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
+  animation: skeleton-shimmer 1.4s infinite;
+}
+.skeleton-line { height: 1rem; margin-bottom: .8rem; }
+.skeleton-card { min-height: 14rem; }
+@keyframes skeleton-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skeleton-line::after, .skeleton-card::after { animation: none; } }
+
+.content-shell { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; }
+.public-content-page { min-height: 70vh; padding: 8rem 0 5rem; }
+.public-content-page h1 { color: var(--plum-800); font-size: clamp(2.4rem, 7vw, 5.6rem); }
+.public-content-page > .content-shell > p { color: var(--muted); max-width: 720px; font-size: 1.05rem; line-height: 1.8; }
+.content-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
+.content-card { padding: 1.5rem; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.content-card h2, .content-card h3 { color: var(--plum-800); margin-bottom: .7rem; }
+.content-card p { color: var(--muted); line-height: 1.7; }
+.content-card a { color: var(--rose-500); font-weight: 800; }
+
+.auth-utility-page { min-height: calc(100vh - 72px); padding: 7rem 1rem 4rem; display: grid; place-items: center; background: radial-gradient(circle at top, #fff, var(--cream-100)); }
+.auth-utility-card { width: min(520px, 100%); padding: clamp(1.5rem, 5vw, 2.5rem); border: 1px solid var(--line); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow-lg); }
+.auth-utility-card h1 { color: var(--plum-800); font-size: 2rem; }
+.auth-utility-card p { color: var(--muted); line-height: 1.6; }
+.auth-utility-card label { display: grid; gap: .45rem; margin: 1rem 0; color: var(--ink); font-weight: 700; }
+.auth-utility-card input { width: 100%; padding: .85rem 1rem; }
+.auth-utility-card button { width: 100%; min-height: 48px; border: 0; border-radius: 999px; color: white; background: var(--grad-brand); font-weight: 800; cursor: pointer; }
+.auth-utility-card button:disabled { opacity: .55; cursor: wait; }
+.form-message { margin-top: 1rem; padding: .8rem 1rem; border-radius: 12px; background: var(--gold-100); color: var(--plum-800); }
+.form-message.error { background: #fee2e2; color: #991b1b; }
+
+.portal-loading { min-height: 60vh; display: grid; place-items: center; padding: 2rem; color: var(--muted); }

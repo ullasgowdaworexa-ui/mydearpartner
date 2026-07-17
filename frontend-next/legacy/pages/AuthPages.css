@@ -1,0 +1,586 @@
+/* ═══════════════════════════════════════════════════════════════════
+   MY DEAR PARTNER 2026 — AUTH PAGES (Login & Register)
+   Premium glass-card two-panel design
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Layout shell ───────────────────────────────────────────────── */
+.neo-auth {
+  --wine: #7c304b;
+  --plum: #2b101d;
+  --gold: #d9b36c;
+  min-height: 100svh;
+  padding: 120px 24px 60px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(ellipse 130% 90% at 20% 0%, #f0ddd4 0%, #f7f1e8 45%, #ecdde8 100%);
+  color: #281820;
+}
+
+/* Background ambient blobs */
+.neo-auth-glow {
+  position: absolute; border-radius: 50%;
+  pointer-events: none; animation: blobFloat 9s ease-in-out infinite;
+}
+.neo-auth-glow.glow-one {
+  width: 600px; height: 600px; left: -260px; top: -200px;
+  background: radial-gradient(circle, rgba(217,179,108,.2) 0%, transparent 65%);
+  filter: blur(40px);
+}
+.neo-auth-glow.glow-two {
+  width: 700px; height: 700px; right: -320px; bottom: -280px;
+  background: radial-gradient(circle, rgba(124,48,75,.18) 0%, transparent 65%);
+  filter: blur(50px); animation-delay: -4.5s;
+}
+.neo-auth-glow.glow-three {
+  width: 300px; height: 300px; right: 15%; top: 30%;
+  background: radial-gradient(circle, rgba(142,61,88,.1) 0%, transparent 65%);
+  filter: blur(30px); animation-delay: -2s;
+}
+@keyframes blobFloat {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.04); }
+  66% { transform: translate(-20px, 15px) scale(.97); }
+}
+
+/* ── Card shell ─────────────────────────────────────────────────── */
+.neo-auth-shell {
+  position: relative; z-index: 1;
+  width: min(100%, 1060px); min-height: 660px;
+  display: grid; grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,.85);
+  background: white;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.6),
+    0 24px 80px rgba(43,16,29,.18),
+    0 60px 120px rgba(43,16,29,.1);
+}
+
+/* ── Story panel (left dark side) ──────────────────────────────── */
+.neo-auth-story {
+  position: relative; min-width: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 44px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #52203b 0%, #2b101d 45%, #130510 100%);
+  color: white;
+}
+/* Subtle grid texture */
+.neo-auth-story::after {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.6), transparent 75%);
+}
+/* Radial ambient glow inside */
+.neo-auth-story::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(circle at 75% 18%, rgba(217,179,108,.22) 0%, transparent 50%);
+}
+
+/* Story top logo bar */
+.neo-story-top {
+  position: relative; z-index: 2;
+  display: flex; align-items: center; gap: 12px;
+}
+.neo-story-top > span {
+  width: 38px; height: 38px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: linear-gradient(145deg, #e8c26a, #b77d2e);
+  box-shadow: 0 10px 28px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.5);
+  color: #48152a;
+}
+.neo-story-top > span svg { width: 18px; fill: currentColor; }
+.neo-story-top b {
+  font-family: 'Manrope', sans-serif;
+  font-size: 18px; font-weight: 800; letter-spacing: -.04em;
+}
+
+/* 3D ring scene */
+.neo-ring-scene {
+  position: relative; height: 260px;
+  perspective: 900px; transform-style: preserve-3d;
+  z-index: 2;
+}
+.neo-ring {
+  position: absolute; top: 28px;
+  width: 160px; height: 160px;
+  border-width: 14px; border-style: solid; border-color: #d8aa58;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 18px rgba(255,255,255,.35),
+    inset -10px -10px 20px rgba(52,20,0,.3),
+    0 30px 50px rgba(0,0,0,.35),
+    0 0 0 2px rgba(255,255,255,.07);
+  animation: neoRingSway 8s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+.neo-ring::after {
+  content: ''; position: absolute; inset: -10px;
+  border-top: 3px solid rgba(255,255,255,.65);
+  border-radius: 50%; filter: blur(.3px);
+}
+.neo-ring.ring-one { left: calc(50% - 130px); transform: rotateY(58deg) rotateZ(-12deg); }
+.neo-ring.ring-two {
+  left: calc(50% - 30px); border-color: #f2e7cf;
+  animation-delay: -4s; transform: rotateY(-55deg) rotateZ(13deg);
+}
+.neo-ring-scene > span {
+  position: absolute; width: 240px; height: 28px;
+  left: 50%; bottom: 32px; transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(0,0,0,.5), transparent 68%);
+  filter: blur(5px);
+}
+.neo-ring-scene i {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #fff4ce, #c48d38 55%, #512604);
+  box-shadow: 0 12px 26px rgba(0,0,0,.28);
+  animation: orbFloat 6s ease-in-out infinite;
+}
+.orb-a { width: 20px; height: 20px; right: 16%; top: 25%; animation-delay: 0s; }
+.orb-b { width: 10px; height: 10px; left: 16%; bottom: 27%; animation-delay: -3s; }
+@keyframes neoRingSway { 0%,100%{filter:brightness(1)} 50%{margin-top:-12px;filter:brightness(1.18)} }
+@keyframes orbFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
+
+/* Story copy */
+.neo-story-copy { position: relative; z-index: 2; }
+.neo-eyebrow {
+  margin: 0;
+  color: #dcb96f; font-size: 9px; font-weight: 800;
+  letter-spacing: .2em; text-transform: uppercase;
+}
+.neo-eyebrow.dark { color: #8e3d58; }
+.neo-story-copy h2 {
+  margin: 16px 0 18px;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(2.4rem, 3.4vw, 3.8rem);
+  font-weight: 800; line-height: .97; letter-spacing: -.065em;
+}
+.neo-story-copy h2 em,
+.neo-register-aside h1 em {
+  display: block; margin-top: 4px;
+  color: #e5c37f;
+  font-family: 'DM Serif Display', serif;
+  font-weight: 400; font-style: italic;
+  letter-spacing: -.04em;
+}
+.neo-story-copy > p:not(.neo-eyebrow),
+.neo-register-aside > div > p:last-child {
+  max-width: 400px; color: rgba(255,255,255,.55);
+  font-size: 13px; line-height: 1.75;
+}
+
+/* Trust pills row */
+.neo-trust-row {
+  display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px;
+}
+.neo-trust-row span {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 99px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.09);
+  color: rgba(255,255,255,.72);
+  font-size: 9px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.neo-trust-row svg { width: 13px; color: #e2bd70; }
+
+/* ── Form panel (right) ─────────────────────────────────────────── */
+.neo-auth-form-panel {
+  min-width: 0; display: flex; flex-direction: column;
+  padding: 40px 48px 44px;
+  background: linear-gradient(160deg, #fffdf9 0%, #fff 60%, #fdf6ef 100%);
+}
+
+.neo-form-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 22px;
+  border-bottom: 1px solid rgba(43,16,29,.1);
+}
+.neo-form-top p {
+  margin: 0; color: #a0878f; font-size: 9px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .15em;
+}
+.neo-form-top a {
+  font-size: 11px; font-weight: 700; color: #6e5b63; text-decoration: none;
+  transition: color .2s;
+}
+.neo-form-top a:hover { color: #7c304b; }
+.neo-form-top a strong { color: #7c304b; }
+
+/* Form content */
+.neo-form-content {
+  width: 100%; max-width: 400px; margin: auto;
+  display: flex; flex-direction: column;
+}
+
+.neo-icon-box {
+  width: 50px; height: 50px; border-radius: 16px;
+  display: grid; place-items: center; margin-bottom: 22px;
+  background: linear-gradient(145deg, #f1dfb7, #d0a253);
+  box-shadow: inset 0 1px rgba(255,255,255,.65), 0 14px 30px rgba(106,62,24,.18);
+  color: #4c172b;
+}
+.neo-icon-box svg { width: 22px; }
+
+.neo-form-content h1,
+.neo-register-step h2 {
+  margin: 10px 0 12px;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(2.1rem, 3.2vw, 3.2rem);
+  font-weight: 800; line-height: .97; letter-spacing: -.065em;
+}
+
+.neo-form-lead {
+  margin: 0 0 26px; color: #7a6870; font-size: 13px; line-height: 1.7;
+}
+.neo-form-lead strong { color: #542034; }
+
+/* Field label */
+.neo-field-label,
+.neo-field-grid label > span {
+  display: block; margin: 0 0 7px;
+  color: #5e4a52; font-size: 9px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+
+/* Phone input */
+.neo-phone-input {
+  height: 56px; display: flex; align-items: center;
+  margin-bottom: 14px; border-radius: 14px; overflow: hidden;
+  border: 1.5px solid rgba(43,16,29,.14);
+  background: white;
+  box-shadow: 0 4px 16px rgba(43,16,29,.06);
+  transition: border-color .22s, box-shadow .22s;
+}
+.neo-phone-input:focus-within {
+  border-color: #8e3d58;
+  box-shadow: 0 0 0 4px rgba(142,61,88,.1), 0 4px 16px rgba(43,16,29,.06);
+}
+.neo-phone-input > span {
+  display: grid; place-items: center; align-self: stretch;
+  padding: 0 16px;
+  border-right: 1px solid rgba(43,16,29,.1);
+  background: #faf4ed; color: #69253e;
+  font-size: 13px; font-weight: 800;
+  white-space: nowrap;
+}
+.neo-phone-input input {
+  min-width: 0; flex: 1; height: 100%;
+  padding: 0 16px !important;
+  border: 0 !important; background: transparent !important;
+  box-shadow: none !important; outline: 0;
+  font: 600 15px 'DM Sans'; color: #2b101d;
+  border-radius: 0 !important;
+}
+.neo-phone-input input::placeholder { color: #b2a1a7; font-weight: 500; }
+
+/* OTP input */
+.neo-otp-input {
+  width: 100%; height: 62px;
+  margin-bottom: 14px; padding: 0 20px;
+  border: 1.5px solid rgba(43,16,29,.14) !important;
+  border-radius: 14px !important;
+  background: white !important;
+  box-shadow: 0 4px 16px rgba(43,16,29,.06) !important;
+  color: #42162a;
+  font: 800 24px 'Manrope';
+  letter-spacing: .28em; text-align: center;
+  outline: none; transition: border-color .22s, box-shadow .22s;
+}
+.neo-otp-input:focus {
+  border-color: #8e3d58 !important;
+  box-shadow: 0 0 0 4px rgba(142,61,88,.1) !important;
+}
+
+/* CTA buttons */
+.neo-primary-button,
+.neo-secondary-button {
+  min-height: 52px; display: inline-flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 0 22px; border: 0; border-radius: 14px;
+  font: 800 13px 'DM Sans'; cursor: pointer; transition: .25s;
+}
+.neo-primary-button {
+  width: 100%;
+  background: linear-gradient(135deg, #8e3d58 0%, #4f192f 100%);
+  box-shadow: 0 16px 36px rgba(79,25,47,.25); color: white;
+}
+.neo-primary-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 22px 44px rgba(79,25,47,.32); }
+.neo-primary-button:disabled { cursor: not-allowed; opacity: .45; }
+.neo-primary-button svg, .neo-secondary-button svg { width: 16px; }
+.neo-secondary-button {
+  border: 1.5px solid rgba(43,16,29,.15);
+  background: white; color: #6a5660;
+}
+.neo-secondary-button:hover { border-color: #8e3d58; background: rgba(142,61,88,.05); }
+
+/* Error */
+.neo-error {
+  margin: 0 0 14px; padding: 11px 14px;
+  border-left: 3px solid #a8344f; border-radius: 0 10px 10px 0;
+  background: rgba(168,52,79,.06); color: #8a233c;
+  font-size: 12px; line-height: 1.6;
+}
+
+/* Back link */
+.neo-back-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 24px; padding: 0; border: 0; background: none;
+  color: #7b6870; font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .09em; cursor: pointer;
+  transition: color .2s;
+}
+.neo-back-link:hover { color: #8e3d58; }
+.neo-back-link svg { width: 14px; }
+
+/* Developer OTP box */
+.neo-dev-otp {
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: 10px;
+  margin: 0 0 22px; padding: 14px 16px;
+  border: 1.5px solid rgba(193,142,54,.35); border-radius: 14px;
+  background: linear-gradient(135deg, #fffae8, #f8e6ba);
+  color: #704a1e;
+}
+.neo-dev-otp svg { width: 17px; }
+.neo-dev-otp span { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.neo-dev-otp strong { font-family: 'Manrope'; font-size: 18px; font-weight: 800; letter-spacing: .18em; }
+
+/* Security note */
+.neo-security-note {
+  display: flex; align-items: flex-start; gap: 11px;
+  margin-top: 26px; padding-top: 20px;
+  border-top: 1px solid rgba(43,16,29,.1);
+  color: #8b7980; font-size: 11px; line-height: 1.6;
+}
+.neo-security-note svg { width: 16px; flex: 0 0 auto; color: #8e3d58; margin-top: 1px; }
+.neo-security-note strong { color: #51303e; }
+
+/* Resend */
+.neo-resend {
+  width: 100%; margin-top: 16px;
+  border: 0; background: none;
+  color: #7c304b; font-size: 11px; font-weight: 800; cursor: pointer;
+  text-align: center; transition: color .2s;
+}
+.neo-resend:hover:not(:disabled) { color: #2b101d; }
+.neo-resend:disabled { color: #a9969d; cursor: default; }
+
+/* ── Register specific ──────────────────────────────────────────── */
+.neo-register-shell {
+  width: min(100%, 1180px); min-height: 700px;
+  grid-template-columns: .68fr 1.32fr;
+}
+.neo-register-aside {
+  position: relative; min-width: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 46px;
+  overflow: hidden;
+  background: radial-gradient(160deg at 72% 25%, #742944 0%, #421426 50%, #210a13 100%);
+  color: white;
+}
+.neo-register-aside::after {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, black, transparent 65%);
+}
+.neo-register-aside > div:nth-child(2) { position: relative; z-index: 2; }
+.neo-register-aside h1 {
+  margin: 18px 0 20px;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(2.6rem, 3.7vw, 4.4rem);
+  font-weight: 800; line-height: .97; letter-spacing: -.07em;
+}
+.neo-register-aside > div > p:last-child { max-width: 340px; }
+.neo-register-promises {
+  position: relative; z-index: 2; display: grid; gap: 12px;
+}
+.neo-register-promises span {
+  display: flex; align-items: center; gap: 10px;
+  color: rgba(255,255,255,.65); font-size: 11px; font-weight: 700;
+}
+.neo-register-promises svg { width: 15px; color: #d9b36c; }
+
+/* Orbit decoration */
+.neo-aside-orbit {
+  position: absolute; width: 540px; height: 230px;
+  right: -260px; top: 175px;
+  border: 1px solid rgba(217,179,108,.22); border-radius: 50%;
+  transform: rotate(-25deg);
+}
+.neo-aside-orbit::after {
+  content: ''; position: absolute; inset: 46px;
+  border: 1px solid rgba(255,255,255,.1); border-radius: 50%;
+}
+.neo-aside-orbit i {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #fff2c8, #bd8230 60%, #512604);
+}
+.neo-aside-orbit i:first-child { width: 18px; height: 18px; left: 18%; top: 4%; }
+.neo-aside-orbit i:last-child  { width: 10px; height: 10px; right: 16%; bottom: 7%; }
+
+/* Register form panel */
+.neo-register-form-panel {
+  min-width: 0; display: flex; flex-direction: column;
+  padding: 34px 44px 40px;
+  background: linear-gradient(160deg, #fffdf9 0%, #fff 60%, #fdf6ef 100%);
+}
+
+/* Multi-step stepper */
+.neo-stepper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  margin: 24px 0 32px;
+}
+.neo-stepper::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 16.6%;
+  right: 16.6%;
+  height: 2px;
+  background: #e5d8d4;
+  z-index: 1;
+}
+.neo-stepper-progress {
+  position: absolute;
+  top: 15px;
+  left: 16.6%;
+  height: 2px;
+  background: linear-gradient(to right, #8e3d58, #4f192f);
+  z-index: 2;
+  transition: width 0.3s ease;
+}
+.neo-stepper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  position: relative;
+  z-index: 3;
+  flex: 1;
+  text-align: center;
+}
+.neo-stepper-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #dfd1cd;
+  background: white;
+  font-size: 10px;
+  font-weight: 800;
+  color: #a18e95;
+  transition: background .25s, border-color .25s, color .25s;
+}
+.neo-stepper-circle svg { width: 14px; }
+.neo-stepper-label {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #a18e95;
+  transition: color .25s ease;
+}
+.neo-stepper-item.active .neo-stepper-circle,
+.neo-stepper-item.done .neo-stepper-circle {
+  border-color: #8e3d58;
+  background: linear-gradient(135deg, #8e3d58, #4f192f);
+  color: white;
+  box-shadow: 0 8px 18px rgba(142,61,88,.3);
+}
+.neo-stepper-item.active .neo-stepper-label,
+.neo-stepper-item.done .neo-stepper-label {
+  color: #7c304b;
+}
+
+/* Register step form */
+.neo-register-step { max-width: 700px; }
+.neo-register-step .neo-icon-box { width: 44px; height: 44px; margin-bottom: 14px; }
+.neo-register-step h2 { font-size: clamp(2rem, 2.75vw, 3rem); }
+.neo-field-grid {
+  display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px;
+}
+.neo-field-grid.two { grid-template-columns: 1fr 1fr; }
+.neo-field-grid label { min-width: 0; }
+.neo-field-grid input,
+.neo-field-grid select {
+  width: 100%; height: 50px; padding: 0 14px;
+  border: 1.5px solid rgba(43,16,29,.13) !important;
+  border-radius: 12px !important;
+  background: white !important;
+  box-shadow: 0 2px 10px rgba(43,16,29,.05) !important;
+  color: #371522; font: 600 14px 'DM Sans'; outline: none;
+  transition: border-color .22s, box-shadow .22s !important;
+}
+.neo-field-grid input:focus,
+.neo-field-grid select:focus {
+  border-color: #8e3d58 !important;
+  box-shadow: 0 0 0 4px rgba(142,61,88,.09) !important;
+}
+.neo-form-actions {
+  display: grid; grid-template-columns: auto 1fr; gap: 12px; margin-top: 6px;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .neo-auth { padding: 100px 16px 40px; place-items: start center; }
+  .neo-auth-shell, .neo-register-shell {
+    grid-template-columns: 1fr; max-width: 560px; min-height: 0;
+  }
+  .neo-auth-story { min-height: 290px; padding: 32px; }
+  .neo-ring-scene { position: absolute; width: 270px; height: 230px; right: -20px; top: 40px; opacity: .65; }
+  .neo-ring { width: 120px; height: 120px; border-width: 11px; }
+  .neo-ring.ring-one { left: 30px; }
+  .neo-ring.ring-two { left: 110px; }
+  .neo-story-copy { max-width: 360px; }
+  .neo-story-copy h2 { font-size: 2.4rem; }
+  .neo-trust-row { display: none; }
+  .neo-auth-form-panel { min-height: 500px; }
+  .neo-register-aside { min-height: 260px; padding: 34px; }
+  .neo-register-aside h1 { max-width: 480px; font-size: 2.9rem; }
+  .neo-register-aside > div > p:last-child,
+  .neo-register-promises { display: none; }
+  .neo-aside-orbit { right: -190px; top: 60px; }
+  .neo-register-form-panel { padding: 30px 34px 36px; }
+}
+
+@media (max-width: 560px) {
+  .neo-auth { padding: 90px 10px 28px; }
+  .neo-auth-shell, .neo-register-shell { border-radius: 20px; }
+  .neo-auth-story { min-height: 220px; padding: 24px 22px; }
+  .neo-story-top b { font-size: 15px; }
+  .neo-ring-scene { width: 190px; height: 168px; right: -32px; top: 46px; opacity: .5; }
+  .neo-ring { top: 22px; width: 82px; height: 82px; border-width: 8px; }
+  .neo-ring.ring-one { left: 22px; }
+  .neo-ring.ring-two { left: 78px; }
+  .neo-ring-scene > span { width: 130px; bottom: 18px; }
+  .neo-story-copy h2 { max-width: 260px; margin: 12px 0 0; font-size: 1.95rem; }
+  .neo-story-copy > p:not(.neo-eyebrow) { display: none; }
+  .neo-auth-form-panel, .neo-register-form-panel { padding: 24px 20px 28px; }
+  .neo-form-top { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .neo-form-top p { display: none; }
+  .neo-form-content { padding-top: 28px; }
+  .neo-form-content h1 { font-size: 2.4rem; }
+  .neo-icon-box { margin-bottom: 16px; }
+  .neo-register-aside { min-height: 200px; padding: 24px; }
+  .neo-register-aside h1 { margin-top: 12px; font-size: 2.2rem; }
+  .neo-stepper { margin: 18px 0 22px; }
+  .neo-stepper-label { display: none; }
+  .neo-stepper::before, .neo-stepper-progress { left: 15%; right: 15%; }
+  .neo-register-step h2 { font-size: 2.1rem; }
+  .neo-field-grid.two { grid-template-columns: 1fr; gap: 12px; }
+  .neo-field-grid { gap: 12px; }
+  .neo-form-actions { grid-template-columns: 1fr; }
+  .neo-form-actions .neo-secondary-button { order: 2; }
+  .neo-register-step .neo-primary-button { margin-top: 2px; }
+}
