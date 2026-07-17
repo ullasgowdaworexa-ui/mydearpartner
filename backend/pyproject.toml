@@ -1,0 +1,3 @@
+[tool.ruff.lint.per-file-ignores]
+"config/settings/*.py" = ["F403", "F405"]
+"config/routing.py" = ["E402"]

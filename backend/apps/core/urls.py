@@ -1,0 +1,313 @@
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from .role_views import (
+    AdminAccountDetailView,
+    AdminAccountListCreateView,
+    AdminActivityListView,
+    AdminBackupListView,
+    AdminAssigneeListView,
+    AdminBlogDetailView,
+    AdminBlogListCreateView,
+    AdminDashboardView,
+    AdminComplaintDetailView,
+    AdminComplaintListView,
+    AdminEnquiryDetailView,
+    AdminEnquiryListView,
+    AdminFAQDetailView,
+    AdminFAQListCreateView,
+    AdminRolePermissionView,
+    AdminUserPermissionsView,
+    AdminPermissionAuditLogListView,
+    AdminMembershipListView,
+    AdminMembershipRequestListView,
+    AdminMembershipRequestDetailView,
+    AdminDirectMembershipView,
+    AdminNotificationListCreateView,
+    AdminPaymentRefundView,
+    AdminProfileReportDetailView,
+    AdminProfileReportListView,
+    AdminSettingsView,
+    AdminSupportDashboardView,
+    AdminSupportReportsView,
+    AdminSuccessStoryDetailView,
+    AdminSuccessStoryListCreateView,
+    AdminTestimonialDetailView,
+    AdminTestimonialListCreateView,
+    AdminTicketDetailView,
+    AdminTicketListView,
+    AdminTransactionListView,
+    AdminUserActionView,
+    AdminUserListView,
+    AdminVerificationDetailView,
+    AdminVerificationListView,
+    AdministrativeNotificationListView,
+    CustomerSupportDashboardView,
+    CustomerSupportTicketDetailView,
+    CustomerSupportTicketListCreateView,
+    StaffDashboardView,
+    StaffVerificationDetailView,
+    StaffVerificationListView,
+    SuperAdminAdminListCreateView,
+    AdminMembershipPlanListCreateView,
+    AdminMembershipPlanDetailView,
+    
+    # New administrative and workflow views
+    SuperAdminDepartmentListCreateView,
+    SuperAdminDepartmentDetailView,
+    SuperAdminDesignationListCreateView,
+    SuperAdminDesignationDetailView,
+    SuperAdminAccountListCreateView,
+    SuperAdminAccountDetailView,
+    SuperAdminAccountActionView,
+    SuperAdminAccountActivityView,
+    AdminStaffListCreateView,
+    AdminStaffDetailView,
+    AdminStaffActionView,
+    AdminStaffActivityView,
+    AdminCustomerSupportListCreateView,
+    AdminCustomerSupportDetailView,
+    AdminCustomerSupportActionView,
+    AdminCustomerSupportActivityView,
+    AdminAssignWorkView,
+    AdminAssignTicketView,
+    AdminDuplicateFlagListView,
+    StaffWorkListView,
+    StaffWorkActionView,
+    AdminEligibleStaffListView,
+    AdminEligibleAgentsListView,
+    AdminBulkReassignTicketView,
+    AdminBulkReassignWorkView,
+    AdminQueueListView,
+    AdminAnalyticsDashboardView,
+    SpecializationViewSet,
+    QueueViewSet,
+    AssignmentStrategyViewSet,
+    EmployeeAvailabilityViewSet,
+    WorkloadViewSet,
+    AssignmentRuleViewSet,
+    AssignmentAuditViewSet,
+    DepartmentViewSet,
+    DesignationViewSet,
+    SuperAdminMembershipPlanListCreateView,
+    SuperAdminMembershipPlanDetailView,
+    SuperAdminMembershipPlanActivateView,
+    SuperAdminMembershipPlanDeactivateView,
+)
+from .views import (
+    BlogPostListView,
+    CompatibilityCheckView,
+    ContactEnquiryCreateView,
+    ConversationListView,
+    DatabaseHealthCheckView,
+    FAQListView,
+    HealthCheckView,
+    InterestDetailView,
+    InterestListCreateView,
+    MemberNotificationListView,
+    MemberNotificationReadView,
+    MemberNotificationUnreadCountView,
+    MemberSupportTicketDetailView,
+    MemberSupportTicketListView,
+    MembershipPlanListView,
+    MessageHistoryView,
+    PaymentHistoryView,
+    ProfileDetailView,
+    ProfileListView,
+    SecurePaymentCreateOrderView,
+    SecurePaymentVerifyView,
+    SecurePaymentWebhookView,
+    MemberComplaintListCreateView,
+    MemberProfileReportCreateView,
+    SuccessStoryListView,
+    SupportAttachmentDownloadView,
+    SupportCategoryListView,
+    TestimonialListView,
+    MemberMembershipRequestView,
+    MemberMembershipRequestHistoryView,
+    ProfileUnlockDailyUsageView,
+    ProfileUnlockHistoryView,
+    # New plan views
+    PublicMembershipPlanListView,
+    AdminMembershipPlanListCreateView,
+    AdminMembershipPlanDetailView,
+    AdminMembershipPlanToggleView,
+)
+
+
+urlpatterns = [
+    path('health/', HealthCheckView.as_view(), name='health_check'),
+    path('health/database/', DatabaseHealthCheckView.as_view(), name='database_health_check'),
+
+    # Public membership plans endpoint
+    path('membership-plans/', PublicMembershipPlanListView.as_view(), name='public_membership_plans'),
+    
+    # Keep legacy endpoint for backward compatibility
+    # path('membership-plans/', MembershipPlanListView.as_view(), name='membership_plans'),
+    path('success-stories/', SuccessStoryListView.as_view(), name='success_stories'),
+    path('testimonials/', TestimonialListView.as_view(), name='testimonials'),
+    path('blogposts/', BlogPostListView.as_view(), name='blog_posts'),
+    path('faqs/', FAQListView.as_view(), name='faqs'),
+    path('support/categories/', SupportCategoryListView.as_view(), name='support_categories'),
+    path('contact-enquiries/', ContactEnquiryCreateView.as_view(), name='contact_enquiry_create'),
+
+    path('profiles/', ProfileListView.as_view(), name='profiles_list'),
+    path('profiles/<uuid:pk>/', ProfileDetailView.as_view(), name='profile_detail'),
+    path('interests/', InterestListCreateView.as_view(), name='interests_list'),
+    path('interests/<uuid:pk>/', InterestDetailView.as_view(), name='interest_detail'),
+    path('matchmaking/compatibility/', CompatibilityCheckView.as_view(), name='compatibility_check'),
+    path('conversations/', ConversationListView.as_view(), name='conversations_list'),
+    path('conversations/<uuid:user_id>/messages/', MessageHistoryView.as_view(), name='conversation_messages'),
+
+    path('payments/create-order/', SecurePaymentCreateOrderView.as_view(), name='payment_create_order'),
+    path('payments/verify/', SecurePaymentVerifyView.as_view(), name='payment_verify'),
+    path('payments/history/', PaymentHistoryView.as_view(), name='payment_history'),
+    path('payments/webhook/', SecurePaymentWebhookView.as_view(), name='payment_webhook'),
+    path('complaints/', MemberComplaintListCreateView.as_view(), name='member_complaints'),
+    path('profile-reports/', MemberProfileReportCreateView.as_view(), name='member_profile_reports'),
+    path('memberships/request/', MemberMembershipRequestView.as_view(), name='member_membership_request'),
+    path('memberships/my-requests/', MemberMembershipRequestHistoryView.as_view(), name='member_membership_request_history'),
+
+    path('profile-unlocks/daily-usage/', ProfileUnlockDailyUsageView.as_view(), name='profile_unlock_daily_usage'),
+    path('profile-unlocks/history/', ProfileUnlockHistoryView.as_view(), name='profile_unlock_history'),
+
+    path('support/tickets/', MemberSupportTicketListView.as_view(), name='member_support_tickets'),
+    path('support/tickets/<uuid:pk>/', MemberSupportTicketDetailView.as_view(), name='member_support_ticket_detail'),
+    path('support/attachments/<uuid:attachment_id>/download/', SupportAttachmentDownloadView.as_view(), name='support_attachment_download'),
+    path('notifications/', MemberNotificationListView.as_view(), name='member_notifications'),
+    path('notifications/unread-count/', MemberNotificationUnreadCountView.as_view(), name='member_notifications_unread_count'),
+    path('notifications/<uuid:pk>/read/', MemberNotificationReadView.as_view(), name='member_notification_read'),
+    path('notifications/mark-all-read/', MemberNotificationReadView.as_view(), name='member_notifications_mark_all_read'),
+
+    # Super Admin owns Admin accounts and critical permission policy.
+    path('super-admin/dashboard/', AdminDashboardView.as_view(), name='super_admin_dashboard'),
+    path('super-admin/admins/', SuperAdminAdminListCreateView.as_view(), name='super_admin_admins'),
+    path('super-admin/admins/<uuid:account_id>/', AdminAccountDetailView.as_view(), name='super_admin_admin_detail'),
+    path('super-admin/roles/', AdminRolePermissionView.as_view(), name='super_admin_roles'),
+    path('super-admin/roles/<int:role_id>/', AdminRolePermissionView.as_view(), name='super_admin_role_detail'),
+    path('super-admin/activity/', AdminActivityListView.as_view(), name='super_admin_activity'),
+    
+    # Canonical Super Admin membership-plans routes
+    path('super-admin/membership-plans/', SuperAdminMembershipPlanListCreateView.as_view(), name='super_admin_membership_plans'),
+    path('super-admin/membership-plans/<uuid:plan_id>/', SuperAdminMembershipPlanDetailView.as_view(), name='super_admin_membership_plan_detail'),
+    path('super-admin/membership-plans/<uuid:plan_id>/activate/', SuperAdminMembershipPlanActivateView.as_view(), name='super_admin_membership_plan_activate'),
+    path('super-admin/membership-plans/<uuid:plan_id>/deactivate/', SuperAdminMembershipPlanDeactivateView.as_view(), name='super_admin_membership_plan_deactivate'),
+    
+    # New Super Admin Departments and Designations CRUD paths
+    path('super-admin/departments/', SuperAdminDepartmentListCreateView.as_view(), name='super_admin_departments'),
+    path('super-admin/departments/<uuid:pk>/', SuperAdminDepartmentDetailView.as_view(), name='super_admin_department_detail'),
+    path('super-admin/designations/', SuperAdminDesignationListCreateView.as_view(), name='super_admin_designations'),
+    path('super-admin/designations/<uuid:pk>/', SuperAdminDesignationDetailView.as_view(), name='super_admin_designation_detail'),
+    
+    # New Super Admin Accounts CRUD paths
+    path('super-admin/accounts/', SuperAdminAccountListCreateView.as_view(), name='super_admin_accounts_list'),
+    path('super-admin/accounts/<str:account_type>/<uuid:account_id>/', SuperAdminAccountDetailView.as_view(), name='super_admin_account_detail'),
+    path('super-admin/accounts/<str:account_type>/<uuid:account_id>/<str:action>/', SuperAdminAccountActionView.as_view(), name='super_admin_account_action'),
+    path('super-admin/accounts/<str:account_type>/<uuid:account_id>/activity/', SuperAdminAccountActivityView.as_view(), name='super_admin_account_activity'),
+
+    # Admin operational APIs. Super Admin may also enter these APIs explicitly.
+    path('admin/dashboard/', AdminDashboardView.as_view(), name='admin_dashboard'),
+    path('admin/users/', AdminUserListView.as_view(), name='admin_users'),
+    path('admin/users/<uuid:user_id>/', AdminUserActionView.as_view(), name='admin_user_action'),
+    path('admin/transactions/', AdminTransactionListView.as_view(), name='admin_transactions'),
+    path('admin/transactions/<uuid:payment_id>/refund/', AdminPaymentRefundView.as_view(), name='admin_payment_refund'),
+    path('admin/memberships/', AdminMembershipListView.as_view(), name='admin_memberships'),
+    path('admin/memberships/direct/', AdminDirectMembershipView.as_view(), name='admin_memberships_direct'),
+    path('admin/membership-requests/', AdminMembershipRequestListView.as_view(), name='admin_membership_request_list'),
+    path('admin/membership-requests/<uuid:pk>/', AdminMembershipRequestDetailView.as_view(), name='admin_membership_request_detail'),
+    path('admin/membership-plans/', AdminMembershipPlanListCreateView.as_view(), name='admin_membership_plans'),
+    path('admin/membership-plans/<uuid:plan_id>/', AdminMembershipPlanDetailView.as_view(), name='admin_membership_plan_detail'),
+    path('admin/membership-plans/<uuid:plan_id>/toggle/', AdminMembershipPlanToggleView.as_view(), name='admin_membership_plan_toggle'),
+    path('admin/accounts/', AdminAccountListCreateView.as_view(), name='admin_accounts'),
+    path('admin/accounts/<uuid:account_id>/', AdminAccountDetailView.as_view(), name='admin_account_detail'),
+    path('admin/roles/', AdminRolePermissionView.as_view(), name='admin_roles'),
+    path('admin/roles/<int:role_id>/', AdminRolePermissionView.as_view(), name='admin_role_detail'),
+    path('admin/activity/', AdminActivityListView.as_view(), name='admin_activity'),
+    path('admin/user-permissions/<uuid:user_id>/', AdminUserPermissionsView.as_view(), name='admin_user_permissions'),
+    path('admin/user-permissions/logs/', AdminPermissionAuditLogListView.as_view(), name='admin_user_permissions_logs'),
+    path('admin/tickets/', AdminTicketListView.as_view(), name='admin_tickets'),
+    path('admin/tickets/<uuid:ticket_id>/', AdminTicketDetailView.as_view(), name='admin_ticket_detail'),
+    path('admin/assignees/', AdminAssigneeListView.as_view(), name='admin_assignees'),
+    path('admin/enquiries/', AdminEnquiryListView.as_view(), name='admin_enquiries'),
+    path('admin/enquiries/<uuid:enquiry_id>/', AdminEnquiryDetailView.as_view(), name='admin_enquiry_detail'),
+    path('admin/complaints/', AdminComplaintListView.as_view(), name='admin_complaints'),
+    path('admin/complaints/<uuid:complaint_id>/', AdminComplaintDetailView.as_view(), name='admin_complaint_detail'),
+    path('admin/reported-profiles/', AdminProfileReportListView.as_view(), name='admin_reported_profiles'),
+    path('admin/reported-profiles/<uuid:report_id>/', AdminProfileReportDetailView.as_view(), name='admin_reported_profile_detail'),
+    path('admin/verifications/', AdminVerificationListView.as_view(), name='admin_verifications'),
+    path('admin/verifications/<uuid:verification_id>/', AdminVerificationDetailView.as_view(), name='admin_verification_detail'),
+    path('admin/blogs/', AdminBlogListCreateView.as_view(), name='admin_blogs'),
+    path('admin/blogs/<uuid:item_id>/', AdminBlogDetailView.as_view(), name='admin_blog_detail'),
+    path('admin/faqs/', AdminFAQListCreateView.as_view(), name='admin_faqs'),
+    path('admin/faqs/<uuid:item_id>/', AdminFAQDetailView.as_view(), name='admin_faq_detail'),
+    path('admin/success-stories/', AdminSuccessStoryListCreateView.as_view(), name='admin_success_stories'),
+    path('admin/success-stories/<uuid:item_id>/', AdminSuccessStoryDetailView.as_view(), name='admin_success_story_detail'),
+    path('admin/testimonials/', AdminTestimonialListCreateView.as_view(), name='admin_testimonials'),
+    path('admin/testimonials/<uuid:item_id>/', AdminTestimonialDetailView.as_view(), name='admin_testimonial_detail'),
+    path('admin/notifications/', AdminNotificationListCreateView.as_view(), name='admin_notifications'),
+    path('admin/settings/', AdminSettingsView.as_view(), name='admin_settings'),
+    path('admin/backups/', AdminBackupListView.as_view(), name='admin_backups'),
+    
+    # New Admin Specific Staff CRUD paths
+    path('admin/staff/', AdminStaffListCreateView.as_view(), name='admin_staff_list'),
+    path('admin/staff/<uuid:pk>/', AdminStaffDetailView.as_view(), name='admin_staff_detail'),
+    path('admin/staff/<uuid:pk>/activity/', AdminStaffActivityView.as_view(), name='admin_staff_activity'),
+    path('admin/staff/<uuid:pk>/<str:action>/', AdminStaffActionView.as_view(), name='admin_staff_action'),
+    
+    # New Admin Specific Customer Support CRUD paths
+    path('admin/customer-support/', AdminCustomerSupportListCreateView.as_view(), name='admin_customer_support_list'),
+    path('admin/customer-support/<uuid:pk>/', AdminCustomerSupportDetailView.as_view(), name='admin_customer_support_detail'),
+    path('admin/customer-support/<uuid:pk>/activity/', AdminCustomerSupportActivityView.as_view(), name='admin_customer_support_activity'),
+    path('admin/customer-support/<uuid:pk>/<str:action>/', AdminCustomerSupportActionView.as_view(), name='admin_customer_support_action'),
+    
+    # New Work/Ticket Assignment paths
+    path('admin/assign-work/', AdminAssignWorkView.as_view(), name='admin_assign_work'),
+    path('admin/assign-ticket/', AdminAssignTicketView.as_view(), name='admin_assign_ticket'),
+    path('admin/eligible-staff/', AdminEligibleStaffListView.as_view(), name='admin_eligible_staff'),
+    path('admin/eligible-agents/', AdminEligibleAgentsListView.as_view(), name='admin_eligible_agents'),
+    path('admin/assignments/bulk-reassign-tickets/', AdminBulkReassignTicketView.as_view(), name='admin_bulk_reassign_tickets'),
+    path('admin/assignments/bulk-reassign-work/', AdminBulkReassignWorkView.as_view(), name='admin_bulk_reassign_work'),
+    path('admin/queues/', AdminQueueListView.as_view(), name='admin_queues'),
+    path('admin/analytics/dashboard/', AdminAnalyticsDashboardView.as_view(), name='admin_analytics_dashboard'),
+
+    # Duplicate account detection flags
+    path('admin/duplicate-flags/', AdminDuplicateFlagListView.as_view(), name='admin_duplicate_flags'),
+    path('admin/duplicate-flags/<uuid:pk>/', AdminDuplicateFlagListView.as_view(), name='admin_duplicate_flag_detail'),
+
+    # Staff and Customer Support have intentionally separate work queues.
+    path('staff/dashboard/', StaffDashboardView.as_view(), name='staff_dashboard'),
+    path('staff/verifications/', StaffVerificationListView.as_view(), name='staff_verifications'),
+    path('staff/verifications/<uuid:verification_id>/', StaffVerificationDetailView.as_view(), name='staff_verification_detail'),
+    path('staff/notifications/', AdministrativeNotificationListView.as_view(), name='staff_notifications'),
+    
+    # New Staff Work Assignment endpoints
+    path('staff/my-work/', StaffWorkListView.as_view(), name='staff_my_work'),
+    path('staff/work-action/', StaffWorkActionView.as_view(), name='staff_work_action'),
+
+    path('customer-support/dashboard/', CustomerSupportDashboardView.as_view(), name='customer_support_dashboard'),
+    path('customer-support/tickets/', CustomerSupportTicketListCreateView.as_view(), name='customer_support_tickets'),
+    path('customer-support/tickets/<uuid:ticket_id>/', CustomerSupportTicketDetailView.as_view(), name='customer_support_ticket_detail'),
+    path('customer-support/notifications/', AdministrativeNotificationListView.as_view(), name='customer_support_notifications'),
+
+    # Compatibility aliases for the previous admin support screens.
+    path('admin/support/dashboard/', AdminSupportDashboardView.as_view(), name='admin_support_dashboard'),
+    path('admin/support/reports/', AdminSupportReportsView.as_view(), name='admin_support_reports'),
+    path('admin/support/tickets/', AdminTicketListView.as_view(), name='admin_support_tickets'),
+    path('admin/support/tickets/<uuid:ticket_id>/', AdminTicketDetailView.as_view(), name='admin_support_ticket_detail'),
+]
+
+router = DefaultRouter()
+router.register(r'departments', DepartmentViewSet, basename='departments')
+router.register(r'designations', DesignationViewSet, basename='designations')
+router.register(r'specializations', SpecializationViewSet, basename='specializations')
+router.register(r'queues', QueueViewSet, basename='queues')
+router.register(r'assignment-strategies', AssignmentStrategyViewSet, basename='assignment-strategies')
+router.register(r'employee-availabilities', EmployeeAvailabilityViewSet, basename='employee-availabilities')
+router.register(r'workloads', WorkloadViewSet, basename='workloads')
+router.register(r'assignment-rules', AssignmentRuleViewSet, basename='assignment-rules')
+router.register(r'assignment-audits', AssignmentAuditViewSet, basename='assignment-audits')
+
+urlpatterns += [
+    path('admin/config/', include(router.urls)),
+]
+

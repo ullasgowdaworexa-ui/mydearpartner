@@ -1,0 +1,48 @@
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from apps.accounts.models import Staff, CustomerSupportAgent
+from apps.core.models import EmployeeAvailability, Workload, SupportTicket, ProfileVerificationRequest
+
+@receiver(post_save, sender=Staff)
+@receiver(post_save, sender=CustomerSupportAgent)
+def create_availability_and_workload(sender, instance, created, **kwargs):
+    is_staff = isinstance(instance, Staff)
+    availability_filter = {'staff_member': instance} if is_staff else {'support_agent': instance}
+    workload_filter = {'staff_member': instance} if is_staff else {'support_agent': instance}
+    
+    if created or not hasattr(instance, 'availability'):
+        EmployeeAvailability.objects.get_or_create(
+            **availability_filter,
+            defaults={
+                'is_online': True,
+                'is_suspended': False,
+                'availability_status': 'AVAILABLE',
+            }
+        )
+    if created or not hasattr(instance, 'workload'):
+        Workload.objects.get_or_create(
+            **workload_filter,
+            defaults={
+                'open_tickets_count': 0,
+                'urgent_tickets_count': 0,
+                'open_verifications_count': 0,
+                'capacity': 10,
+            }
+        )
+
+@receiver(post_save, sender=SupportTicket)
+def trigger_ticket_auto_assignment(sender, instance, created, **kwargs):
+    # Only auto-assign if ticket is unassigned and not being saved in a recursive loop
+    if (created or instance.status == SupportTicket.Status.UNASSIGNED) and not getattr(instance, '_auto_assigning', False):
+        instance._auto_assigning = True
+        from apps.core.assignment_engine import auto_assign_ticket
+        auto_assign_ticket(instance)
+        instance._auto_assigning = False
+
+@receiver(post_save, sender=ProfileVerificationRequest)
+def trigger_verification_auto_assignment(sender, instance, created, **kwargs):
+    if (created or instance.status == ProfileVerificationRequest.Status.PENDING) and not getattr(instance, '_auto_assigning', False):
+        instance._auto_assigning = True
+        from apps.core.assignment_engine import auto_assign_verification
+        auto_assign_verification(instance)
+        instance._auto_assigning = False
