@@ -167,3 +167,25 @@ class ProfilePhotoAuditLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.action} profile photo {self.photo_id}"
+
+
+class UserProfileImage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        "accounts.Member",
+        on_delete=models.CASCADE,
+        related_name="user_profile_images",
+    )
+    image_data = models.BinaryField()
+    thumbnail_data = models.BinaryField()
+    mime_type = models.CharField(max_length=50, default="image/webp")
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "user_profile_images"
+        ordering = ["display_order", "created_at"]
+
+    def __str__(self) -> str:
+        return f"Image {self.id} for user {self.user_id}"
+

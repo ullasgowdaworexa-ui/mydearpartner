@@ -25,6 +25,14 @@ app.conf.beat_schedule = {
         'schedule': 300.0,
         'kwargs': {'limit': 100},
     },
+    'expire-memberships': {
+        'task': 'apps.memberships.tasks.expire_memberships',
+        'schedule': crontab(hour=0, minute=5),
+    },
+    'notify-expiring-memberships': {
+        'task': 'apps.memberships.tasks.notify_expiring_memberships',
+        'schedule': crontab(hour=9, minute=0),
+    },
 }
 
 

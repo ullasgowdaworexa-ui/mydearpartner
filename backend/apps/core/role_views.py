@@ -22,6 +22,7 @@ from apps.accounts.models import (
     CustomerSupportActivityLog,
     CustomerSupportAgent,
     Member,
+    MemberDocument,
     RoleCode,
     Staff,
     StaffActivityLog,
@@ -1029,6 +1030,7 @@ class AdminDashboardView(ScopedAPIView):
 
         # Verification queues
         pending_profile_approvals = ProfileVerificationRequest.objects.filter(
+            verification_type=ProfileVerificationRequest.VerificationType.FULL_PROFILE,
             status__in=(
                 ProfileVerificationRequest.Status.PENDING,
                 ProfileVerificationRequest.Status.ASSIGNED,
@@ -1161,13 +1163,68 @@ class AdminUserListView(ScopedAPIView):
 
 class AdminUserActionView(ScopedAPIView):
     allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
-    required_permission = 'members.manage'
+
+    # Member operations have distinct privileges.  Keep this mapping at the
+    # API boundary so a UI bug cannot let a user with, for example, only
+    # suspension access delete a member.
+    action_permissions = {
+        'approve_profile': 'members.manage',
+        'verify': 'members.manage',
+        'unverify': 'members.manage',
+        'reject_profile': 'members.manage',
+        'approve_photo': 'members.manage',
+        'reject_photo': 'members.manage',
+        'verify_document': 'members.manage',
+        'reject_document': 'members.manage',
+        'activate': 'members.suspend',
+        'reactivate': 'members.suspend',
+        'deactivate': 'members.suspend',
+        'suspend': 'members.suspend',
+        'soft_delete': 'members.delete',
+        'permanent_delete': 'members.delete',
+    }
+
+    @staticmethod
+    def _require_permission(request, permission):
+        if (
+            str(request.user.account_type) != AccountType.SUPER_ADMIN
+            and not request.user.has_admin_permission(permission)
+        ):
+            raise PermissionDenied(f'{permission} permission is required.')
+
+    def get(self, request, user_id):
+        self._require_permission(request, 'members.view')
+        queryset = Member.objects.select_related('profile', 'preferences').prefetch_related('documents')
+        member = get_object_or_404(queryset, pk=user_id, deleted_at__isnull=True)
+        check_object_scope(request.user, member, branch_path='branch')
+        activity_model = SuperAdminActivityLog if str(request.user.account_type) == AccountType.SUPER_ADMIN else AdminActivityLog
+        activity = activity_model.objects.filter(target_type='MEMBER', target_id=str(member.pk)).values(
+            'id', 'action', 'module', 'description', 'created_at', 'old_data', 'new_data'
+        )[:50]
+        verifications = ProfileVerificationRequest.objects.filter(member=member).values(
+            'id', 'verification_type', 'status', 'submitted_at', 'reviewed_at', 'rejection_reason'
+        )
+        memberships = MemberMembership.objects.filter(member=member).select_related('plan').values(
+            'id', 'status', 'is_active', 'start_date', 'end_date', 'plan__name', 'plan__slug'
+        )
+        documents = member.documents.values('id', 'document_type', 'status', 'uploaded_at', 'rejection_reason')
+        return ApiResponse(data={
+            'member': MemberSerializer(member, context={'request': request}).data,
+            'verifications': list(verifications),
+            'documents': list(documents),
+            'memberships': list(memberships),
+            'activity': list(activity),
+        })
 
     @transaction.atomic
     def patch(self, request, user_id):
         member = get_object_or_404(Member.objects.select_for_update(), pk=user_id)
         check_object_scope(request.user, member, branch_path='branch')
         action = request.data.get('action')
+        permission = self.action_permissions.get(action)
+        if permission is None:
+            return bad_request('Unsupported member action.')
+        self._require_permission(request, permission)
         reason = str(request.data.get('reason', '')).strip()
         before = {
             'is_active': member.is_active,
@@ -1178,9 +1235,13 @@ class AdminUserActionView(ScopedAPIView):
         if action == 'approve_profile':
             member.profile_status = Member.ProfileStatus.APPROVED
         elif action == 'verify':
+            # An administrator's explicit verification must satisfy both
+            # contact checks enforced by membership checkout.
             member.is_email_verified = True
+            member.is_mobile_verified = True
         elif action == 'unverify':
             member.is_email_verified = False
+            member.is_mobile_verified = False
         elif action == 'reject_profile':
             if not reason:
                 return bad_request('A rejection reason is required.')
@@ -1193,8 +1254,34 @@ class AdminUserActionView(ScopedAPIView):
         elif action == 'reject_photo':
             member.photo_status = Member.ReviewStatus.REJECTED
         elif action == 'verify_document':
+            document_id = request.data.get('document_id')
+            documents = member.documents.filter(status=MemberDocument.Status.PENDING)
+            if document_id:
+                documents = documents.filter(pk=document_id)
+            document = documents.order_by('-uploaded_at').first()
+            if document is None:
+                return bad_request('No pending KYC document is available to approve.')
+            document.status = MemberDocument.Status.APPROVED
+            document.rejection_reason = ''
+            document.reviewed_at = timezone.now()
+            document.reviewed_by_id = request.user.pk
+            document.save(update_fields=('status', 'rejection_reason', 'reviewed_at', 'reviewed_by_id'))
             member.document_status = Member.ReviewStatus.APPROVED
         elif action == 'reject_document':
+            if not reason:
+                return bad_request('A rejection reason is required.')
+            document_id = request.data.get('document_id')
+            documents = member.documents.filter(status=MemberDocument.Status.PENDING)
+            if document_id:
+                documents = documents.filter(pk=document_id)
+            document = documents.order_by('-uploaded_at').first()
+            if document is None:
+                return bad_request('No pending KYC document is available to reject.')
+            document.status = MemberDocument.Status.REJECTED
+            document.rejection_reason = reason
+            document.reviewed_at = timezone.now()
+            document.reviewed_by_id = request.user.pk
+            document.save(update_fields=('status', 'rejection_reason', 'reviewed_at', 'reviewed_by_id'))
             member.document_status = Member.ReviewStatus.REJECTED
         elif action in {'activate', 'reactivate'}:
             member.is_active = True
@@ -1217,8 +1304,6 @@ class AdminUserActionView(ScopedAPIView):
                 old_data={**before, **deletion_result.audit_context()},
             )
             return ApiResponse(message='Member permanently deleted.')
-        else:
-            return bad_request('Unsupported member action.')
         member.save()
         after = {
             'is_active': member.is_active,
@@ -1826,7 +1911,19 @@ class AdminVerificationDetailView(ScopedAPIView):
                 new_data={'staff_id': str(staff.pk)},
             )
             return ApiResponse(data=ProfileVerificationSerializer(verification).data)
-        if action in {'approve', 'reject'} and verification.status == ProfileVerificationRequest.Status.ESCALATED:
+        if action in {'approve', 'reject'}:
+            permission = 'verification.approve' if action == 'approve' else 'verification.reject'
+            if not request.user.has_admin_permission(permission):
+                raise PermissionDenied(f'{permission} permission is required.')
+            reviewable_statuses = {
+                ProfileVerificationRequest.Status.PENDING,
+                ProfileVerificationRequest.Status.ASSIGNED,
+                ProfileVerificationRequest.Status.IN_REVIEW,
+                ProfileVerificationRequest.Status.RESUBMITTED,
+                ProfileVerificationRequest.Status.ESCALATED,
+            }
+            if verification.status not in reviewable_statuses:
+                return bad_request('This verification has already been completed.')
             return _review_verification(request, verification, action)
         return bad_request('Unsupported verification action.')
 
@@ -1928,6 +2025,15 @@ def _review_verification(request, verification, action):
             member.photo_status = Member.PhotoStatus.APPROVED
         elif verification.verification_type == ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT:
             member.document_status = Member.DocumentStatus.APPROVED
+            MemberDocument.objects.filter(
+                member=member,
+                status=MemberDocument.Status.PENDING,
+            ).update(
+                status=MemberDocument.Status.APPROVED,
+                reviewed_at=now,
+                reviewed_by_id=request.user.pk,
+                rejection_reason='',
+            )
         elif verification.verification_type == ProfileVerificationRequest.VerificationType.PHONE:
             member.is_mobile_verified = True
         elif verification.verification_type == ProfileVerificationRequest.VerificationType.EMAIL:
@@ -1958,6 +2064,15 @@ def _review_verification(request, verification, action):
             member.save(update_fields=('photo_status', 'updated_at'))
         elif verification.verification_type == ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT:
             member.document_status = Member.DocumentStatus.REJECTED
+            MemberDocument.objects.filter(
+                member=member,
+                status=MemberDocument.Status.PENDING,
+            ).update(
+                status=MemberDocument.Status.REJECTED,
+                rejection_reason=reason,
+                reviewed_at=now,
+                reviewed_by_id=request.user.pk,
+            )
             member.save(update_fields=('document_status', 'updated_at'))
     elif action == 'escalate':
         verification.escalation_reason = reason
@@ -4909,17 +5024,13 @@ class DesignationViewSet(viewsets.ModelViewSet):
 
 
 class SuperAdminMembershipPlanListCreateView(ScopedAPIView):
-    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
-    required_permission = 'memberships.view'
+    allowed_account_types = (AccountType.SUPER_ADMIN,)
 
     def get(self, request):
         queryset = MembershipPlan.objects.all().order_by('display_order')
         return paginated_response(request, queryset, MembershipPlanSerializer)
 
     def post(self, request):
-        if request.user.account_type == AccountType.ADMIN and not request.user.has_admin_permission('memberships.create'):
-            raise PermissionDenied('You do not have permission to create membership plans.')
-        
         serializer = MembershipPlanSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -4940,17 +5051,15 @@ class SuperAdminMembershipPlanListCreateView(ScopedAPIView):
 
 
 class SuperAdminMembershipPlanDetailView(ScopedAPIView):
-    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
-    required_permission = 'memberships.view'
+    allowed_account_types = (AccountType.SUPER_ADMIN,)
 
     def get(self, request, plan_id):
         plan = get_object_or_404(MembershipPlan, pk=plan_id)
         return ApiResponse(data=MembershipPlanSerializer(plan).data)
 
     def patch(self, request, plan_id):
-        if request.user.account_type == AccountType.ADMIN and not request.user.has_admin_permission('memberships.edit'):
-            raise PermissionDenied('You do not have permission to edit membership plans.')
         plan = get_object_or_404(MembershipPlan, pk=plan_id)
+        previous_entitlements = dict(plan.entitlements or {})
         serializer = MembershipPlanSerializer(plan, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         
@@ -4966,12 +5075,12 @@ class SuperAdminMembershipPlanDetailView(ScopedAPIView):
         audit(
             request, request.user, action='MEMBERSHIP_PLAN_UPDATED', module='memberships',
             target_type='MembershipPlan', target_id=plan.pk,
+            old_data={'entitlements': previous_entitlements},
+            new_data={'entitlements': plan.entitlements},
         )
         return ApiResponse(data=MembershipPlanSerializer(plan).data)
 
     def delete(self, request, plan_id):
-        if request.user.account_type == AccountType.ADMIN and not request.user.has_admin_permission('memberships.edit'):
-            raise PermissionDenied('You do not have permission to delete/archive membership plans.')
         plan = get_object_or_404(MembershipPlan, pk=plan_id)
         
         from apps.core.models import Payment, MemberMembership
@@ -4994,8 +5103,7 @@ class SuperAdminMembershipPlanDetailView(ScopedAPIView):
 
 
 class SuperAdminMembershipPlanActivateView(ScopedAPIView):
-    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
-    required_permission = 'memberships.activate'
+    allowed_account_types = (AccountType.SUPER_ADMIN,)
 
     def post(self, request, plan_id):
         plan = get_object_or_404(MembershipPlan, pk=plan_id)
@@ -5009,8 +5117,7 @@ class SuperAdminMembershipPlanActivateView(ScopedAPIView):
 
 
 class SuperAdminMembershipPlanDeactivateView(ScopedAPIView):
-    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
-    required_permission = 'memberships.deactivate'
+    allowed_account_types = (AccountType.SUPER_ADMIN,)
 
     def post(self, request, plan_id):
         plan = get_object_or_404(MembershipPlan, pk=plan_id)

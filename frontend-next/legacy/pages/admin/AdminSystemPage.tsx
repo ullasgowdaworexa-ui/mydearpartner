@@ -15,7 +15,7 @@ const CONFIG_TABS = [
   { key: 'REGISTRATION', label: 'Registration', icon: ShieldCheck, desc: 'Onboarding policies and verification requirements.' },
   { key: 'VERIFICATION', label: 'Verification', icon: ShieldCheck, desc: 'Identity checklist documents and AI checks.' },
   { key: 'MEMBERSHIP', label: 'Membership', icon: CreditCard, desc: 'Entitlements, view limits, and discounts.' },
-  { key: 'PAYMENTS', label: 'Payments', icon: CreditCard, desc: 'Razorpay keys, base currency, and refund limits.' },
+  { key: 'PAYMENTS', label: 'Payments', icon: CreditCard, desc: 'Manual approval, currency, and refund policies.' },
   { key: 'NOTIFICATIONS', label: 'Notifications', icon: Bell, desc: 'WhatsApp notifications, push messages, and system alerts.' },
   { key: 'EMAIL', label: 'Email', icon: Mail, desc: 'SMTP server host, port, username, password and templates.' },
   { key: 'SMS_OTP', label: 'SMS/OTP', icon: Bell, desc: 'SMS gateway keys and OTP verification rules.' },
@@ -421,26 +421,8 @@ export default function AdminSystemPage({ mode }: { mode: 'settings' | 'backups'
       case 'PAYMENTS':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <p style={{ margin: 0, color: 'var(--admin-muted)' }}>Membership requests are reviewed and activated manually. Online checkout and payment gateway credentials are intentionally unavailable.</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
-              <label className="admin-form-field">
-                <span>Razorpay Key ID</span>
-                <input type="text" value={val.razorpay_key_id || ''} onChange={e => updateFormField('PAYMENT', 'razorpay_key_id', e.target.value)} />
-              </label>
-              <SecretInput
-                label="Razorpay Key Secret"
-                value={val.razorpay_key_secret}
-                onChange={v => updateFormField('PAYMENT', 'razorpay_key_secret', v)}
-                description="The secret key generated inside the Razorpay dashboard integration."
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
-              <SecretInput
-                label="Webhook Signature Token"
-                value={val.webhook_secret}
-                onChange={v => updateFormField('PAYMENT', 'webhook_secret', v)}
-                description="Used to authenticate signatures of incoming payment webhooks."
-              />
               <label className="admin-form-field">
                 <span>Base Transaction Currency</span>
                 <input type="text" value={val.currency || 'INR'} onChange={e => updateFormField('PAYMENT', 'currency', e.target.value)} maxLength={3} />

@@ -4,9 +4,10 @@ from .base import *
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 
-# Disable strict verification and auto-approve uploaded photos during local development
+# Keep account verification relaxed locally, but never bypass profile-photo moderation.
+# This makes development behave like production for the member-visible photo flow.
 REQUIRE_MEMBER_VERIFICATION = False
-AUTO_APPROVE_PROFILE_PHOTOS = True
+AUTO_APPROVE_PROFILE_PHOTOS = False
 
 # Fallback to local in-memory Cache and Channels when Redis is not running/needed locally
 CACHES = {
@@ -21,5 +22,4 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
-
 

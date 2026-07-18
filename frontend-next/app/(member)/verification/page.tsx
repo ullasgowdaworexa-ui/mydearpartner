@@ -29,13 +29,22 @@ interface VerificationStep {
 }
 
 export default function VerificationCenterPage() {
-  const verificationRequired = process.env.NEXT_PUBLIC_REQUIRE_MEMBER_VERIFICATION === 'true';
   const { data: verification, isLoading, error, refetch } = useGetVerificationStatusQuery();
   const [steps, setSteps] = useState<VerificationStep[]>([]);
 
   useEffect(() => {
     if (verification) {
       setSteps([
+        {
+          id: 'contact',
+          title: 'Email & Mobile',
+          description: 'Verify both your email address and mobile number',
+          icon: User,
+          status: verification.contact.status as any,
+          action: 'Verify Contact Details',
+          actionLink: '/verify-otp',
+          reason: verification.contact.reason,
+        },
         {
           id: 'profile',
           title: 'Profile Information',
@@ -69,23 +78,6 @@ export default function VerificationCenterPage() {
       ]);
     }
   }, [verification]);
-
-  if (!verificationRequired) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
-        <div className="max-w-md text-center bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-          <Check className="w-12 h-12 text-green-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-slate-900">Verification is not required</h1>
-          <p className="mt-3 text-sm text-slate-600">
-            Your account can use member features immediately. Complete your profile whenever you are ready.
-          </p>
-          <Link href="/dashboard" className="inline-flex mt-6 px-5 py-3 rounded-lg bg-rose-500 text-white font-semibold hover:bg-rose-600">
-            Go to dashboard
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {

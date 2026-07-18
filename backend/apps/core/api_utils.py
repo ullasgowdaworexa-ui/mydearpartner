@@ -56,7 +56,13 @@ def audit(
     )
 
 
-def notify(recipient, *, notification_type, title, message, related_object=None, priority='NORMAL'):
+def create_notification(recipient, *, type, title, body, link_url='', related_object=None, priority='NORMAL'):
+    """Persist a notification and publish it to the member's websocket group.
+
+    Persistence happens first, so a disconnected browser always receives the
+    notification on its next API load. Broadcasting is deliberately best
+    effort; a websocket outage cannot make notification creation fail.
+    """
     recipient_field = {
         AccountType.MEMBER: 'member_recipient',
         AccountType.SUPER_ADMIN: 'super_admin_recipient',
@@ -66,15 +72,52 @@ def notify(recipient, *, notification_type, title, message, related_object=None,
     }[str(recipient.account_type)]
     values = {
         recipient_field: recipient,
-        'notification_type': notification_type,
+        'notification_type': type,
         'title': title,
-        'message': message,
+        'message': body,
+        'link_url': link_url,
         'priority': priority,
     }
     if related_object is not None:
         values['related_object_type'] = related_object._meta.label_lower
         values['related_object_id'] = str(related_object.pk)
     return Notification.objects.create(**values)
+
+
+def broadcast_notification(notification):
+    """Best-effort realtime delivery for every persisted member notification."""
+    if not notification.member_recipient_id:
+        return
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{notification.member_recipient_id}',
+                {'type': 'notification.created', 'notification': {
+                    'id': str(notification.pk), 'notification_type': notification.notification_type,
+                    'title': notification.title, 'message': notification.message,
+                    'link_url': notification.link_url, 'is_read': notification.is_read,
+                    'created_at': notification.created_at.isoformat(),
+                }},
+            )
+    except Exception:
+        # Persistence is the delivery guarantee; a realtime outage is not.
+        pass
+
+
+def notify(recipient, *, notification_type, title, message, related_object=None, priority='NORMAL'):
+    """Backward-compatible wrapper for legacy callers."""
+    return create_notification(
+        recipient,
+        type=notification_type,
+        title=title,
+        body=message,
+        related_object=related_object,
+        priority=priority,
+    )
 
 
 def paginated_response(request, queryset, serializer_class, *, context=None, message='Request completed successfully.'):

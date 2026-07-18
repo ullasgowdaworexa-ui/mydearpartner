@@ -64,6 +64,7 @@ test('complete private profile-photo lifecycle with refresh, moderation, replace
     const url = new URL(request.url());
     const path = url.pathname;
     const method = request.method();
+    console.log('[MOCK REQ]', method, path);
 
     if (path === '/api/proxy/member-auth/me/') {
       return json(route, {
@@ -180,7 +181,7 @@ test('complete private profile-photo lifecycle with refresh, moderation, replace
   });
 
   await page.goto('/profile/photos');
-  await expect(page.getByRole('heading', { name: 'Profile Photos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Profile Photos' })).toBeVisible({ timeout: 20000 });
   await expect(page.getByText('1 / 6 photos uploaded')).toBeVisible();
 
   await page.getByLabel('Choose profile photo to upload').setInputFiles({

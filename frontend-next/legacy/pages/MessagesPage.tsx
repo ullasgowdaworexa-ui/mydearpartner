@@ -21,7 +21,11 @@ export default function MessagesPage() {
   const [searchParams] = useSearchParams();
   const requestedUserId = searchParams.get('user');
   const requestedProfile = (location.state as { profile?: any } | null)?.profile;
-  const isBlocked = user && user.account_type === 'MEMBER' && !user.is_premium;
+  const [messagingMembershipEnabled, setMessagingMembershipEnabled] = useState<boolean | null>(null);
+  const [membershipPlanName, setMembershipPlanName] = useState<string | null>(null);
+  const [membershipCheckVersion, setMembershipCheckVersion] = useState(0);
+  const isMember = user?.account_type === 'MEMBER';
+  const isBlocked = isMember && messagingMembershipEnabled === false;
   const [conversationsList, setConversationsList] = useState<any[]>([]);
   const [activeConversation, setActiveConversation] = useState<any>(null);
   const [messagesList, setMessagesList] = useState<any[]>([]);
@@ -30,6 +34,41 @@ export default function MessagesPage() {
   const [loadingChats, setLoadingChats] = useState(true);
   const [error, setError] = useState('');
   const [chatRestriction, setChatRestriction] = useState('');
+
+  // ``is_premium`` is a display flag retained for older clients.  Messaging
+  // must use the active membership entitlement so an expired or unapproved
+  // upgrade never looks available in the UI and then fails with a 403.
+  useEffect(() => {
+    if (!isMember) {
+      setMessagingMembershipEnabled(true);
+      return;
+    }
+
+    let cancelled = false;
+    setMessagingMembershipEnabled(null);
+    fetchApi<{ can_message?: boolean; has_active_plan?: boolean; plan_name?: string }>('/member-auth/membership/summary/')
+      .then((summary) => {
+        // Older deployments did not include ``can_message`` in the
+        // verification-aware summary. An active paid membership is the safe
+        // compatibility fallback; the server still enforces the final rule
+        // for the selected chat partner.
+        const allowed = typeof summary.can_message === 'boolean'
+          ? summary.can_message
+          : Boolean(summary.has_active_plan);
+        if (!cancelled) {
+          setMembershipPlanName(summary.plan_name ?? null);
+          setMessagingMembershipEnabled(allowed);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMembershipPlanName(null);
+          setMessagingMembershipEnabled(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [isMember, user?.id, membershipCheckVersion]);
 
   // E2EE cryptographic states
   const [activeSharedKey, setActiveSharedKey] = useState<CryptoKey | null>(null);
@@ -151,7 +190,7 @@ export default function MessagesPage() {
 
   // Fetch message history for the selected conversation
   useEffect(() => {
-    if (activeConversation && activeConversation.id) {
+    if (messagingMembershipEnabled === true && activeConversation && activeConversation.id) {
       setChatRestriction('');
       setError('');
       getMessages(activeConversation.id)
@@ -183,6 +222,8 @@ export default function MessagesPage() {
           const msg = err.message || String(err);
           if (msg.toLowerCase().includes('interest') || msg.toLowerCase().includes('mutual')) {
             setChatRestriction('You can chat after both members accept the interest.');
+          } else if (msg.toLowerCase().includes('free membership') || msg.toLowerCase().includes('not included')) {
+            setChatRestriction('Messaging will be available after your selected membership is activated.');
           } else if (msg.toLowerCase().includes('approve') || msg.toLowerCase().includes('pending')) {
             setChatRestriction('This member is not currently available for chat.');
           } else if (msg.toLowerCase().includes('plan') || msg.toLowerCase().includes('premium') || msg.toLowerCase().includes('gold') || msg.toLowerCase().includes('upgrade')) {
@@ -192,43 +233,7 @@ export default function MessagesPage() {
           }
         });
     }
-  }, [activeConversation, user, activeSharedKey]);
-
-  // Fallback Polling interval when socket connection is unavailable
-  useEffect(() => {
-    if (!activeConversation || !activeConversation.id || !user) return;
-
-    const interval = setInterval(() => {
-      if (!socketConnected) {
-        getMessages(activeConversation.id)
-          .then(async (data) => {
-            const formatted = await Promise.all(data.map(async (msg: any) => {
-              let decryptedText = msg.text;
-              if (msg.text.startsWith('__E2EE__:')) {
-                if (activeSharedKey) {
-                  decryptedText = await decryptMessage(msg.text, activeSharedKey);
-                } else {
-                  const fallback = await deriveFallbackKey(activeConversation.id);
-                  decryptedText = await decryptMessage(msg.text, fallback);
-                }
-              }
-              const senderId = msg.sender_id ?? msg.sender?.id;
-              return {
-                id: msg.id,
-                senderId: senderId === user.id ? 'me' : senderId,
-                text: decryptedText,
-                time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                read: msg.is_read
-              };
-            }));
-            setMessagesList(formatted);
-          })
-          .catch((err) => console.error('Polling fallback failed:', err));
-      }
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [activeConversation, user, activeSharedKey, socketConnected]);
+  }, [activeConversation, user, activeSharedKey, messagingMembershipEnabled]);
 
   const handleSendMessage = async () => {
     if (newMessage.trim() && activeConversation && user) {
@@ -287,6 +292,10 @@ export default function MessagesPage() {
     }
   };
 
+  if (isMember && messagingMembershipEnabled === null) {
+    return <div className="min-h-screen pt-32 text-center text-sm text-slate-500">Checking messaging access…</div>;
+  }
+
   if (isBlocked) {
     return (
       <div className="min-h-screen pt-32 pb-16 bg-[#FFFAF9] flex items-center justify-center px-4">
@@ -301,10 +310,18 @@ export default function MessagesPage() {
 
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-display mb-4">Premium Membership Required</h2>
           <p className="text-slate-600 text-sm sm:text-base mb-8 leading-relaxed">
-            Direct chat messaging, E2EE key derivation, and matching details are premium features. Upgrade your plan to start chatting with matching partners.
+            Messaging is not active for this signed-in account yet. Current plan: <strong>{membershipPlanName || 'Free'}</strong>.
+            {' '}Activate the plan for this account, then recheck access.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              type="button"
+              onClick={() => setMembershipCheckVersion((version) => version + 1)}
+              className="py-3 px-6 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-all text-center cursor-pointer border-0"
+            >
+              Recheck membership
+            </button>
             <Link
               to="/membership"
               className="py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white font-bold text-sm shadow-md hover:brightness-110 transition-all text-center"

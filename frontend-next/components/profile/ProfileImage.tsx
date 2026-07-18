@@ -15,6 +15,8 @@ export type ProfileImageAspectRatio = '1:1' | '4:5';
 export type ProfileImageShape = 'circle' | 'rounded' | 'square';
 
 export interface ProfileImageProps {
+  /** Optional user ID to fetch user avatar from GET /api/users/:id/avatar */
+  userId?: string | null;
   /** The ProfilePhoto UUID. This is the preferred way to load a protected photo. */
   photoId?: string | null;
   /** A photo endpoint returned by the API, or a local object URL for an upload preview. */
@@ -71,12 +73,11 @@ function withVersion(url: string, version: ProfileImageProps['version']): string
 
 /**
  * Builds a same-origin URL so protected image requests can carry the current
- * in-memory access token through the BFF proxy instead of exposing a direct
- * storage or backend URL to an `<img>` element.
+ * HttpOnly access token cookie through the BFF proxy.
  */
 export function profilePhotoEndpoint(
   photoId: string,
-  variant: ProfilePhotoVariant = 'thumbnail',
+  variant: ProfilePhotoVariant = 'image',
   version?: ProfileImageProps['version'],
 ): string {
   return withVersion(
@@ -90,6 +91,12 @@ function protectedEndpointFromSource(source: string, version?: ProfileImageProps
 
   try {
     const parsed = new URL(source, 'https://profile-image.local');
+    
+    const avatarMatch = parsed.pathname.match(/(?:^|\/)users\/([^/]+)\/avatar\/?$/);
+    if (avatarMatch) {
+      return withVersion(`/api/proxy/users/${avatarMatch[1]}/avatar/`, version ?? parsed.searchParams.get('v'));
+    }
+
     const match = parsed.pathname.match(/(?:^|\/)profile-photos\/([^/]+)\/(image|thumbnail)\/?$/);
     if (!match) return null;
 
@@ -120,49 +127,15 @@ function placeholderClasses(gender: ProfileImageProps['gender']) {
   }
 }
 
-async function fetchProtectedPhoto(endpoint: string, signal: AbortSignal): Promise<Blob> {
-  const request = async (token: string | null) => {
-    const headers = new Headers({
-      Accept: 'image/avif,image/webp,image/*;q=0.8,*/*;q=0.5',
-    });
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-
-    return fetch(endpoint, {
-      headers,
-      credentials: 'include',
-      signal,
-    });
-  };
-
-  let token = getAccessToken();
-  if (!token) token = await getFreshAccessToken();
-  let response = await request(token);
-
-  if (response.status === 401) {
-    token = await refreshAccessToken();
-    response = await request(token);
-  }
-
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!response.ok) {
-    throw new Error(`Unable to load profile photo (${response.status}).`);
-  }
-  if (!contentType.toLowerCase().startsWith('image/')) {
-    throw new Error('The profile photo response was not an image.');
-  }
-
-  return response.blob();
-}
-
 /**
- * Renders a portrait or avatar safely from the authenticated ProfilePhoto
- * endpoints. Private images are fetched as a Blob and rendered through an
- * object URL, so browser image requests never omit the access credential.
+ * Renders a portrait or avatar safely from the authenticated ProfilePhoto endpoints.
+ * Native browser <img> tags automatically attach HttpOnly cookies to requests to the Next.js proxy.
  */
 export default function ProfileImage({
+  userId,
   photoId,
   src,
-  variant = 'thumbnail',
+  variant = 'image',
   version,
   updatedAt,
   alt = 'Profile photo',
@@ -179,13 +152,19 @@ export default function ProfileImage({
   const onErrorRef = useRef(onError);
   const onLoadRef = useRef(onLoad);
   const effectiveVersion = version ?? updatedAt;
+
   const protectedEndpoint = useMemo(() => {
+    if (userId) return `/api/proxy/users/${userId}/avatar/`;
     if (photoId) return profilePhotoEndpoint(photoId, variant, effectiveVersion);
     return src ? protectedEndpointFromSource(src, effectiveVersion) : null;
-  }, [effectiveVersion, photoId, src, variant]);
+  }, [userId, effectiveVersion, photoId, src, variant]);
+
   const directSource = useMemo(() => localImageSource(src), [src]);
-  const [displaySource, setDisplaySource] = useState<string | null>(directSource);
-  const [loading, setLoading] = useState(Boolean(protectedEndpoint || directSource));
+  const initialSource = protectedEndpoint || directSource;
+
+  const [displaySource, setDisplaySource] = useState<string | null>(initialSource);
+  const [retryAttempted, setRetryAttempted] = useState(false);
+  const [loading, setLoading] = useState(Boolean(initialSource));
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -194,42 +173,35 @@ export default function ProfileImage({
   }, [onError, onLoad]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-    let objectUrl: string | null = null;
-
-    setDisplaySource(directSource);
+    setDisplaySource(initialSource);
     setFailed(false);
-    setLoading(Boolean(protectedEndpoint || directSource));
+    setRetryAttempted(false);
+    setLoading(Boolean(initialSource));
+  }, [initialSource]);
 
-    if (!protectedEndpoint) {
-      if (!directSource) setLoading(false);
-      return () => controller.abort();
-    }
+  const handleImageError = async () => {
+    if (!retryAttempted && protectedEndpoint) {
+      setRetryAttempted(true);
+      try {
+        // Trigger a silent token refresh (reissues cookie)
+        await refreshAccessToken();
 
-    void fetchProtectedPhoto(protectedEndpoint, controller.signal)
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
-        if (!active) {
-          URL.revokeObjectURL(objectUrl);
-          return;
-        }
-        setDisplaySource(objectUrl);
-      })
-      .catch((error: unknown) => {
-        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
-        const loadError = error instanceof Error ? error : new Error('Unable to load profile photo.');
+        // Append retry query param to bust browser image cache for this retry request
+        const separator = protectedEndpoint.includes('?') ? '&' : '?';
+        const retryUrl = `${protectedEndpoint}${separator}retry=${Date.now()}`;
+        setDisplaySource(retryUrl);
+      } catch (error: unknown) {
         setFailed(true);
         setLoading(false);
+        const loadError = error instanceof Error ? error : new Error('Token refresh failed');
         onErrorRef.current?.(loadError);
-      });
-
-    return () => {
-      active = false;
-      controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [directSource, protectedEndpoint]);
+      }
+    } else {
+      setFailed(true);
+      setLoading(false);
+      onErrorRef.current?.(new Error('Image failed to load.'));
+    }
+  };
 
   const isCircle = shape === 'circle';
   const ratioClass = isCircle || aspectRatio === '1:1' ? 'aspect-square' : 'aspect-[4/5]';
@@ -243,25 +215,28 @@ export default function ProfileImage({
       style={style}
       aria-busy={loading || undefined}
     >
+      {/* Loading animation placeholder rendered behind the actual image to prevent visual blinking */}
+      {loading && !failed ? (
+        <div
+          className="absolute inset-0 animate-pulse bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 z-0"
+          aria-hidden="true"
+        />
+      ) : null}
+
       {!showFallback && displaySource ? (
         <img
           src={displaySource}
           alt={alt}
-          className="h-full w-full object-cover"
+          className="relative h-full w-full object-cover z-10"
           onLoad={() => {
             setLoading(false);
             onLoadRef.current?.();
           }}
-          onError={() => {
-            const loadError = new Error('The profile photo could not be displayed.');
-            setFailed(true);
-            setLoading(false);
-            onErrorRef.current?.(loadError);
-          }}
+          onError={handleImageError}
         />
       ) : (
         <div
-          className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br ${placeholderClass}`}
+          className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br ${placeholderClass} z-10`}
           role={alt ? 'img' : undefined}
           aria-label={alt || undefined}
         >
@@ -269,13 +244,6 @@ export default function ProfileImage({
           {failed && alt ? <span className="sr-only">{alt} is unavailable.</span> : null}
         </div>
       )}
-
-      {loading ? (
-        <div
-          className="absolute inset-0 animate-pulse bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200"
-          aria-hidden="true"
-        />
-      ) : null}
     </div>
   );
 }

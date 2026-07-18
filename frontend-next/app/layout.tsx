@@ -40,7 +40,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#2b101d' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="en" className={`${dmSans.variable} ${manrope.variable}`}>
+  return <html lang="en" data-scroll-behavior="smooth" className={`${dmSans.variable} ${manrope.variable}`}>
     <body><Providers>{children}</Providers></body>
   </html>;
 }

@@ -25,6 +25,10 @@ MAX_PROFILE_PHOTOS = 6
 logger = logging.getLogger(__name__)
 
 
+class PrimaryPhotoNotVerifiedError(ProfilePhotoProcessingError):
+    """Raised when a gallery upload would bypass primary-photo moderation."""
+
+
 def _actor_type(actor) -> str:
     return str(getattr(actor, "account_type", ""))
 
@@ -297,8 +301,16 @@ def _create_processed_profile_photo(*, member: Member, processed, uploaded_file,
     # and the per-user six-photo limit without loading BLOB data.
     member = Member.objects.select_for_update().get(pk=member.pk)
     existing_count = ProfilePhoto.objects.filter(user=member).count()
-    if existing_count >= MAX_PROFILE_PHOTOS:
-        raise ProfilePhotoProcessingError("You can have a maximum of 6 profile photos.")
+    from apps.core.entitlements import get_active_entitlements
+    max_photos = get_active_entitlements(member).max_photos
+    if existing_count >= max_photos:
+        raise ProfilePhotoProcessingError(f"Your {get_active_entitlements(member).plan_name} plan allows a maximum of {max_photos} profile photos.")
+    if existing_count and not ProfilePhoto.objects.filter(
+        user=member, status=ProfilePhoto.Status.APPROVED
+    ).exists():
+        raise PrimaryPhotoNotVerifiedError(
+            "Your first photo must be approved before you can add more photos."
+        )
     if ImageProcessingService.check_duplicate(processed.checksum, member.pk):
         raise ProfilePhotoProcessingError("This photo has already been uploaded.")
 
@@ -500,6 +512,24 @@ def review_profile_photo(
         ),
         details={"reason": photo.rejection_reason} if not approve else {},
     )
+    from apps.core.api_utils import notify
+    if approve:
+        notify(
+            member,
+            notification_type="PROFILE_PHOTO_APPROVED",
+            title="Photo approved",
+            message="Your photo has been approved and is now visible on your profile.",
+            related_object=photo,
+        )
+    else:
+        notify(
+            member,
+            notification_type="PROFILE_PHOTO_REJECTED",
+            title="Photo needs attention",
+            message=f"Your photo was not approved: {photo.rejection_reason}. Please upload a new one.",
+            related_object=photo,
+            priority="HIGH",
+        )
     if sync_verification_request:
         _resolve_completed_photo_verification_requests(
             member=member,

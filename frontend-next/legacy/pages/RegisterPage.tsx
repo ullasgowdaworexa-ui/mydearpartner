@@ -1,9 +1,28 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from '@/lib/router-compat';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, Heart, LockKeyhole, MapPin, ShieldCheck, UserRound, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Heart,
+  LockKeyhole,
+  MapPin,
+  ShieldCheck,
+  UserRound,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Users,
+  Mail,
+  Phone,
+  Calendar,
+  GraduationCap,
+  Sparkles,
+  MessageCircle
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const stepNames = ['Identity', 'Life details', 'Secure account'];
@@ -102,6 +121,41 @@ const checkPasswordRequirements = (password: string) => {
   };
 };
 
+const testimonials = [
+  {
+    quote: "We found each other through MyDearPartner. The privacy features made us feel completely secure.",
+    name: "Aditya & Ritu",
+    story: "Married in Dec 2025",
+    avatar: "/images/couple-sunset.jpg"
+  },
+  {
+    quote: "Creating a profile here was so straightforward, and within weeks we connected on shared values.",
+    name: "Sneha & Vivek",
+    story: "Engaged in March 2026",
+    avatar: "/images/wedding-rings.jpg"
+  },
+  {
+    quote: "Our families were very happy with the verification standard. It really keeps out non-serious profiles.",
+    name: "Karan & Meera",
+    story: "Matched in Feb 2026",
+    avatar: "/images/bride-portrait.jpg"
+  }
+];
+
+const profileOptions = [
+  { value: 'Self', label: 'Myself', icon: UserRound },
+  { value: 'Parent', label: 'Son/Daughter', icon: Users },
+  { value: 'Sibling', label: 'Sibling', icon: Heart },
+  { value: 'Relative', label: 'Relative', icon: ShieldCheck },
+  { value: 'Friend', label: 'Friend', icon: Sparkles },
+];
+
+const genderOptions = [
+  { value: 'Female', label: 'Woman', icon: UserRound },
+  { value: 'Male', label: 'Man', icon: UserRound },
+  { value: 'Other', label: 'Other', icon: Sparkles },
+];
+
 export default function RegisterPage() {
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -110,6 +164,14 @@ export default function RegisterPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [testimonialIndex, setTestimonialIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTestimonialIndex((prev) => (prev + 1) % testimonials.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [form, setForm] = useState({
     firstName: '',
@@ -421,23 +483,21 @@ export default function RegisterPage() {
     return (
       <main className="neo-auth neo-register">
         <div className="neo-auth-glow glow-one" /><div className="neo-auth-glow glow-two" />
-        <section className="neo-register-shell">
-          <div className="neo-register-form-panel" style={{ margin: 'auto', maxWidth: '480px' }}>
-            <div className="neo-register-step text-center">
-              <span className="neo-icon-box success" style={{ margin: '0 auto 20px', color: '#10b981', background: '#d1fae5' }}>
-                <Check size={36} />
-              </span>
-              <h2>{successMsg}</h2>
-              <p className="neo-form-lead" style={{ marginTop: '10px' }}>
-                Your member account is ready. You can complete your profile and start browsing matches now.
-              </p>
-              <div className="loader-dots" style={{ margin: '20px auto 0' }}>
-                <span /><span /><span />
-              </div>
-              <p style={{ marginTop: '15px', color: '#6b7280', fontSize: '0.875rem' }}>
-                Redirecting to your dashboard...
-              </p>
+        <section className="neo-register-shell" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="neo-register-form-panel neo-success-card" style={{ maxWidth: '480px', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.8)' }}>
+            <div className="success-checkmark-glow">
+              <Check size={36} />
             </div>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#2b101d' }}>{successMsg}</h2>
+            <p className="neo-form-lead" style={{ marginTop: '14px', fontSize: '14px', color: '#7a6870' }}>
+              Your member account is ready. You can complete your profile and start browsing matches now.
+            </p>
+            <div className="loader-dots" style={{ margin: '24px auto 0' }}>
+              <span /><span /><span />
+            </div>
+            <p style={{ marginTop: '16px', color: '#a18e95', fontSize: '0.85rem', fontWeight: 600 }}>
+              Redirecting to your dashboard...
+            </p>
           </div>
         </section>
       </main>
@@ -449,32 +509,113 @@ export default function RegisterPage() {
       <div className="neo-auth-glow glow-one" /><div className="neo-auth-glow glow-two" />
       <section className="neo-register-shell">
         <aside className="neo-register-aside">
-          <div className="neo-story-top"><span><Heart fill="currentColor" /></span><b>My Dear Partner</b></div>
-          <div>
-            <p className="neo-eyebrow">Create your private profile</p>
-            <h1>Begin with who you are.<br /><em>Weâ€™ll help with who you meet.</em></h1>
-            <p>A considered profile gives us the context to make fewer, stronger introductions.</p>
+          {/* Brand mark */}
+          <div className="reg-aside-brand">
+            <span className="reg-brand-icon"><Heart fill="currentColor" size={16} /></span>
+            <b>My Dear Partner</b>
           </div>
-          <div className="neo-register-promises"><span><ShieldCheck /> Reviewed profiles</span><span><LockKeyhole /> Private credentials</span></div>
-          <div className="neo-aside-orbit" aria-hidden="true"><i /><i /></div>
+
+          {/* Hero copy */}
+          <div className="reg-aside-copy">
+            <p className="reg-aside-eyebrow">Create your private profile</p>
+            <h1 className="reg-aside-headline">
+              Begin with<br />who you are.
+              <br />
+              <em className="reg-aside-italic">We'll help with<br />who you meet.</em>
+            </h1>
+            <p className="reg-aside-sub">
+              A considered profile gives us the context to make fewer, stronger introductions.
+            </p>
+          </div>
+
+          {/* Trust pills row */}
+          <div className="reg-trust-pills">
+            <div className="reg-trust-pill">
+              <span className="reg-trust-icon reg-trust-icon--green"><ShieldCheck size={13} /></span>
+              <div>
+                <span className="reg-trust-label">Verified Profiles</span>
+                <span className="reg-trust-sub">100% Secure</span>
+              </div>
+            </div>
+            <div className="reg-trust-pill">
+              <span className="reg-trust-icon reg-trust-icon--rose"><Heart fill="#f43f5e" size={11} /></span>
+              <div>
+                <span className="reg-trust-label">Curated Match</span>
+                <span className="reg-trust-sub">Value-based</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Testimonial */}
+          <div className="reg-testimonial-card">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={testimonialIndex}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.4 }}
+              >
+                <p className="reg-testimonial-quote">
+                  "{testimonials[testimonialIndex].quote}"
+                </p>
+                <div className="reg-testimonial-author">
+                  <img
+                    src={testimonials[testimonialIndex].avatar}
+                    alt={testimonials[testimonialIndex].name}
+                    className="reg-testimonial-avatar"
+                  />
+                  <div>
+                    <span className="reg-testimonial-name">{testimonials[testimonialIndex].name}</span>
+                    <span className="reg-testimonial-story">{testimonials[testimonialIndex].story}</span>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Bottom promises */}
+          <div className="reg-promises">
+            <span><ShieldCheck size={14} /> Reviewed profiles</span>
+            <span><LockKeyhole size={14} /> Private credentials</span>
+          </div>
+
+          {/* Decorative orbit */}
+          <div className="neo-aside-orbit" aria-hidden="true" style={{ zIndex: 1 }}><i /><i /></div>
         </aside>
 
         <div className="neo-register-form-panel">
-          <div className="neo-form-top"><p>Free registration</p><Link to="/login">Already a member? <strong>Login</strong></Link></div>
+          <div className="neo-form-top">
+            <p>Free registration</p>
+            <Link to="/login">Already a member? <strong>Login</strong></Link>
+          </div>
           
           {/* Progress Indicator */}
-          <div className="neo-stepper" role="progressbar" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={3}>
-            <div className="neo-stepper-progress" style={{ width: `${step * 50}%` }} />
-            {stepNames.map((name, index) => (
-              <div key={name} className={`neo-stepper-item ${index === step ? 'active' : index < step ? 'done' : ''}`}>
-                <span className="neo-stepper-circle">{index < step ? <Check /> : index + 1}</span>
-                <small className="neo-stepper-label">{name}</small>
-              </div>
-            ))}
+          <div style={{ marginTop: '24px' }}>
+            <div className="stepper-header-info">
+              <span>Step {step + 1} of 3</span>
+              <p>{stepNames[step]}</p>
+            </div>
+            <div className="neo-stepper" role="progressbar" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={3} style={{ marginTop: '8px' }}>
+              <div className="neo-stepper-progress" style={{ width: `${step * 50}%` }} />
+              {stepNames.map((name, index) => (
+                <div key={name} className={`neo-stepper-item ${index === step ? 'active' : index < step ? 'done' : ''}`}>
+                  <span className="neo-stepper-circle">{index < step ? <Check /> : index + 1}</span>
+                  <small className="neo-stepper-label">{name}</small>
+                </div>
+              ))}
+            </div>
           </div>
 
           <AnimatePresence mode="wait">
-            <motion.div key={step} className="neo-register-step" initial={{ opacity: 0, x: 22 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -18 }}>
+            <motion.div
+              key={step}
+              className="neo-register-step"
+              initial={{ opacity: 0, x: 15, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -15, scale: 0.98 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+            >
               
               {/* STEP 1: IDENTITY */}
               {step === 0 && (
@@ -486,24 +627,28 @@ export default function RegisterPage() {
 
                   <div className="neo-field-grid two">
                     <div className="form-field">
-                      <label htmlFor="firstName">First name *</label>
-                      <input
-                        id="firstName"
-                        type="text"
-                        value={form.firstName}
-                        onChange={(e) => {
-                          update('firstName', e.target.value);
-                          validateField('firstName', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, firstName: true }));
-                          validateField('firstName', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.firstName || backendErrors.firstName)}
-                        aria-describedby={(errors.firstName || backendErrors.firstName) ? "firstName-error" : undefined}
-                        className={(errors.firstName || backendErrors.firstName) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="firstName"
+                          type="text"
+                          placeholder=" "
+                          value={form.firstName}
+                          onChange={(e) => {
+                            update('firstName', e.target.value);
+                            validateField('firstName', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, firstName: true }));
+                            validateField('firstName', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.firstName || backendErrors.firstName)}
+                          aria-describedby={(errors.firstName || backendErrors.firstName) ? "firstName-error" : undefined}
+                          className={(errors.firstName || backendErrors.firstName) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="firstName">First name *</label>
+                        <UserRound className="field-icon" size={16} />
+                      </div>
                       {(errors.firstName || backendErrors.firstName) && (
                         <p id="firstName-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.firstName || backendErrors.firstName?.[0]}
@@ -512,24 +657,28 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="form-field">
-                      <label htmlFor="lastName">Last name *</label>
-                      <input
-                        id="lastName"
-                        type="text"
-                        value={form.lastName}
-                        onChange={(e) => {
-                          update('lastName', e.target.value);
-                          validateField('lastName', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, lastName: true }));
-                          validateField('lastName', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.lastName || backendErrors.lastName)}
-                        aria-describedby={(errors.lastName || backendErrors.lastName) ? "lastName-error" : undefined}
-                        className={(errors.lastName || backendErrors.lastName) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="lastName"
+                          type="text"
+                          placeholder=" "
+                          value={form.lastName}
+                          onChange={(e) => {
+                            update('lastName', e.target.value);
+                            validateField('lastName', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, lastName: true }));
+                            validateField('lastName', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.lastName || backendErrors.lastName)}
+                          aria-describedby={(errors.lastName || backendErrors.lastName) ? "lastName-error" : undefined}
+                          className={(errors.lastName || backendErrors.lastName) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="lastName">Last name *</label>
+                        <UserRound className="field-icon" size={16} />
+                      </div>
                       {(errors.lastName || backendErrors.lastName) && (
                         <p id="lastName-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.lastName || backendErrors.lastName?.[0]}
@@ -538,54 +687,78 @@ export default function RegisterPage() {
                     </div>
                   </div>
 
-                  <div className="neo-field-grid two">
+                  <div className="neo-field-grid">
                     <div className="form-field">
-                      <label htmlFor="profileFor">Profile created for *</label>
-                      <select
-                        id="profileFor"
-                        value={form.profileFor}
-                        onChange={(e) => {
-                          update('profileFor', e.target.value);
-                          validateField('profileFor', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.profileFor || backendErrors.profileFor)}
-                        aria-describedby={(errors.profileFor || backendErrors.profileFor) ? "profileFor-error" : undefined}
-                        className={(errors.profileFor || backendErrors.profileFor) ? 'invalid' : ''}
-                        required
-                      >
-                        <option value="">Select one</option>
-                        <option value="Self">Myself</option>
-                        <option value="Parent">Son/Daughter</option>
-                        <option value="Sibling">Sibling</option>
-                        <option value="Relative">Relative</option>
-                        <option value="Friend">Friend</option>
-                      </select>
+                      <label style={{ display: 'block', margin: '0 0 10px', color: '#5e4a52', fontSize: '9px', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                        Profile created for *
+                      </label>
+                      <div className="selection-card-grid five-cols" id="profileFor">
+                        {profileOptions.map((opt) => {
+                          const Icon = opt.icon;
+                          const isActive = form.profileFor === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              className={`selection-card ${isActive ? 'active' : ''}`}
+                              onClick={() => {
+                                update('profileFor', opt.value);
+                                validateField('profileFor', opt.value);
+                              }}
+                            >
+                              <div className="card-icon-wrapper">
+                                <Icon size={18} />
+                              </div>
+                              <span>{opt.label}</span>
+                              {isActive && (
+                                <span className="select-badge">
+                                  <Check />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                       {(errors.profileFor || backendErrors.profileFor) && (
                         <p id="profileFor-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.profileFor || backendErrors.profileFor?.[0]}
                         </p>
                       )}
                     </div>
+                  </div>
 
+                  <div className="neo-field-grid">
                     <div className="form-field">
-                      <label htmlFor="gender">Gender *</label>
-                      <select
-                        id="gender"
-                        value={form.gender}
-                        onChange={(e) => {
-                          update('gender', e.target.value);
-                          validateField('gender', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.gender || backendErrors.gender)}
-                        aria-describedby={(errors.gender || backendErrors.gender) ? "gender-error" : undefined}
-                        className={(errors.gender || backendErrors.gender) ? 'invalid' : ''}
-                        required
-                      >
-                        <option value="">Select gender</option>
-                        <option value="Female">Woman</option>
-                        <option value="Male">Man</option>
-                        <option value="Other">Other</option>
-                      </select>
+                      <label style={{ display: 'block', margin: '0 0 10px', color: '#5e4a52', fontSize: '9px', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                        Gender *
+                      </label>
+                      <div className="selection-card-grid three-cols" id="gender">
+                        {genderOptions.map((opt) => {
+                          const Icon = opt.icon;
+                          const isActive = form.gender === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              className={`selection-card ${isActive ? 'active' : ''}`}
+                              onClick={() => {
+                                update('gender', opt.value);
+                                validateField('gender', opt.value);
+                              }}
+                            >
+                              <div className="card-icon-wrapper">
+                                <Icon size={18} />
+                              </div>
+                              <span>{opt.label}</span>
+                              {isActive && (
+                                <span className="select-badge">
+                                  <Check />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                       {(errors.gender || backendErrors.gender) && (
                         <p id="gender-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.gender || backendErrors.gender?.[0]}
@@ -596,25 +769,29 @@ export default function RegisterPage() {
 
                   <div className="neo-field-grid">
                     <div className="form-field">
-                      <label htmlFor="birthDate">Date of birth *</label>
-                      <input
-                        id="birthDate"
-                        type="date"
-                        max={maxDateString}
-                        value={form.birthDate}
-                        onChange={(e) => {
-                          update('birthDate', e.target.value);
-                          validateField('birthDate', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, birthDate: true }));
-                          validateField('birthDate', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.birthDate || backendErrors.birthDate)}
-                        aria-describedby={(errors.birthDate || backendErrors.birthDate) ? "birthDate-error" : undefined}
-                        className={(errors.birthDate || backendErrors.birthDate) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="birthDate"
+                          type="date"
+                          max={maxDateString}
+                          placeholder=" "
+                          value={form.birthDate}
+                          onChange={(e) => {
+                            update('birthDate', e.target.value);
+                            validateField('birthDate', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, birthDate: true }));
+                            validateField('birthDate', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.birthDate || backendErrors.birthDate)}
+                          aria-describedby={(errors.birthDate || backendErrors.birthDate) ? "birthDate-error" : undefined}
+                          className={(errors.birthDate || backendErrors.birthDate) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="birthDate">Date of birth *</label>
+                        <Calendar className="field-icon" size={16} />
+                      </div>
                       {(errors.birthDate || backendErrors.birthDate) && (
                         <p id="birthDate-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.birthDate || backendErrors.birthDate?.[0]}
@@ -637,24 +814,28 @@ export default function RegisterPage() {
 
                   <div className="neo-field-grid two">
                     <div className="form-field">
-                      <label htmlFor="city">Current city *</label>
-                      <input
-                        id="city"
-                        type="text"
-                        value={form.city}
-                        onChange={(e) => {
-                          update('city', e.target.value);
-                          validateField('city', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, city: true }));
-                          validateField('city', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.city || backendErrors.city)}
-                        aria-describedby={(errors.city || backendErrors.city) ? "city-error" : undefined}
-                        className={(errors.city || backendErrors.city) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="city"
+                          type="text"
+                          placeholder=" "
+                          value={form.city}
+                          onChange={(e) => {
+                            update('city', e.target.value);
+                            validateField('city', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, city: true }));
+                            validateField('city', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.city || backendErrors.city)}
+                          aria-describedby={(errors.city || backendErrors.city) ? "city-error" : undefined}
+                          className={(errors.city || backendErrors.city) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="city">Current city *</label>
+                        <MapPin className="field-icon" size={16} />
+                      </div>
                       {(errors.city || backendErrors.city) && (
                         <p id="city-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.city || backendErrors.city?.[0]}
@@ -663,24 +844,28 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="form-field">
-                      <label htmlFor="religion">Religion *</label>
-                      <input
-                        id="religion"
-                        type="text"
-                        value={form.religion}
-                        onChange={(e) => {
-                          update('religion', e.target.value);
-                          validateField('religion', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, religion: true }));
-                          validateField('religion', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.religion || backendErrors.religion)}
-                        aria-describedby={(errors.religion || backendErrors.religion) ? "religion-error" : undefined}
-                        className={(errors.religion || backendErrors.religion) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="religion"
+                          type="text"
+                          placeholder=" "
+                          value={form.religion}
+                          onChange={(e) => {
+                            update('religion', e.target.value);
+                            validateField('religion', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, religion: true }));
+                            validateField('religion', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.religion || backendErrors.religion)}
+                          aria-describedby={(errors.religion || backendErrors.religion) ? "religion-error" : undefined}
+                          className={(errors.religion || backendErrors.religion) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="religion">Religion *</label>
+                        <Sparkles className="field-icon" size={16} />
+                      </div>
                       {(errors.religion || backendErrors.religion) && (
                         <p id="religion-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.religion || backendErrors.religion?.[0]}
@@ -691,24 +876,28 @@ export default function RegisterPage() {
 
                   <div className="neo-field-grid two">
                     <div className="form-field">
-                      <label htmlFor="language">Mother tongue *</label>
-                      <input
-                        id="language"
-                        type="text"
-                        value={form.language}
-                        onChange={(e) => {
-                          update('language', e.target.value);
-                          validateField('language', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, language: true }));
-                          validateField('language', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.language || backendErrors.language)}
-                        aria-describedby={(errors.language || backendErrors.language) ? "language-error" : undefined}
-                        className={(errors.language || backendErrors.language) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="language"
+                          type="text"
+                          placeholder=" "
+                          value={form.language}
+                          onChange={(e) => {
+                            update('language', e.target.value);
+                            validateField('language', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, language: true }));
+                            validateField('language', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.language || backendErrors.language)}
+                          aria-describedby={(errors.language || backendErrors.language) ? "language-error" : undefined}
+                          className={(errors.language || backendErrors.language) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="language">Mother tongue *</label>
+                        <MessageCircle className="field-icon" size={16} />
+                      </div>
                       {(errors.language || backendErrors.language) && (
                         <p id="language-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.language || backendErrors.language?.[0]}
@@ -717,16 +906,20 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="form-field">
-                      <label htmlFor="education">Highest education</label>
-                      <input
-                        id="education"
-                        type="text"
-                        value={form.education}
-                        onChange={(e) => update('education', e.target.value)}
-                        aria-invalid={Boolean(errors.education || backendErrors.education)}
-                        aria-describedby={(errors.education || backendErrors.education) ? "education-error" : undefined}
-                        className={(errors.education || backendErrors.education) ? 'invalid' : ''}
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="education"
+                          type="text"
+                          placeholder=" "
+                          value={form.education}
+                          onChange={(e) => update('education', e.target.value)}
+                          aria-invalid={Boolean(errors.education || backendErrors.education)}
+                          aria-describedby={(errors.education || backendErrors.education) ? "education-error" : undefined}
+                          className={(errors.education || backendErrors.education) ? 'invalid' : ''}
+                        />
+                        <label htmlFor="education">Highest education</label>
+                        <GraduationCap className="field-icon" size={16} />
+                      </div>
                       {(errors.education || backendErrors.education) && (
                         <p id="education-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.education || backendErrors.education?.[0]}
@@ -756,25 +949,29 @@ export default function RegisterPage() {
 
                   <div className="neo-field-grid">
                     <div className="form-field">
-                      <label htmlFor="email">Email address *</label>
-                      <input
-                        id="email"
-                        type="email"
-                        autoComplete="email"
-                        value={form.email}
-                        onChange={(e) => {
-                          update('email', e.target.value);
-                          validateField('email', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, email: true }));
-                          validateField('email', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.email || backendErrors.email)}
-                        aria-describedby={(errors.email || backendErrors.email) ? "email-error" : undefined}
-                        className={(errors.email || backendErrors.email) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="email"
+                          type="email"
+                          autoComplete="email"
+                          placeholder=" "
+                          value={form.email}
+                          onChange={(e) => {
+                            update('email', e.target.value);
+                            validateField('email', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, email: true }));
+                            validateField('email', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.email || backendErrors.email)}
+                          aria-describedby={(errors.email || backendErrors.email) ? "email-error" : undefined}
+                          className={(errors.email || backendErrors.email) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="email">Email address *</label>
+                        <Mail className="field-icon" size={16} />
+                      </div>
                       {(errors.email || backendErrors.email) && (
                         <p id="email-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.email || backendErrors.email?.[0]}
@@ -785,26 +982,29 @@ export default function RegisterPage() {
 
                   <div className="neo-field-grid">
                     <div className="form-field">
-                      <label htmlFor="phone">Mobile number *</label>
-                      <input
-                        id="phone"
-                        type="tel"
-                        inputMode="numeric"
-                        placeholder="e.g. 9876543210"
-                        value={form.phone}
-                        onChange={(e) => {
-                          update('phone', e.target.value);
-                          validateField('phone', e.target.value);
-                        }}
-                        onBlur={(e) => {
-                          setTouched((t) => ({ ...t, phone: true }));
-                          validateField('phone', e.target.value);
-                        }}
-                        aria-invalid={Boolean(errors.phone || backendErrors.phone)}
-                        aria-describedby={(errors.phone || backendErrors.phone) ? "phone-error" : undefined}
-                        className={(errors.phone || backendErrors.phone) ? 'invalid' : ''}
-                        required
-                      />
+                      <div className="floating-label-group">
+                        <input
+                          id="phone"
+                          type="tel"
+                          inputMode="numeric"
+                          placeholder=" "
+                          value={form.phone}
+                          onChange={(e) => {
+                            update('phone', e.target.value);
+                            validateField('phone', e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            setTouched((t) => ({ ...t, phone: true }));
+                            validateField('phone', e.target.value);
+                          }}
+                          aria-invalid={Boolean(errors.phone || backendErrors.phone)}
+                          aria-describedby={(errors.phone || backendErrors.phone) ? "phone-error" : undefined}
+                          className={(errors.phone || backendErrors.phone) ? 'invalid' : ''}
+                          required
+                        />
+                        <label htmlFor="phone">Mobile number *</label>
+                        <Phone className="field-icon" size={16} />
+                      </div>
                       {(errors.phone || backendErrors.phone) && (
                         <p id="phone-error" className="field-error" role="alert">
                           <AlertCircle size={14} className="inline-icon" /> {errors.phone || backendErrors.phone?.[0]}
@@ -814,13 +1014,13 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="neo-field-grid two">
-                    <div className="form-field password-wrapper" style={{ position: 'relative' }}>
-                      <label htmlFor="password">Password *</label>
-                      <div style={{ position: 'relative' }}>
+                    <div className="form-field">
+                      <div className="floating-label-group">
                         <input
                           id="password"
                           type={showPassword ? 'text' : 'password'}
                           autoComplete="new-password"
+                          placeholder=" "
                           value={form.password}
                           onChange={(e) => {
                             update('password', e.target.value);
@@ -836,15 +1036,16 @@ export default function RegisterPage() {
                           aria-invalid={Boolean(errors.password || backendErrors.password)}
                           aria-describedby={(errors.password || backendErrors.password) ? "password-error" : undefined}
                           className={(errors.password || backendErrors.password) ? 'invalid' : ''}
-                          style={{ paddingRight: '40px' }}
+                          style={{ paddingRight: '44px' }}
                           required
                         />
+                        <label htmlFor="password">Password *</label>
+                        <LockKeyhole className="field-icon" size={16} />
                         <button
                           type="button"
-                          className="password-toggle-btn"
                           onClick={() => setShowPassword(!showPassword)}
                           aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}
+                          style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#a18e95' }}
                         >
                           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
@@ -856,13 +1057,13 @@ export default function RegisterPage() {
                       )}
                     </div>
 
-                    <div className="form-field password-wrapper" style={{ position: 'relative' }}>
-                      <label htmlFor="confirmPassword">Confirm password *</label>
-                      <div style={{ position: 'relative' }}>
+                    <div className="form-field">
+                      <div className="floating-label-group">
                         <input
                           id="confirmPassword"
                           type={showConfirmPassword ? 'text' : 'password'}
                           autoComplete="new-password"
+                          placeholder=" "
                           value={form.confirmPassword}
                           onChange={(e) => {
                             update('confirmPassword', e.target.value);
@@ -875,15 +1076,16 @@ export default function RegisterPage() {
                           aria-invalid={Boolean(errors.confirmPassword || backendErrors.confirmPassword)}
                           aria-describedby={(errors.confirmPassword || backendErrors.confirmPassword) ? "confirmPassword-error" : undefined}
                           className={(errors.confirmPassword || backendErrors.confirmPassword) ? 'invalid' : ''}
-                          style={{ paddingRight: '40px' }}
+                          style={{ paddingRight: '44px' }}
                           required
                         />
+                        <label htmlFor="confirmPassword">Confirm password *</label>
+                        <LockKeyhole className="field-icon" size={16} />
                         <button
                           type="button"
-                          className="password-toggle-btn"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                          style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}
+                          style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#a18e95' }}
                         >
                           {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
@@ -896,30 +1098,41 @@ export default function RegisterPage() {
                     </div>
                   </div>
 
-                  {/* Live Password Checklist */}
+                  {/* Live Password Checklist Redesign */}
                   {form.password && (
-                    <div className="password-checklist-card" style={{ marginTop: '10px', padding: '15px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Password Strength:</span>
-                        <span className={`strength-badge ${strengthColorClass}`} style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
+                    <div className="strength-meter-container">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#4b3d43' }}>Password Security</span>
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          color: pwdStrength === 'Strong' ? '#10b981' : pwdStrength === 'Medium' ? '#fbbf24' : '#f43f5e'
+                        }}>
                           {pwdStrength}
                         </span>
                       </div>
-                      <ul className="checklist-list" style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.825rem', color: '#4b5563' }}>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.length ? '#10b981' : '#6b7280' }}>
-                          <Check size={14} /> At least 8 characters
+                      
+                      <div className="strength-progress-row">
+                        <div className={`strength-segment ${requirementsMet >= 1 ? (pwdStrength === 'Strong' ? 'active-strong' : pwdStrength === 'Medium' ? 'active-medium' : 'active-weak') : ''}`} />
+                        <div className={`strength-segment ${requirementsMet >= 3 ? (pwdStrength === 'Strong' ? 'active-strong' : pwdStrength === 'Medium' ? 'active-medium' : '') : ''}`} />
+                        <div className={`strength-segment ${requirementsMet === 5 ? 'active-strong' : ''}`} />
+                      </div>
+                      
+                      <ul className="checklist-list" style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.75rem', color: '#7a6870' }}>
+                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.length ? '#10b981' : '#a18e95' }}>
+                          <Check size={12} /> 8+ Characters
                         </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.upper ? '#10b981' : '#6b7280' }}>
-                          <Check size={14} /> One uppercase letter
+                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.upper ? '#10b981' : '#a18e95' }}>
+                          <Check size={12} /> Uppercase letter
                         </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.lower ? '#10b981' : '#6b7280' }}>
-                          <Check size={14} /> One lowercase letter
+                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.lower ? '#10b981' : '#a18e95' }}>
+                          <Check size={12} /> Lowercase letter
                         </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.number ? '#10b981' : '#6b7280' }}>
-                          <Check size={14} /> One number
+                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.number ? '#10b981' : '#a18e95' }}>
+                          <Check size={12} /> One number
                         </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.special ? '#10b981' : '#6b7280' }}>
-                          <Check size={14} /> One special character
+                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.special ? '#10b981' : '#a18e95' }}>
+                          <Check size={12} /> Special char
                         </li>
                       </ul>
                     </div>
@@ -938,7 +1151,6 @@ export default function RegisterPage() {
                         aria-invalid={Boolean(errors.acceptTerms || backendErrors.acceptTerms)}
                         aria-describedby={(errors.acceptTerms || backendErrors.acceptTerms) ? "acceptTerms-error" : undefined}
                         required
-                        style={{ marginTop: '4px' }}
                       />
                       <label htmlFor="acceptTerms" style={{ fontSize: '0.875rem', cursor: 'pointer', userSelect: 'none' }}>
                         I accept the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: '#2563eb' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: '#2563eb' }}>Privacy Policy</a> *

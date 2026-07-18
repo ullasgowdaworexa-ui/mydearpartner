@@ -18,6 +18,7 @@ from .serializers import ProfilePhotoSerializer
 from .services.image_processing import ProfilePhotoProcessingError
 from .services.photo_management import (
     MAX_PROFILE_PHOTOS,
+    PrimaryPhotoNotVerifiedError,
     create_profile_photo,
     delete_profile_photo,
     reorder_profile_photos,
@@ -129,6 +130,13 @@ class ProfilePhotoCollectionView(APIView):
                 uploaded_file=_uploaded_photo(request),
                 actor=member,
             )
+        except PrimaryPhotoNotVerifiedError as exc:
+            return ApiResponse(
+                success=False,
+                message=str(exc),
+                errors={"code": "PRIMARY_PHOTO_NOT_VERIFIED"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         except ProfilePhotoProcessingError as exc:
             return _error_response(exc)
 
@@ -155,8 +163,9 @@ class ProfilePhotoMineView(APIView):
             .order_by("display_order", "created_at")
         )
         serialized = ProfilePhotoSerializer(photos, many=True, context={"request": request}).data
+        from apps.core.entitlements import get_active_entitlements
         return ApiResponse(
-            data={"photos": serialized, "count": len(serialized), "max_photos": MAX_PROFILE_PHOTOS},
+            data={"photos": serialized, "count": len(serialized), "max_photos": get_active_entitlements(member).max_photos},
             message="Profile photos retrieved successfully.",
         )
 
@@ -371,3 +380,104 @@ class ProfilePhotoListView(ProfilePhotoMineView):
 
 class ProfilePhotoDeleteView(ProfilePhotoDetailView):
     pass
+
+
+class UserProfileImageUploadView(APIView):
+    """Compatibility endpoint for registration clients using ``images``.
+
+    Every upload is stored through the canonical ProfilePhoto pipeline.  The
+    retired UserProfileImage table has no moderation state and must never
+    receive new uploads.
+    """
+
+    permission_classes = (permissions.IsAuthenticated,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        member = _require_active_member(request)
+
+        # Support multiple files uploaded as 'images', 'image', or 'photo'
+        files = request.FILES.getlist("images") or request.FILES.getlist("image") or request.FILES.getlist("photo")
+        if not files:
+            single_file = request.FILES.get("images") or request.FILES.get("image") or request.FILES.get("photo")
+            if single_file:
+                files = [single_file]
+
+        if not files:
+            return Response(
+                {"detail": "No images provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from apps.core.entitlements import get_active_entitlements
+        existing_count = ProfilePhoto.objects.filter(user=member).count()
+        incoming_count = len(files)
+        max_photos = get_active_entitlements(member).max_photos
+        if existing_count + incoming_count > max_photos:
+            return Response(
+                {"error": "ENTITLEMENT_DENIED", "entitlement": "max_photos", "current_plan": get_active_entitlements(member).plan_name, "upgrade_url": "/membership"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if incoming_count > 1 and not ProfilePhoto.objects.filter(
+            user=member, status=ProfilePhoto.Status.APPROVED
+        ).exists():
+            return Response(
+                {"detail": "Upload one first photo and wait for approval before adding more photos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        saved_photos = []
+        try:
+            for file in files:
+                saved_photos.append(create_profile_photo(
+                    member=member,
+                    uploaded_file=file,
+                    actor=member,
+                ))
+        except PrimaryPhotoNotVerifiedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except ProfilePhotoProcessingError as exc:
+            return _error_response(exc)
+
+        return Response(
+            {
+                "success": True,
+                "message": "Photo uploaded and submitted for approval.",
+                "data": ProfilePhotoSerializer(saved_photos, many=True).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class UserAvatarView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def get(self, request, user_id):
+        from .models import UserProfileImage
+        avatar = UserProfileImage.objects.filter(user_id=user_id).order_by("display_order", "created_at").first()
+        
+        if avatar and avatar.thumbnail_data:
+            response = HttpResponse(bytes(avatar.thumbnail_data), content_type=avatar.mime_type)
+            response["Content-Length"] = str(len(avatar.thumbnail_data))
+            response["Cache-Control"] = "public, max-age=86400"
+            return response
+            
+        # Fallback to existing ProfilePhoto primary approved thumbnail
+        from .models import ProfilePhoto
+        old_photo = ProfilePhoto.objects.filter(user_id=user_id, is_primary=True, status=ProfilePhoto.Status.APPROVED).first()
+        if old_photo and old_photo.thumbnail_data:
+            response = HttpResponse(bytes(old_photo.thumbnail_data), content_type=old_photo.mime_type)
+            response["Content-Length"] = str(len(old_photo.thumbnail_data))
+            response["Cache-Control"] = "public, max-age=86400"
+            return response
+
+        # Default placeholder SVG
+        default_svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="80" height="80" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>'
+            '<circle cx="12" cy="7" r="4"></circle>'
+            '</svg>'
+        )
+        response = HttpResponse(default_svg, content_type="image/svg+xml")
+        response["Cache-Control"] = "public, max-age=86400"
+        return response

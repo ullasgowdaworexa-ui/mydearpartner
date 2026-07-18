@@ -9,6 +9,6 @@ const Work = dynamic(() => import('@/legacy/pages/admin/StaffWorkQueuePage'), { 
 export function StaffRouteResolver() {
   const path = usePathname().replace(/^\/staff\/?/, '').split('/')[0] || 'dashboard';
   if (path === 'dashboard') return <Dashboard />;
-  if (['tasks', 'my-work', 'profiles', 'photos', 'documents', 'assigned-tickets'].includes(path)) return <Work />;
+  if (['tasks', 'my-work', 'profiles', 'photos', 'documents'].includes(path)) return <Work />;
   notFound();
 }

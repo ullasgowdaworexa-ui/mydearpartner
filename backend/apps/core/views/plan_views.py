@@ -13,6 +13,7 @@ from apps.core.models import MembershipPlan
 from apps.core.responses import ApiResponse
 from apps.core.serializers import MembershipPlanSerializer
 from apps.accounts.permissions import IsAdmin
+from apps.accounts.models import AccountType
 
 
 class PublicMembershipPlanListView(APIView):
@@ -80,6 +81,8 @@ class AdminMembershipPlanListCreateView(APIView):
     
     def post(self, request):
         """Create a new membership plan"""
+        if str(request.user.account_type) != AccountType.SUPER_ADMIN:
+            return ApiResponse(success=False, message='Only Super Admin can change membership plans.', status=status.HTTP_403_FORBIDDEN)
         serializer = MembershipPlanSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -142,6 +145,8 @@ class AdminMembershipPlanDetailView(APIView):
         )
     
     def patch(self, request, plan_id):
+        if str(request.user.account_type) != AccountType.SUPER_ADMIN:
+            return ApiResponse(success=False, message='Only Super Admin can change membership plans.', status=status.HTTP_403_FORBIDDEN)
         try:
             plan = MembershipPlan.objects.get(pk=plan_id)
         except MembershipPlan.DoesNotExist:
@@ -187,6 +192,8 @@ class AdminMembershipPlanDetailView(APIView):
         )
     
     def delete(self, request, plan_id):
+        if str(request.user.account_type) != AccountType.SUPER_ADMIN:
+            return ApiResponse(success=False, message='Only Super Admin can change membership plans.', status=status.HTTP_403_FORBIDDEN)
         try:
             plan = MembershipPlan.objects.get(pk=plan_id)
         except MembershipPlan.DoesNotExist:

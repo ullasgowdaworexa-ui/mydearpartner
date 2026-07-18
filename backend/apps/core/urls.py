@@ -114,17 +114,13 @@ from .views import (
     PaymentHistoryView,
     ProfileDetailView,
     ProfileListView,
-    SecurePaymentCreateOrderView,
-    SecurePaymentVerifyView,
-    SecurePaymentWebhookView,
+    ProfileVisitorListView,
     MemberComplaintListCreateView,
     MemberProfileReportCreateView,
     SuccessStoryListView,
     SupportAttachmentDownloadView,
     SupportCategoryListView,
     TestimonialListView,
-    MemberMembershipRequestView,
-    MemberMembershipRequestHistoryView,
     ProfileUnlockDailyUsageView,
     ProfileUnlockHistoryView,
     # New plan views
@@ -133,6 +129,7 @@ from .views import (
     AdminMembershipPlanDetailView,
     AdminMembershipPlanToggleView,
 )
+from .views.membership_views import MembershipCreateOrderView, MembershipEntitlementsView, MembershipVerifyPaymentView, RazorpayWebhookView
 
 
 urlpatterns = [
@@ -153,20 +150,20 @@ urlpatterns = [
 
     path('profiles/', ProfileListView.as_view(), name='profiles_list'),
     path('profiles/<uuid:pk>/', ProfileDetailView.as_view(), name='profile_detail'),
+    path('profile-visitors/', ProfileVisitorListView.as_view(), name='profile_visitors'),
     path('interests/', InterestListCreateView.as_view(), name='interests_list'),
     path('interests/<uuid:pk>/', InterestDetailView.as_view(), name='interest_detail'),
     path('matchmaking/compatibility/', CompatibilityCheckView.as_view(), name='compatibility_check'),
     path('conversations/', ConversationListView.as_view(), name='conversations_list'),
     path('conversations/<uuid:user_id>/messages/', MessageHistoryView.as_view(), name='conversation_messages'),
 
-    path('payments/create-order/', SecurePaymentCreateOrderView.as_view(), name='payment_create_order'),
-    path('payments/verify/', SecurePaymentVerifyView.as_view(), name='payment_verify'),
     path('payments/history/', PaymentHistoryView.as_view(), name='payment_history'),
-    path('payments/webhook/', SecurePaymentWebhookView.as_view(), name='payment_webhook'),
+    path('member/memberships/create-order/', MembershipCreateOrderView.as_view(), name='membership_create_order'),
+    path('member/entitlements/', MembershipEntitlementsView.as_view(), name='member_entitlements'),
+    path('member/memberships/verify/', MembershipVerifyPaymentView.as_view(), name='membership_verify_payment'),
+    path('payments/webhook/', RazorpayWebhookView.as_view(), name='razorpay_webhook'),
     path('complaints/', MemberComplaintListCreateView.as_view(), name='member_complaints'),
     path('profile-reports/', MemberProfileReportCreateView.as_view(), name='member_profile_reports'),
-    path('memberships/request/', MemberMembershipRequestView.as_view(), name='member_membership_request'),
-    path('memberships/my-requests/', MemberMembershipRequestHistoryView.as_view(), name='member_membership_request_history'),
 
     path('profile-unlocks/daily-usage/', ProfileUnlockDailyUsageView.as_view(), name='profile_unlock_daily_usage'),
     path('profile-unlocks/history/', ProfileUnlockHistoryView.as_view(), name='profile_unlock_history'),
@@ -213,8 +210,6 @@ urlpatterns = [
     path('admin/transactions/<uuid:payment_id>/refund/', AdminPaymentRefundView.as_view(), name='admin_payment_refund'),
     path('admin/memberships/', AdminMembershipListView.as_view(), name='admin_memberships'),
     path('admin/memberships/direct/', AdminDirectMembershipView.as_view(), name='admin_memberships_direct'),
-    path('admin/membership-requests/', AdminMembershipRequestListView.as_view(), name='admin_membership_request_list'),
-    path('admin/membership-requests/<uuid:pk>/', AdminMembershipRequestDetailView.as_view(), name='admin_membership_request_detail'),
     path('admin/membership-plans/', AdminMembershipPlanListCreateView.as_view(), name='admin_membership_plans'),
     path('admin/membership-plans/<uuid:plan_id>/', AdminMembershipPlanDetailView.as_view(), name='admin_membership_plan_detail'),
     path('admin/membership-plans/<uuid:plan_id>/toggle/', AdminMembershipPlanToggleView.as_view(), name='admin_membership_plan_toggle'),
@@ -310,4 +305,3 @@ router.register(r'assignment-audits', AssignmentAuditViewSet, basename='assignme
 urlpatterns += [
     path('admin/config/', include(router.urls)),
 ]
-

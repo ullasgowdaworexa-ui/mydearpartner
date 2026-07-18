@@ -1,22 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Sparkles, Crown, Star, Heart, Loader2, X } from 'lucide-react';
+import { Check, Gem, Crown, Star, Heart, Loader2, X } from 'lucide-react';
 import { useAuth } from '@/legacy/contexts/AuthContext';
 import { fetchApi } from '@/legacy/services/apiClient';
 import { 
   useGetMembershipPlansQuery, 
-  useActivatePlanMutation,
+  useCreateMembershipOrderMutation,
+  useVerifyMembershipPaymentMutation,
   useGetMembershipSummaryQuery,
   type MembershipPlan 
 } from '@/legacy/services/membershipApi';
+import { useGetVerificationStatusQuery } from '@/legacy/services/verificationStatusApi';
+
+declare global {
+  interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void; }; }
+}
 
 // Icon mapping for different plan types
 const iconMap: Record<string, any> = {
   'free': Heart,
   'gold': Star,
-  'platinum': Sparkles,
+  'platinum': Gem,
   'elite': Crown,
 };
 
@@ -24,12 +30,25 @@ export default function MemberMembershipPage() {
   const { updateUser } = useAuth();
   const { data: plans = [], isLoading, error } = useGetMembershipPlansQuery();
   const { data: summary, refetch: refetchSummary } = useGetMembershipSummaryQuery();
-  const [activatePlan, { isLoading: isActivating }] = useActivatePlanMutation();
+  const [createOrder, { isLoading: isActivating }] = useCreateMembershipOrderMutation();
+  const [verifyPayment] = useVerifyMembershipPaymentMutation();
+  const { data: verification } = useGetVerificationStatusQuery();
   
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<'select' | 'processing' | 'success' | 'error'>('select');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Hooks must run before loading/error early returns. The script is harmless
+  // in demo mode and is used automatically when real Razorpay is enabled.
+  useEffect(() => {
+    if (document.querySelector('script[data-razorpay-checkout]')) return;
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.dataset.razorpayCheckout = 'true';
+    document.body.appendChild(script);
+  }, []);
 
   // Loading state
   if (isLoading) {
@@ -57,33 +76,61 @@ export default function MemberMembershipPage() {
     );
   }
 
-  const handleSelectPlan = (plan: MembershipPlan) => {
+  const handleSelectPlan = async (plan: MembershipPlan) => {
     if (plan.slug === 'free') {
       // Free plan - redirect to dashboard
       window.location.href = '/dashboard';
       return;
     }
     
-    // Paid plan - start activation flow
     setSelectedPlan(plan);
     setCheckoutStep('processing');
     setErrorMsg('');
-    handleActivatePlan(plan.slug);
-  };
-
-  const handleActivatePlan = async (planSlug: string) => {
     try {
-      const result = await activatePlan(planSlug).unwrap();
-      setSuccessMsg(`${result.membership?.plan_name || selectedPlan?.display_name || selectedPlan?.name || 'Your'} plan activated successfully!`);
-      setCheckoutStep('success');
-      await refetchSummary();
-      const freshUser = await fetchApi<any>('/member-auth/me/');
-      updateUser(freshUser);
-      setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 1200);
+      const order = await createOrder({ plan_id: plan.id }).unwrap();
+      if (order.demo_mode) {
+        const confirmed = window.confirm(`Demo checkout for ${order.plan.name}. No payment will be collected.`);
+        if (!confirmed) { setCheckoutStep('select'); return; }
+        const verified = await verifyPayment({
+          razorpay_order_id: order.order_id,
+          razorpay_payment_id: `demo_payment_${order.order_id}`,
+          razorpay_signature: 'DEMO_NO_PAYMENT',
+        }).unwrap();
+        setSuccessMsg(`Demo complete — your ${verified.membership.plan_name} membership is active until ${new Date(verified.membership.expires_at).toLocaleDateString()}.`);
+        setCheckoutStep('success');
+        await refetchSummary();
+        setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
+        return;
+      }
+      if (!window.Razorpay) throw new Error('Secure checkout could not be loaded. Please try again.');
+      setCheckoutStep('select');
+      const checkout = new window.Razorpay({
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'My Dear Partner',
+        description: `${order.plan.name} membership`,
+        order_id: order.order_id,
+        handler: async (payment: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          setCheckoutStep('processing');
+          try {
+            const verified = await verifyPayment(payment).unwrap();
+            setSuccessMsg(`Your ${verified.membership.plan_name} membership is active until ${new Date(verified.membership.expires_at).toLocaleDateString()}.`);
+            setCheckoutStep('success');
+            await refetchSummary();
+            updateUser(await fetchApi<any>('/member-auth/me/'));
+            setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
+          } catch (error: any) {
+            setErrorMsg(error.message || 'We could not verify your payment. Please contact support if you were charged.');
+            setCheckoutStep('error');
+          }
+        },
+        modal: { ondismiss: () => setCheckoutStep('select') },
+      });
+      checkout.open();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to activate plan');
+      const missing = err?.errors?.missing;
+      setErrorMsg(missing?.length ? `Finish these checks first: ${missing.join(', ').replaceAll('_', ' ')}.` : (err.message || 'Failed to start secure checkout'));
       setCheckoutStep('error');
     }
   };
@@ -134,6 +181,10 @@ export default function MemberMembershipPage() {
       if (plan.can_use_advanced_search) {
         features.push('Advanced search filters');
       }
+
+      if (plan.can_view_received_interests) {
+        features.push('See received interests');
+      }
       
       if (plan.contact_access_mode !== 'NONE') {
         features.push('Contact information access');
@@ -167,6 +218,13 @@ export default function MemberMembershipPage() {
             Upgrade your account to unlock exclusive features and find your match faster
           </p>
         </motion.div>
+
+        {verification && !verification.is_verified && (
+          <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+            Complete verification before purchasing a plan: {verification.next_action}.{' '}
+            <a className="font-semibold underline" href="/verification">Complete verification</a>
+          </div>
+        )}
 
         {/* Plans Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
@@ -242,7 +300,7 @@ export default function MemberMembershipPage() {
                     {/* CTA Button */}
                     <button
                       onClick={() => handleSelectPlan(plan)}
-                      disabled={isActivating || (summary?.plan_slug === plan.slug && summary?.is_free === false)}
+                      disabled={isActivating || (plan.slug !== 'free' && verification?.is_verified === false) || (summary?.plan_slug === plan.slug && summary?.is_free === false)}
                       className={`w-full py-3 px-4 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                         summary?.plan_slug === plan.slug && summary?.is_free === false
                           ? 'bg-green-500 text-white cursor-default hover:bg-green-500'
@@ -264,7 +322,7 @@ export default function MemberMembershipPage() {
                           Current Plan
                         </span>
                       ) : (
-                        plan.slug === 'free' ? 'Start Free' : `Choose ${planName}`
+                        plan.slug === 'free' ? 'Start Free' : verification?.is_verified === false ? 'Complete verification to buy' : `Buy ${planName}`
                       )}
                     </button>
                   </div>
@@ -329,7 +387,7 @@ export default function MemberMembershipPage() {
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <X className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-bold mb-2 text-gray-900">Activation Failed</h3>
+              <h3 className="text-xl font-bold mb-2 text-gray-900">Request Failed</h3>
               <p className="text-gray-600 mb-6">{errorMsg}</p>
               <div className="flex gap-3">
                 <button
@@ -343,7 +401,7 @@ export default function MemberMembershipPage() {
                     if (selectedPlan) {
                       setCheckoutStep('processing');
                       setErrorMsg('');
-                      handleActivatePlan(selectedPlan.slug);
+                      handleSelectPlan(selectedPlan);
                     }
                   }}
                   className="flex-1 bg-rose-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-rose-600 transition-colors"

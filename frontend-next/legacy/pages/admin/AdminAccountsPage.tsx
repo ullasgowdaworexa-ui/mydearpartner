@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
 
@@ -198,7 +198,7 @@ export default function AdminAccountsPage() {
                 const isSelf = account.id === user?.id;
                 return (
                   <tr key={account.id}>
-                    <td data-label="Administrator"><div className="admin-member-cell"><span className="admin-list-avatar">{account.photo ? <SmartImage src={account.photo} alt="" /> : account.full_name[0]?.toUpperCase()}</span><p><strong>{account.full_name}{isSelf && <em className="admin-you-label">You</em>}</strong><small>{account.email}</small><small>{account.phone || 'No phone provided'}</small></p></div></td>
+                    <td data-label="Administrator"><div className="admin-member-cell"><span className="admin-list-avatar">{account.id ? <img src={`/api/proxy/users/${account.id}/avatar/`} alt="" /> : account.full_name[0]?.toUpperCase()}</span><p><strong>{account.full_name}{isSelf && <em className="admin-you-label">You</em>}</strong><small>{account.email}</small><small>{account.phone || 'No phone provided'}</small></p></div></td>
                     <td data-label="Role"><span className={`admin-role-pill role-${account.role.toLowerCase()}`}><ShieldCheck />{account.role_display}</span></td>
                     <td data-label="Status"><AdminStatusBadge status={account.is_active ? 'Active' : 'Inactive'} /></td>
                     <td data-label="Last login"><span className="admin-muted-cell">{formatAdminDate(account.last_login, true)}</span></td>

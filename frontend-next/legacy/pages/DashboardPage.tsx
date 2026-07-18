@@ -7,7 +7,7 @@ import { Link } from '@/lib/router-compat';
 import { motion } from 'framer-motion';
 import {
   Heart, MessageCircle, Crown, Bell, Settings,
-  UserPlus, Sparkles, MapPin, BadgeCheck, CheckCircle2,
+  UserPlus, MapPin, BadgeCheck, CheckCircle2,
   ArrowRight, Check, X, ShieldAlert, Eye, Lock, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -34,16 +34,33 @@ const fieldLabels: Record<string, string> = {
   about: 'About Me',
 };
 
-const mockVisitors = [
-  { id: '1', name: 'Aakriti Sharma', age: 25, photo: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120', city: 'Mumbai', time: '2 hours ago' },
-  { id: '2', name: 'Priyanka Patel', age: 27, photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120', city: 'Pune', time: '5 hours ago' },
-  { id: '3', name: 'Sneha Reddy', age: 26, photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120', city: 'Hyderabad', time: '1 day ago' },
-];
+interface ProfileVisitor {
+  id: string;
+  viewed_at: string;
+  profile: { full_name?: string; age?: number; photo?: string; work_location?: string };
+}
+
+interface ProfileVisitorsResponse {
+  can_view_visitors: boolean;
+  total_unique_visitors: number;
+  results: ProfileVisitor[];
+}
+
+function relativeTime(value: string) {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+  return `${Math.floor(seconds / 86400)} days ago`;
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [incomingInterests, setIncomingInterests] = useState<any[]>([]);
   const [suggestedProfiles, setSuggestedProfiles] = useState<any[]>([]);
+  const [visitors, setVisitors] = useState<ProfileVisitor[]>([]);
+  const [canViewVisitors, setCanViewVisitors] = useState(false);
+  const [visitorCount, setVisitorCount] = useState(0);
   const [stats, setStats] = useState({
     receivedCount: 0,
     sentCount: 0,
@@ -55,17 +72,22 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      const [incoming, outgoing, conversations, notificationStats, profiles] = await Promise.all([
+      const [incoming, outgoing, conversations, notificationStats, profiles, visitorData] = await Promise.all([
         getInterests('incoming').catch(() => []),
         getInterests('outgoing').catch(() => []),
         getConversations().catch(() => []),
         fetchApi<{ unread_count: number }>('/notifications/unread-count/').catch(() => ({ unread_count: 0 })),
         getProfiles().catch(() => ({ results: [] })),
+        fetchApi<ProfileVisitorsResponse>('/profile-visitors/', { params: { limit: 3 } })
+          .catch(() => ({ can_view_visitors: false, total_unique_visitors: 0, results: [] })),
       ]);
 
       const pendingIncoming = incoming.filter((i: any) => i.status === 'PENDING');
       setIncomingInterests(pendingIncoming);
       setSuggestedProfiles(profiles.results.slice(0, 6));
+      setVisitors(visitorData.results);
+      setCanViewVisitors(visitorData.can_view_visitors);
+      setVisitorCount(visitorData.total_unique_visitors);
 
       const allInterests = [...incoming, ...outgoing];
       const accepted = allInterests.filter((i: any) => i.status === 'ACCEPTED').length;
@@ -113,94 +135,108 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-16 bg-gray-50/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="min-h-screen pt-28 pb-20 bg-[#faf6f0]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         
         {/* Welcome Banner */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-[var(--theme-primary-900)] via-[var(--theme-primary-800)] to-[var(--theme-primary-900)] p-8 sm:p-10 text-white shadow-2xl"
+          className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-[#2b101d] via-[#4a162b] to-[#1c0612] p-8 sm:p-12 text-white shadow-[0_20px_50px_rgba(43,16,29,0.25)] border border-white/5"
         >
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=2069')] opacity-10 mix-blend-overlay object-cover" />
-          <div className="absolute right-0 top-0 w-96 h-96 bg-white/10 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2" />
+          {/* Subtle grid pattern overlay */}
+          <div className="absolute inset-0 bg-grid-white/[0.02] mix-blend-overlay" />
+          {/* Ambient glowing radial balls */}
+          <div className="absolute right-0 top-0 w-96 h-96 bg-[var(--gold-400)]/10 blur-[120px] rounded-full translate-x-1/3 -translate-y-1/3 pointer-events-none" />
+          <div className="absolute left-10 bottom-0 w-72 h-72 bg-[var(--rose-400)]/10 blur-[100px] rounded-full -translate-x-1/3 translate-y-1/3 pointer-events-none" />
           
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-6">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-full border-4 border-white/20 overflow-hidden shadow-xl bg-gray-800 shrink-0">
+            <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+              <div className="relative group">
+                <div className="w-28 h-28 rounded-full border-4 border-[var(--gold-400)]/30 overflow-hidden shadow-2xl bg-[#160910] shrink-0 transition-transform duration-300 group-hover:scale-105">
                   <SmartImage src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
                 </div>
-                {isPremium && (
-                  <div className="absolute -bottom-2 -right-2 bg-gradient-to-r gradient-primary rounded-full p-1.5 shadow-lg border-2 border-[var(--theme-primary-900)]">
-                    <Crown className="w-4 h-4 text-white" />
+                {isPremium ? (
+                  <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-[var(--gold-400)] to-[var(--gold-500)] rounded-full p-2 shadow-lg border-2 border-[#2b101d] animate-bounce">
+                    <Crown className="w-4 h-4 text-[#2b101d]" />
+                  </div>
+                ) : (
+                  <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-[var(--rose-500)] to-[#4a162b] rounded-full p-2 shadow-lg border-2 border-[#2b101d]">
+                    <Heart className="w-4 h-4 text-white" />
                   </div>
                 )}
               </div>
               
-              <div>
-                <div className="flex flex-wrap gap-2 items-center mb-3">
-                  <div className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold border border-white/10">
-                    <Sparkles className="w-3 h-3 text-amber-300" />
-                    {isPremium ? 'Premium Partner' : 'Standard Member'}
+              <div className="space-y-2">
+                <div className="flex flex-wrap justify-center sm:justify-start gap-2 items-center">
+                  <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold border border-white/10 tracking-wide text-[var(--gold-300)]">
+                    {isPremium ? <Crown className="w-3.5 h-3.5 text-[var(--gold-400)]" /> : <Heart className="w-3.5 h-3.5 text-[var(--rose-300)]" />}
+                    {isPremium ? 'Premium Gold Partner' : 'Standard Member'}
                   </div>
                 </div>
-                <h1 className="text-3xl font-extrabold font-display leading-tight">
+                <h1 className="text-3xl sm:text-4.5xl font-black font-display leading-tight tracking-tight text-white">
                   Welcome back, {user?.first_name || 'Member'} 👋
                 </h1>
-                <p className="text-white/70 mt-1">Ready to discover your matches today?</p>
+                <p className="text-white/60 text-sm max-w-md">
+                  Ready to discover new matches? Complete checklist items to maximize discoverability.
+                </p>
               </div>
             </div>
-
-            {/* Removed duplicate actions panel */}
+            
+            <div className="shrink-0 flex gap-3">
+              <Link to="/search" className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[var(--gold-400)] to-[var(--gold-500)] text-[#2b101d] font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-[var(--gold-500)]/20 hover:scale-[1.03]">
+                Discover Matches
+              </Link>
+            </div>
           </div>
         </motion.div>
 
         {/* Dashboard grid columns */}
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-10">
           
-          <div className="lg:col-span-2 space-y-8">
+          {/* Main Content (Left Column) */}
+          <div className="lg:col-span-2 space-y-10">
             
             {/* 1. Statistics Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
               {[
-                { icon: UserPlus, label: 'Received', value: stats.receivedCount, color: 'text-rose-600 bg-rose-50' },
-                { icon: Heart, label: 'Sent', value: stats.sentCount, color: 'text-indigo-600 bg-indigo-50' },
-                { icon: CheckCircle2, label: 'Accepted', value: stats.acceptedCount, color: 'text-green-600 bg-green-50' },
-                { icon: MessageCircle, label: 'Active Chats', value: stats.chatsCount, color: 'text-purple-600 bg-purple-50' },
+                { icon: UserPlus, label: 'Received', value: stats.receivedCount, color: 'text-[var(--rose-500)] bg-[var(--rose-300)]/10 border-[var(--rose-500)]/10' },
+                { icon: Heart, label: 'Sent', value: stats.sentCount, color: 'text-indigo-600 bg-indigo-50/50 border-indigo-100' },
+                { icon: CheckCircle2, label: 'Accepted', value: stats.acceptedCount, color: 'text-emerald-600 bg-emerald-50/50 border-emerald-100' },
+                { icon: MessageCircle, label: 'Chats', value: stats.chatsCount, color: 'text-amber-600 bg-amber-50/50 border-amber-100' },
               ].map((stat, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="bg-white border border-gray-100 p-6 rounded-3xl flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+                  className="bg-white border border-gray-100 p-6 rounded-3xl flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300"
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 ${stat.color}`}>
-                    <stat.icon className="w-5 h-5" />
+                  <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-4 ${stat.color} shrink-0`}>
+                    <stat.icon className="w-5.5 h-5.5" />
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mb-1">{stat.value}</div>
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</div>
+                  <div className="text-3xl font-black text-slate-900 mb-1">{stat.value}</div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</div>
                 </motion.div>
               ))}
             </div>
 
             {/* 2. Pending Interests */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold font-display text-slate-900">Recent Partner Interests</h3>
               </div>
               
               {incomingInterests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-gray-100 shadow-sm text-center">
-                  <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-4">
-                    <Heart className="w-6 h-6" />
+                <div className="flex flex-col items-center justify-center p-12 bg-white rounded-[2rem] border border-gray-100/80 shadow-sm text-center">
+                  <div className="w-16 h-16 bg-[var(--rose-300)]/10 text-[var(--rose-500)] rounded-full flex items-center justify-center mb-4 border border-[var(--rose-500)]/10">
+                    <Heart className="w-8 h-8" />
                   </div>
                   <h4 className="text-lg font-bold text-slate-900 mb-1">No pending interests yet</h4>
                   <p className="text-slate-500 text-sm max-w-sm mt-1">
                     Try uploading a professional profile photo or updating matching parameters to help more members discover you.
                   </p>
-                  <Link to="/search" className="btn-primary mt-6 text-xs py-2 px-6">
+                  <Link to="/search" className="mt-6 px-6 py-2.5 rounded-xl border border-[var(--rose-500)]/20 text-[var(--rose-500)] font-bold text-xs hover:bg-[var(--rose-300)]/5 transition-all">
                     Browse Matches
                   </Link>
                 </div>
@@ -208,34 +244,34 @@ export default function DashboardPage() {
                 <div className="grid sm:grid-cols-2 gap-6">
                   {incomingInterests.slice(0, 4).map((interest, i) => {
                     const sender = interest.sender;
-                    const senderPhoto = sender.photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300";
+                    const senderPhoto = sender.photo || '';
                     return (
                       <motion.div
                         key={interest.id}
                         initial={{ opacity: 0, scale: 0.98 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.1 + (i * 0.05) }}
-                        className="group relative overflow-hidden rounded-3xl bg-white shadow-md border border-slate-100"
+                        className="group relative overflow-hidden rounded-[2rem] bg-white shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100/80"
                       >
-                        <div className="aspect-[4/5] relative">
-                          <SmartImage src={senderPhoto} alt={sender.full_name} className="w-full h-full object-cover" />
+                        <div className="aspect-[4/5] relative overflow-hidden">
+                          <SmartImage src={senderPhoto} alt={sender.full_name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                           <div className="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-gray-950/20 to-transparent" />
                           
                           {sender.is_verified && (
-                            <div className="absolute top-4 left-4 bg-gradient-to-r gradient-primary text-slate-900 text-[10px] font-extrabold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
-                              <Crown className="w-3 h-3" /> VERIFIED
+                            <div className="absolute top-4 left-4 bg-gradient-to-r from-[var(--gold-400)] to-[var(--gold-500)] text-[#2b101d] text-[10px] font-black px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-1">
+                              <Crown className="w-3.5 h-3.5" /> VERIFIED
                             </div>
                           )}
                           
-                          <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-                            <h4 className="text-xl font-bold flex items-center gap-2">
+                          <div className="absolute bottom-0 left-0 right-0 p-6 text-white z-10">
+                            <h4 className="text-xl font-bold flex items-center gap-1.5">
                               {sender.first_name || 'Member'}, {sender.age || 'N/A'}
-                              <BadgeCheck className="w-5 h-5 text-[var(--theme-primary-500)]" />
+                              <BadgeCheck className="w-5.5 h-5.5 text-emerald-400" />
                             </h4>
                             
                             <div className="flex flex-wrap items-center gap-2 text-xs text-gray-300 mt-1">
-                              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {sender.work_location || 'India'}</span>
-                              <span>â€¢</span>
+                              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-[var(--gold-400)]" /> {sender.work_location || 'India'}</span>
+                              <span>•</span>
                               <span>{sender.highest_education || 'Graduate'}</span>
                             </div>
                           </div>
@@ -244,15 +280,15 @@ export default function DashboardPage() {
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 w-full px-6 z-20">
                           <button type="button"
                             onClick={() => handleInterestAction(interest.id, 'DECLINED')}
-                            className="flex-1 py-2.5 rounded-xl bg-white text-rose-600 font-extrabold shadow-lg hover:bg-rose-50 hover:scale-105 transition-all flex items-center justify-center gap-1 border border-rose-100 cursor-pointer"
+                            className="flex-1 py-3 rounded-2xl bg-white text-[var(--rose-500)] font-extrabold shadow-lg hover:bg-rose-50/50 hover:scale-105 transition-all flex items-center justify-center gap-1.5 border border-rose-100 cursor-pointer"
                           >
-                            <X className="w-4 h-4" /> Decline
+                            <X className="w-4.5 h-4.5" /> Decline
                           </button>
                           <button type="button"
                             onClick={() => handleInterestAction(interest.id, 'ACCEPTED')}
-                            className="flex-1 py-2.5 rounded-xl bg-[var(--theme-primary-600)] text-white font-extrabold shadow-lg hover:bg-[var(--theme-primary-700)] hover:scale-105 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[var(--rose-500)] to-[#4a162b] text-white font-extrabold shadow-lg hover:opacity-95 hover:scale-105 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <Check className="w-4 h-4" /> Accept
+                            <Check className="w-4.5 h-4.5" /> Accept
                           </button>
                         </div>
                       </motion.div>
@@ -262,146 +298,149 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* 3. Six-photo match gallery */}
-            <section className="rounded-[2rem] bg-white border border-gray-100 p-5 sm:p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-4 mb-5">
+            {/* 3. Match Gallery */}
+            <section className="rounded-[2.5rem] bg-white border border-gray-100 p-6 sm:p-8 shadow-sm">
+              <div className="flex items-center justify-between gap-4 mb-6">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-[var(--theme-primary-600)]">Discover</p>
-                  <h3 className="text-xl font-bold font-display text-slate-900">Profiles picked for you</h3>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[var(--rose-500)]">Curated Picks</p>
+                  <h3 className="text-xl font-bold font-display text-slate-900 mt-1">Recommended Compatibility matches</h3>
                 </div>
-                <Link to="/search" className="text-sm font-bold text-[var(--theme-primary-700)] hover:text-[var(--theme-primary-900)] inline-flex items-center gap-1">
-                  See all <ArrowRight className="w-4 h-4" />
+                <Link to="/search" className="text-sm font-bold text-[var(--rose-500)] hover:text-[var(--rose-600)] inline-flex items-center gap-1 group">
+                  See all <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </div>
+              
               {suggestedProfiles.length ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
                   {suggestedProfiles.map((profile) => (
-                    <Link key={profile.id} to={`/profile/${profile.id}`} className="group relative aspect-[4/5] overflow-hidden rounded-2xl bg-slate-100">
-                      <SmartImage src={profile.photo} alt={profile.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent px-3 pb-3 pt-10 text-white">
+                    <Link key={profile.id} to={`/profile/${profile.id}`} className="group relative aspect-[4/5] overflow-hidden rounded-2xl bg-slate-100 shadow-sm border border-slate-100/50 block">
+                      <SmartImage src={profile.photo} alt={profile.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      {profile.photoVisibility === 'pending_approval' ? (
+                        <div className="absolute inset-x-3 top-3 rounded-lg bg-amber-100/95 px-3 py-2 text-center text-[10px] font-bold text-amber-950 shadow-sm">
+                          Photo pending approval
+                        </div>
+                      ) : null}
+                      
+                      {profile.compatibility > 0 && (
+                        <div className="absolute top-3 right-3 bg-[#2b101d]/85 backdrop-blur-sm text-[var(--gold-400)] text-[10px] font-black px-2 py-1 rounded-md border border-[var(--gold-400)]/20 shadow-lg">
+                          {profile.compatibility}% Match
+                        </div>
+                      )}
+                      
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/95 via-slate-950/45 to-transparent px-4 pb-4 pt-12 text-white z-10">
                         <p className="font-bold text-sm truncate">{profile.name}, {profile.age || '—'}</p>
-                        <p className="text-xs text-white/75 truncate">{profile.location || 'India'}</p>
+                        <p className="text-[11px] text-white/60 truncate mt-0.5">{profile.location || 'India'}</p>
                       </div>
                     </Link>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">Complete your profile to receive suggested matches.</div>
+                <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">Complete your profile checklist to unlock compatibility matches.</div>
               )}
             </section>
           </div>
 
-          <div className="space-y-8">
+          {/* Sidebar / Context panel (Right Column) */}
+          <div className="space-y-10">
             <DailyUsageWidget />
 
             {/* Membership Status Widget */}
             <motion.div
-              initial={{ opacity: 0, x: 15 }}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.12 }}
-              className="bg-white p-6 rounded-[2rem] shadow-sm relative overflow-hidden border border-gray-100"
+              className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden border border-gray-100"
             >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-500/10 to-rose-500/10 blur-2xl rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[var(--rose-400)]/5 to-[var(--gold-400)]/5 blur-2xl rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
               
-              <h3 className="font-bold font-display text-lg text-slate-900 mb-4 flex items-center gap-1.5">
-                <Crown className="w-5 h-5 text-rose-500" /> Membership Usage
+              <h3 className="font-bold font-display text-lg text-slate-900 mb-5 flex items-center gap-2">
+                <Crown className="w-5 h-5 text-[var(--gold-500)]" /> Membership Status
               </h3>
               
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6 space-y-3">
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 mb-6 space-y-4">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-500">Current Plan</span>
-                  <span className="bg-gradient-to-r gradient-primary text-slate-900 font-extrabold text-[11px] px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                    {(user as any)?.active_membership?.plan_name || 'Free'}
+                  <span className="font-bold text-slate-400 uppercase text-[10px] tracking-wider">Plan Name</span>
+                  <span className="bg-gradient-to-r from-[var(--gold-400)] to-[var(--gold-500)] text-[#2b101d] font-black text-[10px] px-3.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                    {(user as any)?.active_membership?.plan_name || 'Free Tier'}
                   </span>
                 </div>
                 
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200/50">
-                  <span className="font-semibold text-slate-500">Profiles Unlocked Today</span>
-                  <span className="font-bold text-slate-950">
-                    {((user as any)?.active_membership?.limits?.daily_views_used) ?? 0} of {((user as any)?.active_membership?.limits?.daily_views_limit) ?? 5}
+                <div className="flex justify-between items-center text-sm pt-3 border-t border-slate-200/50">
+                  <span className="font-bold text-slate-400 uppercase text-[10px] tracking-wider">Daily Unlocks</span>
+                  <span className="font-bold text-slate-900">
+                    {((user as any)?.active_membership?.limits?.daily_views_used) ?? 0} / {((user as any)?.active_membership?.limits?.daily_views_limit) ?? 5}
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200/50">
-                  <span className="font-semibold text-slate-500">Remaining Today</span>
-                  <span className="font-bold text-slate-950">
-                    {Math.max(0, (((user as any)?.active_membership?.limits?.daily_views_limit) ?? 5) - (((user as any)?.active_membership?.limits?.daily_views_used) ?? 0))}
+                <div className="flex justify-between items-center text-sm pt-3 border-t border-slate-200/50">
+                  <span className="font-bold text-slate-400 uppercase text-[10px] tracking-wider">Remaining today</span>
+                  <span className="font-black text-[var(--rose-500)]">
+                    {Math.max(0, (((user as any)?.active_membership?.limits?.daily_views_limit) ?? 5) - (((user as any)?.active_membership?.limits?.daily_views_used) ?? 0))} unlocks
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200/50">
-                  <span className="font-semibold text-slate-500">Messaging</span>
-                  <span className={`font-bold ${((user as any)?.active_membership?.plan_slug && (user as any)?.active_membership?.plan_slug !== 'free') ? 'text-green-600' : 'text-slate-500'}`}>
-                    {((user as any)?.active_membership?.plan_slug && (user as any)?.active_membership?.plan_slug !== 'free') ? 'Included' : 'Not Included'}
+                <div className="flex justify-between items-center text-sm pt-3 border-t border-slate-200/50">
+                  <span className="font-bold text-slate-400 uppercase text-[10px] tracking-wider">Direct messaging</span>
+                  <span className={`font-extrabold text-xs uppercase ${((user as any)?.active_membership?.plan_slug && (user as any)?.active_membership?.plan_slug !== 'free') ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    {((user as any)?.active_membership?.plan_slug && (user as any)?.active_membership?.plan_slug !== 'free') ? 'Enabled' : 'Locked'}
                   </span>
                 </div>
-
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200/50">
-                  <span className="font-semibold text-slate-500">Next Reset</span>
-                  <span className="font-medium text-slate-600">Tomorrow at 12:00 AM</span>
-                </div>
-
+                
                 {((user as any)?.active_membership?.end_date) && (
-                  <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200/50">
-                    <span className="font-semibold text-slate-500">Plan Expiry</span>
-                    <span className="font-medium text-rose-500">
+                  <div className="flex justify-between items-center text-sm pt-3 border-t border-slate-200/50">
+                    <span className="font-bold text-slate-400 uppercase text-[10px] tracking-wider">Valid Till</span>
+                    <span className="font-semibold text-slate-700">
                       {new Date((user as any).active_membership.end_date).toLocaleDateString()}
                     </span>
                   </div>
                 )}
                 
                 {((user as any)?.pending_request) && (
-                  <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-xl border border-amber-200 mt-2">
-                    <strong>Pending Plan Request:</strong> {(user as any).pending_request.plan_name} (Awaiting Admin approval)
-                  </div>
-                )}
-
-                {((user as any)?.pending_membership) && (
-                  <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-xl border border-amber-200 mt-2">
-                    <strong>Verification Pending:</strong> {(user as any).pending_membership.plan_name} (Active once verified)
+                  <div className="bg-amber-50 text-amber-950 text-xs p-3.5 rounded-xl border border-amber-200/50 mt-2">
+                    <strong>Pending Upgrade:</strong> {(user as any).pending_request.plan_name} (Awaiting confirmation)
                   </div>
                 )}
               </div>
 
-              <Link to="/membership" className="block text-center w-full py-3.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm">
-                View Plans & Entitlements
+              <Link to="/membership" className="block text-center w-full py-4 rounded-2xl border border-slate-200 text-slate-700 font-extrabold text-sm hover:bg-slate-50 transition-all shadow-sm">
+                View Plan Options
               </Link>
             </motion.div>
 
             {/* 3. Profile Completion & Strength Widget */}
             <motion.div
-              initial={{ opacity: 0, x: 15 }}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.15 }}
-              className="bg-white p-6 rounded-[2rem] shadow-sm relative overflow-hidden border border-gray-100"
+              className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden border border-gray-100"
             >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[var(--theme-primary-500)]/10 to-[var(--theme-primary-400)]/10 blur-2xl rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#8e3d58]/5 to-[var(--gold-400)]/5 blur-2xl rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
               
-              <h3 className="font-bold font-display text-lg text-slate-900 mb-6 flex items-center gap-1.5">
-                <Sparkles className="w-5 h-5 text-amber-500" /> Profile Strength
+              <h3 className="font-bold font-display text-lg text-slate-900 mb-6 flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-amber-500" /> Profile Strength
               </h3>
               
-              <div className="relative w-32 h-32 mx-auto mb-6">
+              <div className="relative w-36 h-36 mx-auto mb-6">
                 <svg className="w-full h-full transform -rotate-90">
-                  <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="none" className="text-gray-100" />
-                  <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="none" className="text-[var(--theme-primary-600)]" strokeDasharray="351.858" strokeDashoffset={351.858 * (1 - completionPercentage / 100)} strokeLinecap="round" />
+                  <circle cx="72" cy="72" r="64" stroke="currentColor" strokeWidth="8" fill="none" className="text-slate-100" />
+                  <circle cx="72" cy="72" r="64" stroke="currentColor" strokeWidth="8" fill="none" className="text-[var(--rose-500)]" strokeDasharray="402.12" strokeDashoffset={402.12 * (1 - completionPercentage / 100)} strokeLinecap="round" />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-black text-slate-900">{completionPercentage}%</span>
+                  <span className="text-3.5xl font-black text-slate-900">{completionPercentage}%</span>
                 </div>
               </div>
               
               {missingFields.length > 0 ? (
                 <div className="space-y-4 mb-6">
-                  <div className="flex items-start gap-2.5 bg-amber-50 text-amber-800 text-xs p-3 rounded-2xl border border-amber-200/50">
-                    <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2.5 bg-amber-50 text-amber-800 text-xs p-3.5 rounded-2xl border border-amber-200/50">
+                    <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
                     <div>
-                      <strong>Pending Fields Checklist</strong>
-                      <p className="text-[11px] text-amber-700/90 mt-0.5">Reach 100% to qualify for verified matchmaking compatibility lists.</p>
+                      <strong>Checklist Remaining</strong>
+                      <p className="text-[11px] text-amber-700/90 mt-0.5">Reach 100% to qualify for compatibility listings.</p>
                     </div>
                   </div>
                   
-                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">To Complete:</div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remaining fields:</div>
                   <ul className="grid grid-cols-2 gap-2 text-xs text-slate-600 max-h-40 overflow-y-auto pr-1">
                     {missingFields.map((field: string) => (
                       <li key={field} className="flex items-center gap-1.5">
@@ -412,68 +451,66 @@ export default function DashboardPage() {
                   </ul>
                 </div>
               ) : (
-                <div className="flex items-start gap-2.5 bg-green-50 text-green-800 text-xs p-3 rounded-2xl border border-green-200/50 mb-6">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2.5 bg-green-50 text-green-800 text-xs p-3.5 rounded-2xl border border-green-200/50 mb-6">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
                   <div>
-                    <strong>100% Complete!</strong>
-                    <p className="text-[11px] text-green-700 mt-0.5">Your profile parameters are fully integrated into our search indexes.</p>
+                    <strong>100% Verified!</strong>
+                    <p className="text-[11px] text-green-700 mt-0.5">Your matching indices are fully built and active.</p>
                   </div>
                 </div>
               )}
               
-              <Link to="/settings" className="block text-center w-full py-3.5 rounded-xl btn-primary text-white font-bold text-sm hover:scale-[1.02] transition-all shadow-md">
-                {missingFields.length > 0 ? 'Complete Profile' : 'Edit Profile Details'}
+              <Link to="/settings" className="block text-center w-full py-4 rounded-2xl bg-gradient-to-r from-[var(--rose-500)] to-[#4a162b] text-white font-extrabold text-sm hover:opacity-95 transition-all shadow-md hover:scale-[1.02]">
+                {missingFields.length > 0 ? 'Complete Profile Info' : 'Edit Profile Parameters'}
               </Link>
             </motion.div>
 
-            {/* 4. Recent Profile Visitors Widget (Premium Matrimony Hook) */}
+            {/* 4. Recent Profile Visitors Widget */}
             <motion.div
-              initial={{ opacity: 0, x: 15 }}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 relative overflow-hidden"
+              className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-gray-100 relative overflow-hidden"
             >
-              <h3 className="font-bold font-display text-lg text-slate-900 mb-4 flex items-center gap-1.5">
-                <Eye className="w-5 h-5 text-indigo-500" /> Recent Visitors
+              <h3 className="font-bold font-display text-lg text-slate-900 mb-5 flex items-center gap-2">
+                <Eye className="w-5 h-5 text-indigo-500" /> Recent Profile Visitors
               </h3>
 
               <div className="space-y-4">
-                {mockVisitors.map((visitor) => (
-                  <div key={visitor.id} className="flex items-center justify-between">
+                {canViewVisitors && visitors.map((visitor) => (
+                  <div key={visitor.id} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0 last:pb-0">
                     <div className="flex items-center gap-3">
                       <div className="relative">
                         <SmartImage 
-                          src={visitor.photo} 
+                          src={visitor.profile.photo} 
                           alt="Visitor" 
-                          className={`w-10 h-10 rounded-full object-cover border border-gray-100 ${!isPremium ? 'blur-[3px]' : ''}`} 
+                          className="w-11 h-11 rounded-full object-cover border border-gray-100"
                         />
-                        {!isPremium && (
-                          <div className="absolute inset-0 bg-black/10 rounded-full flex items-center justify-center">
-                            <Lock className="w-3.5 h-3.5 text-white shadow-sm" />
-                          </div>
-                        )}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-800">
-                          {isPremium ? `${visitor.name}, ${visitor.age}` : 'Verified Partner'}
+                        <p className="text-sm font-bold text-slate-800">
+                          {visitor.profile.full_name || 'Member'}{visitor.profile.age ? `, ${visitor.profile.age}` : ''}
                         </p>
-                        <p className="text-xs text-gray-500">
-                          {isPremium ? `${visitor.city} Â· ${visitor.time}` : `${visitor.time}`}
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {visitor.profile.work_location || 'Location private'} · {relativeTime(visitor.viewed_at)}
                         </p>
                       </div>
                     </div>
                   </div>
                 ))}
+                {canViewVisitors && visitors.length === 0 ? <p className="py-4 text-center text-sm text-slate-400 italic">No one has viewed your profile yet.</p> : null}
+                {!canViewVisitors && visitorCount > 0 ? <p className="py-2 text-center text-sm text-slate-500 font-semibold">{visitorCount} verified {visitorCount === 1 ? 'member' : 'members'} viewed your profile.</p> : null}
+                {!canViewVisitors && visitorCount === 0 ? <p className="py-4 text-center text-sm text-slate-400 italic">No profile views recorded.</p> : null}
               </div>
 
-              {!isPremium && (
+              {!canViewVisitors && visitorCount > 0 && (
                 <div className="mt-4 pt-4 border-t border-gray-100 text-center">
-                  <p className="text-xs text-gray-500 mb-3">Upgrade to Premium to see who viewed your profile details.</p>
+                  <p className="text-xs text-slate-400 mb-4">Upgrade to Gold Tier to unlock full visitor identities.</p>
                   <Link 
                     to="/membership" 
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--theme-primary-700)] hover:text-[var(--theme-primary-900)] transition-colors"
+                    className="inline-flex items-center gap-1 text-xs font-black text-[var(--rose-500)] hover:text-[var(--rose-600)] transition-colors group"
                   >
-                    Unlock Visitors <ArrowRight className="w-3.5 h-3.5" />
+                    Unlock Visitors <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                   </Link>
                 </div>
               )}
@@ -482,20 +519,20 @@ export default function DashboardPage() {
             {/* 5. Premium Upsell Card */}
             {!isPremium && (
               <motion.div
-                initial={{ opacity: 0, x: 15 }}
+                initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.25 }}
-                className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white shadow-xl"
+                className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-[#2b101d] via-[#4a162b] to-[#1c0612] p-8 text-white shadow-xl border border-white/5"
               >
-                <div className="absolute -top-10 -right-10 w-40 h-40 bg-gradient-to-br gradient-primary opacity-20 blur-3xl rounded-full" />
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-gradient-to-br from-[var(--gold-400)]/20 to-[var(--gold-500)]/20 opacity-30 blur-3xl rounded-full pointer-events-none" />
                 
-                <Crown className="w-10 h-10 text-[var(--theme-primary-500)] mb-4" />
-                <h3 className="text-xl font-extrabold font-display mb-2">Upgrade to Gold Tier</h3>
-                <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-                  Get priority compatibility matchmaking, send unlimited messages, and unlock contact details.
+                <Crown className="w-12 h-12 text-[var(--gold-400)] mb-4 animate-pulse" />
+                <h3 className="text-xl font-black font-display mb-2 text-white">Upgrade to Premium Gold</h3>
+                <p className="text-xs text-white/60 mb-6 leading-relaxed">
+                  Send unlimited messages, view direct contact numbers, unlock full compatibility analysis reports, and browse anonymously.
                 </p>
                 
-                <Link to="/membership" className="inline-flex items-center justify-center w-full gap-2 py-3 bg-gradient-to-r gradient-primary text-slate-900 font-bold text-sm hover:opacity-95 transition-opacity rounded-xl shadow-lg">
+                <Link to="/membership" className="inline-flex items-center justify-center w-full gap-2 py-4 bg-gradient-to-r from-[var(--gold-400)] to-[var(--gold-500)] text-[#2b101d] font-black text-sm hover:opacity-95 transition-opacity rounded-2xl shadow-lg">
                   Upgrade Now <ArrowRight className="w-4 h-4" />
                 </Link>
               </motion.div>

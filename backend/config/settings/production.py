@@ -3,16 +3,9 @@ from django.core.exceptions import ImproperlyConfigured
 
 DEBUG = False
 
-# Security check to ensure strong SECRET_KEY and online-payment secrets are
-# supplied in production. Manual approval intentionally needs no gateway key.
+# Security check to ensure a strong SECRET_KEY is supplied in production.
 if not SECRET_KEY or SECRET_KEY.startswith('django-insecure'):
     raise ImproperlyConfigured('A strong, secure SECRET_KEY is required in production.')
-
-if PAYMENT_MODE == 'online' and (
-    not PAYMENT_GATEWAY_VERIFICATION_SECRET
-    or PAYMENT_GATEWAY_VERIFICATION_SECRET == 'placeholder_webhook_secret'
-):
-    raise ImproperlyConfigured('PAYMENT_GATEWAY_VERIFICATION_SECRET is required and must not be placeholder in production.')
 
 # 12-factor overrides from env config
 SECURE_SSL_REDIRECT = config['SECURE_SSL_REDIRECT']

@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from apps.accounts.models import Member, MemberPreference, MemberProfile
 from apps.profiles.models import ProfilePhoto
+from apps.profiles.photo_permissions import can_view_profile_photo
 from apps.profiles.serializers import ProfilePhotoSerializer, photo_endpoint_urls
 
 from .models import (
@@ -99,8 +100,8 @@ class MemberMembershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = MemberMembership
         fields = (
-            'id', 'member', 'plan', 'plan_name', 'plan_slug', 'start_date',
-            'end_date', 'is_active', 'status'
+            'id', 'member', 'plan', 'plan_name', 'plan_slug', 'start_date', 'end_date',
+            'started_at', 'expires_at', 'is_active', 'status', 'created_at'
         )
         read_only_fields = ('id', 'member')
 
@@ -140,6 +141,7 @@ class MemberPublicSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name', read_only=True)
     age = serializers.SerializerMethodField()
     photo = serializers.SerializerMethodField()
+    photo_visibility = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
     is_verified = serializers.BooleanField(read_only=True)
     height = serializers.SerializerMethodField()
@@ -160,7 +162,7 @@ class MemberPublicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Member
         fields = (
-            'id', 'full_name', 'age', 'gender', 'photo', 'photos', 'is_verified', 'is_premium',
+            'id', 'full_name', 'age', 'gender', 'photo', 'photo_visibility', 'photos', 'is_verified', 'is_premium',
             'height', 'religion', 'mother_tongue', 'caste', 'highest_education',
             'occupation', 'annual_income', 'work_location', 'about', 'family_type',
             'marital_status', 'hobbies', 'compatibility', 'pref_about',
@@ -209,15 +211,32 @@ class MemberPublicSerializer(serializers.ModelSerializer):
         """Return a thumbnail endpoint, never image binary or a media URL."""
         approved = self._approved_photos(obj)
         photo = next((item for item in approved if item.is_primary), None)
-        if not photo:
+        viewer = self._get_viewer()
+        # Do not advertise a private endpoint that will reject the current
+        # viewer. Discovery cards use the null value to show their neutral
+        # placeholder instead of triggering noisy 403 thumbnail requests.
+        if not photo or not can_view_profile_photo(viewer, photo):
             return None
-        return photo_endpoint_urls(photo)['thumbnail_url']
+        urls = photo_endpoint_urls(photo)
+        return urls['thumbnail_url']
+
+    def get_photo_visibility(self, obj):
+        """Tell discovery clients why a profile card has no photo URL."""
+        photos = getattr(obj, '_prefetched_objects_cache', {}).get('profile_photos')
+        if photos is None:
+            photos = ProfilePhoto.objects.without_binary().filter(user=obj)
+        if any(photo.status == ProfilePhoto.Status.PENDING for photo in photos):
+            return 'pending_approval'
+        return 'visible' if self.get_photo(obj) else 'unavailable'
 
     def get_photos(self, obj):
         """Return all approved photos for Gold+ members, only primary for FREE."""
         from apps.core.entitlement_service import MembershipEntitlementService
         viewer = self._get_viewer()
-        approved_photos = self._approved_photos(obj)
+        approved_photos = [
+            photo for photo in self._approved_photos(obj)
+            if can_view_profile_photo(viewer, photo)
+        ]
         if viewer is None:
             return []  # Not authenticated — no photos in list context
 
@@ -227,11 +246,22 @@ class MemberPublicSerializer(serializers.ModelSerializer):
             primary = next((item for item in approved_photos if item.is_primary), None)
             if not primary:
                 return []
-            return [{'url': photo_endpoint_urls(primary)['image_url'], 'is_primary': True}]
+            urls = photo_endpoint_urls(primary)
+            return [{
+                'id': str(primary.pk),
+                'image_url': urls['image_url'],
+                'thumbnail_url': urls['thumbnail_url'],
+                'url': urls['image_url'],  # legacy compat
+                'is_primary': True,
+                'display_order': primary.display_order,
+            }]
 
         return [
             {
-                'url': photo_endpoint_urls(p)['image_url'],
+                'id': str(p.pk),
+                'image_url': photo_endpoint_urls(p)['image_url'],
+                'thumbnail_url': photo_endpoint_urls(p)['thumbnail_url'],
+                'url': photo_endpoint_urls(p)['image_url'],  # legacy compat
                 'is_primary': p.is_primary,
                 'display_order': p.display_order,
             }
@@ -441,7 +471,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = (
-            'id', 'notification_type', 'title', 'message', 'related_object_type',
+            'id', 'notification_type', 'title', 'message', 'link_url', 'related_object_type',
             'related_object_id', 'priority', 'is_read', 'read_at', 'created_at',
         )
 
@@ -486,6 +516,7 @@ class ProfileVerificationSerializer(serializers.ModelSerializer):
     member = serializers.SerializerMethodField()
     current_assignment = serializers.SerializerMethodField()
     profile_photos = serializers.SerializerMethodField()
+    verification_documents = serializers.SerializerMethodField()
     history = VerificationHistorySerializer(many=True, read_only=True)
 
     class Meta:
@@ -494,7 +525,7 @@ class ProfileVerificationSerializer(serializers.ModelSerializer):
             'id', 'member', 'verification_type', 'status', 'priority',
             'submitted_at', 'reviewed_at', 'approved_at', 'rejected_at',
             'rejection_reason', 'escalation_reason', 'current_assignment',
-            'profile_photos', 'history', 'created_at', 'updated_at',
+            'profile_photos', 'verification_documents', 'history', 'created_at', 'updated_at',
         )
 
     def get_member(self, obj):
@@ -514,6 +545,15 @@ class ProfileVerificationSerializer(serializers.ModelSerializer):
             .order_by('display_order', 'created_at')
         )
         return ProfilePhotoSerializer(photos, many=True, context=self.context).data
+
+    def get_verification_documents(self, obj):
+        """Return only documents explicitly attached to this document review."""
+        if obj.verification_type != ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT:
+            return []
+        from apps.accounts.serializers import MemberDocumentSerializer
+
+        documents = [link.member_document for link in obj.verification_documents.select_related('member_document')]
+        return MemberDocumentSerializer(documents, many=True, context=self.context).data
 
 
 class SupportAttachmentSerializer(serializers.ModelSerializer):

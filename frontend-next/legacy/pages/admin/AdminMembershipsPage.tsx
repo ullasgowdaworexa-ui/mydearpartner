@@ -48,12 +48,18 @@ interface MembershipPlan {
   interest_limit_daily: number;
   message_limit_daily: number;
   can_message: boolean;
+  can_view_profile_visitors: boolean;
+  can_view_private_photos: boolean;
+  can_get_priority_listing: boolean;
+  can_use_profile_boost: boolean;
+  can_view_received_interests: boolean;
   contact_access_mode: 'NONE' | 'MUTUAL_ONLY' | 'FULL';
   photo_access_mode: 'PRIMARY_ONLY' | 'ALL_APPROVED';
   can_use_advanced_search: boolean;
   can_use_horoscope: boolean;
   profile_boost_level: string;
   support_priority: string;
+  entitlements?: Record<string, unknown>;
 }
 
 const getMemberships = (params: AdminListParams = {}) => {
@@ -81,7 +87,13 @@ const emptyPlanForm = {
   profile_view_limit_daily: '10',
   interest_limit_daily: '3',
   message_limit_daily: '0',
+  max_photos: '6',
   can_message: false,
+  can_view_profile_visitors: false,
+  can_view_private_photos: false,
+  can_get_priority_listing: false,
+  can_use_profile_boost: false,
+  can_view_received_interests: false,
   contact_access_mode: 'NONE',
   photo_access_mode: 'PRIMARY_ONLY',
   can_use_advanced_search: false,
@@ -100,10 +112,13 @@ export default function AdminMembershipsPage() {
 
   // Permission Checks
   const canView = user?.admin_role === 'SUPER_ADMIN' || hasAdminPermission('memberships.view');
-  const canCreate = user?.admin_role === 'SUPER_ADMIN' || hasAdminPermission('memberships.create');
-  const canEdit = user?.admin_role === 'SUPER_ADMIN' || hasAdminPermission('memberships.edit');
-  const canActivate = user?.admin_role === 'SUPER_ADMIN' || hasAdminPermission('memberships.activate');
-  const canDeactivate = user?.admin_role === 'SUPER_ADMIN' || hasAdminPermission('memberships.deactivate');
+  // Plans are commercial policy. Only Super Admin can change them; Admin may
+  // inspect the plans and memberships but cannot alter member entitlements.
+  const isSuperAdmin = user?.account_type === 'SUPER_ADMIN';
+  const canCreate = isSuperAdmin;
+  const canEdit = isSuperAdmin;
+  const canActivate = isSuperAdmin;
+  const canDeactivate = isSuperAdmin;
 
   // Subscriptions Tab State
   const [items, setItems] = useState<AdminMembership[]>([]);
@@ -298,7 +313,27 @@ export default function AdminMembershipsPage() {
         profile_view_limit_daily: parseInt(planForm.profile_view_limit_daily) || 10,
         interest_limit_daily: parseInt(planForm.interest_limit_daily) || 3,
         message_limit_daily: parseInt(planForm.message_limit_daily) || 0,
+        entitlements: {
+          daily_profile_view_limit: parseInt(planForm.profile_view_limit_daily) || null,
+          can_send_interest: true,
+          daily_interest_limit: parseInt(planForm.interest_limit_daily) || null,
+          can_chat: planForm.can_message,
+          can_view_contact_details: planForm.contact_access_mode !== 'NONE',
+          profile_visibility_boost: planForm.can_use_profile_boost,
+          can_see_who_viewed_profile: planForm.can_view_profile_visitors,
+          can_view_received_interests: planForm.can_view_received_interests,
+          priority_support: planForm.support_priority === 'HIGH',
+          max_photos: Math.max(1, parseInt(planForm.max_photos) || 6),
+          contact_access_mode: planForm.contact_access_mode,
+          photo_access_mode: planForm.photo_access_mode,
+          can_use_advanced_search: planForm.can_use_advanced_search,
+        },
         can_message: planForm.can_message,
+        can_view_profile_visitors: planForm.can_view_profile_visitors,
+        can_view_private_photos: planForm.can_view_private_photos,
+        can_get_priority_listing: planForm.can_get_priority_listing,
+        can_use_profile_boost: planForm.can_use_profile_boost,
+        can_view_received_interests: planForm.can_view_received_interests,
         contact_access_mode: planForm.contact_access_mode,
         photo_access_mode: planForm.photo_access_mode,
         can_use_advanced_search: planForm.can_use_advanced_search,
@@ -393,7 +428,13 @@ export default function AdminMembershipsPage() {
       profile_view_limit_daily: String(plan.profile_view_limit_daily ?? 10),
       interest_limit_daily: String(plan.interest_limit_daily ?? 3),
       message_limit_daily: String(plan.message_limit_daily ?? 0),
+      max_photos: String(plan.entitlements?.max_photos ?? 6),
       can_message: plan.can_message ?? false,
+      can_view_profile_visitors: plan.can_view_profile_visitors ?? false,
+      can_view_private_photos: plan.can_view_private_photos ?? false,
+      can_get_priority_listing: plan.can_get_priority_listing ?? false,
+      can_use_profile_boost: plan.can_use_profile_boost ?? false,
+      can_view_received_interests: plan.can_view_received_interests ?? false,
       contact_access_mode: plan.contact_access_mode || 'NONE',
       photo_access_mode: plan.photo_access_mode || 'PRIMARY_ONLY',
       can_use_advanced_search: plan.can_use_advanced_search ?? false,
@@ -424,7 +465,13 @@ export default function AdminMembershipsPage() {
       profile_view_limit_daily: String(plan.profile_view_limit_daily ?? 10),
       interest_limit_daily: String(plan.interest_limit_daily ?? 3),
       message_limit_daily: String(plan.message_limit_daily ?? 0),
+      max_photos: String(plan.entitlements?.max_photos ?? 6),
       can_message: plan.can_message ?? false,
+      can_view_profile_visitors: plan.can_view_profile_visitors ?? false,
+      can_view_private_photos: plan.can_view_private_photos ?? false,
+      can_get_priority_listing: plan.can_get_priority_listing ?? false,
+      can_use_profile_boost: plan.can_use_profile_boost ?? false,
+      can_view_received_interests: plan.can_view_received_interests ?? false,
       contact_access_mode: plan.contact_access_mode || 'NONE',
       photo_access_mode: plan.photo_access_mode || 'PRIMARY_ONLY',
       can_use_advanced_search: plan.can_use_advanced_search ?? false,
@@ -924,6 +971,16 @@ export default function AdminMembershipsPage() {
               />
             </label>
             <label className="admin-form-field">
+              <span>Maximum photos</span>
+              <input
+                type="number"
+                min="1"
+                value={planForm.max_photos}
+                onChange={(e) => setPlanForm((f) => ({ ...f, max_photos: e.target.value }))}
+                disabled={!canEdit}
+              />
+            </label>
+            <label className="admin-form-field">
               <span>Slug *</span>
               <input
                 type="text"
@@ -1127,6 +1184,27 @@ export default function AdminMembershipsPage() {
               />
               <label htmlFor="can-use-horoscope" className="text-xs font-semibold cursor-pointer">Horoscope compatibility</label>
             </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+            {[
+              ['can-view-profile-visitors', 'Show profile visitors', 'can_view_profile_visitors'],
+              ['can-view-private-photos', 'View private photos', 'can_view_private_photos'],
+              ['can-view-received-interests', 'View received interests', 'can_view_received_interests'],
+              ['can-get-priority-listing', 'Priority listing', 'can_get_priority_listing'],
+              ['can-use-profile-boost', 'Profile boost', 'can_use_profile_boost'],
+            ].map(([id, label, field]) => (
+              <div className="flex items-center gap-2" key={id}>
+                <input
+                  type="checkbox"
+                  id={id}
+                  checked={Boolean(planForm[field as keyof typeof planForm])}
+                  onChange={(e) => setPlanForm((form) => ({ ...form, [field]: e.target.checked }))}
+                  disabled={!canEdit}
+                />
+                <label htmlFor={id} className="text-xs font-semibold cursor-pointer">{label}</label>
+              </div>
+            ))}
           </div>
 
           <h4 className="font-bold text-sm text-gray-900 border-b pb-1 mt-4">Visual Theme & Highlights</h4>

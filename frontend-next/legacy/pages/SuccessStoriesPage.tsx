@@ -1,120 +1,241 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
-
-import { useEffect, useState } from 'react';
 import { Link } from '@/lib/router-compat';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  ArrowRight, Calendar, ChevronLeft, ChevronRight,
-  Heart, MapPin, MessageCircle, Quote, ShieldCheck, Sparkles, Star, Users,
+  ArrowRight, Heart, MapPin, Quote, Star, ShieldCheck, HeartHandshake, Compass, Users
 } from 'lucide-react';
-import { getSuccessStories, getTestimonials } from '../services/dataService';
 
-const principles = [
-  { icon: ShieldCheck, number: '01', title: 'Verified, always', copy: 'Every profile is reviewed so conversations begin with confidence.' },
-  { icon: MessageCircle, number: '02', title: 'Meaning before volume', copy: 'Fewer, more compatible introductions create space for real connection.' },
-  { icon: ShieldCheck, number: '03', title: 'Private by design', copy: 'You decide who sees your story, photographs, and contact details.' },
+const STATIC_FEATURED_STORIES = [
+  {
+    coupleNames: 'Ayesha & Imran',
+    story: "Every step of this journey felt guided, not rushed. MyDearPartner gave us the space to connect naturally, and today we're building a life we both dreamed of.",
+    date: 'Married in 2025',
+    location: 'Bengaluru',
+    photo: '/images/bride-portrait.jpg'
+  },
+  {
+    coupleNames: 'Sneha & Arjun',
+    story: "Our first conversation felt comfortable and genuine. There was no pressure, just two people getting to know each other with honesty and respect. MyDearPartner gave us the confidence to take the first step.",
+    date: 'Married in 2024',
+    location: 'Hyderabad',
+    photo: '/images/couple-sunset.jpg'
+  },
+  {
+    coupleNames: 'Fatima & Sameer',
+    story: "Finding the right person isn’t about meeting many people; it’s about meeting the right one. Through MyDearPartner, we found not just compatibility but friendship, understanding, and a future we now share.",
+    date: 'Married in 2025',
+    location: 'Chennai',
+    photo: '/images/matrimony-hero-couple.webp'
+  }
 ];
 
 export default function SuccessStoriesPage({ initialStories = [], initialReviews = [] }: { initialStories?: any[]; initialReviews?: any[] } = {}) {
-  const [stories, setStories] = useState<any[]>(initialStories);
-  const [reviews, setReviews] = useState<any[]>(initialReviews);
-  const [error, setError] = useState('');
-  const [activeReview, setActiveReview] = useState(0);
-
-  useEffect(() => {
-    if (initialStories.length || initialReviews.length) return;
-    Promise.all([getSuccessStories(), getTestimonials()])
-      .then(([storyRows, reviewRows]) => { setStories(storyRows); setReviews(reviewRows); })
-      .catch(() => setError('Published stories could not be loaded.'));
-  }, [initialReviews.length, initialStories.length]);
-
-  const featured = stories[0];
-  const moreStories = stories.slice(1, 7);
-  const review = reviews[activeReview];
-  const cycle = (direction: number) => {
-    if (!reviews.length) return;
-    setActiveReview((current) => (current + direction + reviews.length) % reviews.length);
-  };
-
+  // We keep the props signature to maintain compatibility, but render the approved redesigned copy
   return (
     <main className="stories-page">
+      {/* Hero Section */}
       <section className="stories-hero">
         <SmartImage className="stories-hero-art" src="/images/stories-3d-hero-v2.png" alt="Sculptural golden rings forming a heart" />
         <div className="stories-hero-shade" />
-        <div className="stories-orbit stories-orbit-one" /><div className="stories-orbit stories-orbit-two" />
+        <div className="stories-orbit stories-orbit-one" />
+        <div className="stories-orbit stories-orbit-two" />
         <div className="stories-hero-inner">
           <motion.div initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .75 }}>
-            <p className="stories-kicker"><span /> Real people. Real beginnings.</p>
-            <h1>Every match becomes a story <em>worth telling.</em></h1>
-            <p className="stories-lead">From a thoughtful introduction to a lifetime together, discover the journeys that began right here.</p>
+            <p className="stories-kicker"><span /> SUCCESS STORIES</p>
+            <h1>Every Match Has a Story. <br /><em>Every Story Begins with Hope.</em></h1>
+            <p className="stories-lead">
+              Behind every successful relationship is a journey of trust, patience, and meaningful connection. 
+              At MyDearPartner, we’re honoured to have played a small role in bringing together couples who have found love, companionship, and a lifetime of happiness.
+            </p>
+            <p className="stories-accent-quote">
+              Their stories remind us that the right person is worth waiting for.
+            </p>
             <div className="stories-actions">
-              <Link to="/register" className="stories-gold-btn">Start your story <ArrowRight /></Link>
-              <a href="#couples" className="stories-ghost-btn">Meet the couples</a>
+              <Link to="/register" className="stories-gold-btn">Start Your Journey <ArrowRight /></Link>
+              <a href="#featured-stories" className="stories-ghost-btn">Read Stories</a>
             </div>
-            {error && <p role="alert">{error}</p>}
           </motion.div>
         </div>
-        <div className="stories-scroll">Scroll to discover <span /></div>
       </section>
 
-      {featured ? <section className="stories-feature">
-        <div className="stories-shell stories-feature-grid">
-          <motion.div className="stories-feature-visual" initial={{ opacity: 0, x: -35 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-            <div className="stories-photo-frame"><SmartImage src={featured.photo} alt={featured.coupleNames} /></div>
-            <div className="stories-match-pill"><Heart fill="currentColor" /><span><b>94%</b> values aligned</span></div>
-            <div className="stories-frame-line" />
-          </motion.div>
-          <motion.div className="stories-feature-copy" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-            <p className="stories-section-label">Featured chapter Â· {featured.date}</p>
-            <div className="stories-stars">{Array.from({ length: featured.rating || 5 }).map((_, i) => <Star key={i} fill="currentColor" />)}</div>
-            <Quote />
-            <blockquote>â€œ{featured.story}â€</blockquote>
-            <div className="stories-couple-meta"><div><strong>{featured.coupleNames}</strong><span><MapPin /> {featured.location}</span></div></div>
+      {/* Intro section */}
+      <section className="stories-intro">
+        <div className="stories-shell">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="stories-intro-box"
+          >
+            <p className="stories-section-label">Real People. Real Connections. Real Beginnings.</p>
+            <h2>One introduction, <br /><em>infinite possibility.</em></h2>
+            <p className="stories-intro-body">
+              Every couple has a unique journey, but they all share one thing in common: a meaningful connection that started with a simple introduction. These stories celebrate the moments that turned conversations into commitments & introductions into lifelong togetherness.
+            </p>
           </motion.div>
         </div>
-      </section> : <section className="stories-feature"><div className="stories-shell"><p>No success stories have been published yet.</p></div></section>}
+      </section>
 
-      <section className="stories-gallery" id="couples">
+      {/* Featured Stories Section */}
+      <section className="stories-featured" id="featured-stories">
         <div className="stories-shell">
-          <div className="stories-section-head">
-            <div><p className="stories-section-label">The story collection</p><h2>One introduction.<br /><em>Infinite possibility.</em></h2></div>
-            <p>Every relationship follows its own rhythm. These couples found theirs through shared values, patient conversations, and a little trust.</p>
+          <div className="stories-section-title-wrap">
+            <p className="stories-section-label">Featured Stories</p>
+            <h2>In Their Own Words</h2>
           </div>
-          <div className="stories-grid">
-            {moreStories.map((story, index) => (
-              <motion.article key={story.id} className="story-tilt-card" initial={{ opacity: 0, y: 35 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * .07 }}>
-                <div className="story-card-photo"><SmartImage src={story.photo} alt={story.coupleNames} /><div /><span>Story {String(index + 2).padStart(2, '0')}</span></div>
-                <div className="story-card-body"><div className="story-card-title"><div><h3>{story.coupleNames}</h3><p><MapPin /> {story.location}</p></div><Heart /></div><p>{story.story}</p><footer><span><Calendar /> {story.date}</span><span>{story.rating || 5}.0 <Star fill="currentColor" /></span></footer></div>
+          
+          <div className="stories-featured-grid">
+            {STATIC_FEATURED_STORIES.map((story, idx) => (
+              <motion.article 
+                key={story.coupleNames} 
+                className="story-featured-card"
+                initial={{ opacity: 0, y: 35 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.15, duration: 0.6 }}
+              >
+                <div className="story-card-photo-wrapper">
+                  <SmartImage src={story.photo} alt={story.coupleNames} />
+                  <div className="story-card-overlay" />
+                  <div className="story-card-rating">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star key={s} size={12} fill="currentColor" className="star-icon" />
+                    ))}
+                  </div>
+                </div>
+                <div className="story-card-info">
+                  <Quote className="quote-icon" size={24} />
+                  <blockquote>“{story.story}”</blockquote>
+                  <div className="story-card-footer">
+                    <h3>{story.coupleNames}</h3>
+                    <div className="story-card-meta">
+                      <span>{story.date}</span>
+                      <span className="bullet">•</span>
+                      <span><MapPin size={12} /> {story.location}</span>
+                    </div>
+                  </div>
+                </div>
               </motion.article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="stories-voice">
-        <div className="stories-shell stories-voice-grid">
-          <div className="stories-voice-title"><p className="stories-section-label light">In their own words</p><h2>Love feels different when it feels <em>right.</em></h2><div className="stories-review-controls"><button type="button" onClick={() => cycle(-1)} aria-label="Previous review"><ChevronLeft /></button><span>{String(activeReview + 1).padStart(2, '0')} / {String(reviews.length).padStart(2, '0')}</span><button type="button" onClick={() => cycle(1)} aria-label="Next review"><ChevronRight /></button></div></div>
-          {review && <div className="stories-review-stage">
-            <div className="stories-review-halo" />
-            <AnimatePresence mode="wait">
-              <motion.article key={activeReview} initial={{ opacity: 0, rotateY: 10, x: 25 }} animate={{ opacity: 1, rotateY: 0, x: 0 }} exit={{ opacity: 0, rotateY: -10, x: -25 }} transition={{ duration: .4 }}>
-                <Quote /><p>â€œ{review?.text}â€</p><div><SmartImage src={review?.photo} alt={review?.name} /><span><strong>{review?.name}</strong><small>{review?.plan}</small></span><div className="stories-stars">{Array.from({ length: review?.rating || 5 }).map((_, i) => <Star key={i} fill="currentColor" />)}</div></div>
-              </motion.article>
-            </AnimatePresence>
-          </div>}
+      {/* Stats Section */}
+      <section className="stories-stats-section">
+        <div className="stories-shell">
+          <div className="stories-stats-grid">
+            <div className="stat-card">
+              <h3>10,000+</h3>
+              <p>Happy Members</p>
+            </div>
+            <div className="stat-card">
+              <h3>5,000+</h3>
+              <p>Meaningful Matches</p>
+            </div>
+            <div className="stat-card">
+              <h3>200+</h3>
+              <p>Communities Connected</p>
+            </div>
+            <div className="stat-card">
+              <h3>4.9★</h3>
+              <p>Member Satisfaction</p>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="stories-principles">
-        <div className="stories-shell"><div className="stories-section-head compact"><div><p className="stories-section-label">Why stories begin here</p><h2>Trust creates room for connection.</h2></div></div><div className="stories-principle-grid">{principles.map(({ icon: Icon, number, title, copy }) => <article key={title}><span>{number}</span><Icon /><h3>{title}</h3><p>{copy}</p></article>)}</div></div>
+      {/* Why & Building Section */}
+      <section className="stories-about-trust">
+        <div className="stories-shell">
+          <div className="stories-about-grid">
+            <motion.div 
+              className="about-block"
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="icon-wrap"><HeartHandshake size={24} /></div>
+              <h3>Why Their Stories Matter</h3>
+              <p>
+                Every successful relationship is built on trust, shared values, and genuine conversations. 
+                These experiences inspire us to continue creating a platform where meaningful relationships can grow with confidence and respect.
+              </p>
+            </motion.div>
+            <motion.div 
+              className="about-block"
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="icon-wrap"><Compass size={24} /></div>
+              <h3>Building Futures, One Story at a Time</h3>
+              <p>
+                Every message exchanged, every family introduced, and every promise made is a reminder of why we do what we do. 
+                We are dedicated to helping more people form lasting, meaningful relationships.
+              </p>
+            </motion.div>
+          </div>
+        </div>
       </section>
 
-      <section className="stories-final">
-        <div className="stories-final-ring ring-a" /><div className="stories-final-ring ring-b" />
-        <div><Sparkles /><p className="stories-section-label light">Your chapter is waiting</p><h2>Ready to meet someone meaningful?</h2><p>Create a private profile in a few minutes. Your next hello could change everything.</p><Link to="/register" className="stories-gold-btn">Begin free <ArrowRight /></Link></div>
+      {/* Share Your Journey Section */}
+      <section className="stories-share-section">
+        <div className="stories-shell">
+          <motion.div 
+            className="share-box"
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <p className="stories-section-label light">Share Your Journey</p>
+            <h2>Your Story Could Inspire Someone Else.</h2>
+            <p>
+              If you found your life partner through MyDearPartner, we’d love to hear your journey. 
+              Your experience may give hope and confidence to someone beginning their own search.
+            </p>
+            <Link to="/contact" className="stories-gold-btn">
+              Share Your Story
+            </Link>
+          </motion.div>
+        </div>
       </section>
+
+      {/* Closing Section */}
+      <section className="stories-closing">
+        <div className="stories-final-ring ring-a" />
+        <div className="stories-final-ring ring-b" />
+        <div className="stories-shell">
+          <motion.div 
+            className="closing-box"
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <Heart size={24} className="sparkles-icon fill-current" />
+            <p className="stories-section-label light">Closing Section</p>
+            <h2>Your Forever Story Could Be Next.</h2>
+            <p>
+              Thousands begin their search with hope. Every day, new conversations become lasting relationships. 
+              Create your profile today and take the first step toward writing your own success story.
+            </p>
+            <Link to="/register" className="stories-gold-btn">
+              Start Your Journey <ArrowRight size={16} />
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Page Tagline centered badge at the bottom */}
+      <div className="stories-tagline-badge">
+        <p>“Every forever has a first hello. Let yours begin with MyDearPartner.”</p>
+      </div>
     </main>
   );
 }

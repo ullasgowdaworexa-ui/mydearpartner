@@ -59,18 +59,17 @@ def get_list(key, default=None):
 # 2. Schema definition and validation
 errors = []
 PAYMENT_MODE = os.environ.get('PAYMENT_MODE', 'manual_approval').strip().lower()
-if PAYMENT_MODE not in ('manual_approval', 'online'):
+if PAYMENT_MODE != 'manual_approval':
     errors.append(
-        "PAYMENT_MODE: Unsupported value. Use 'manual_approval' or 'online'."
+        "PAYMENT_MODE: Only 'manual_approval' is supported."
     )
 
 MEMBERSHIP_ACTIVATION_MODE = os.environ.get(
-    'MEMBERSHIP_ACTIVATION_MODE', 'instant'
+    'MEMBERSHIP_ACTIVATION_MODE', 'manual_approval'
 ).strip().lower()
-if MEMBERSHIP_ACTIVATION_MODE not in ('instant', 'payment_verified', 'manual_approval'):
+if MEMBERSHIP_ACTIVATION_MODE != 'manual_approval':
     errors.append(
-        "MEMBERSHIP_ACTIVATION_MODE: Unsupported value. Use 'instant', "
-        "'payment_verified', or 'manual_approval'."
+        "MEMBERSHIP_ACTIVATION_MODE: Only 'manual_approval' is supported."
     )
 
 PERMANENT_DELETE_DOCUMENT_POLICY = os.environ.get(
@@ -103,13 +102,6 @@ if DJANGO_ENV in ('staging', 'production'):
         errors.append("SECRET_KEY: Value is required but missing.")
     elif SECRET_KEY.startswith('django-insecure') or len(SECRET_KEY) < 30:
         errors.append("SECRET_KEY: Value is insecure. Must be at least 30 characters and not start with 'django-insecure'.")
-    
-    # Manual membership approval is the default. Gateway credentials only become
-    # mandatory when an operator explicitly enables online payments.
-    if PAYMENT_MODE == 'online':
-        require_env('RAZORPAY_KEY_ID', 'Payment Gateway Client ID')
-        require_env('RAZORPAY_KEY_SECRET', 'Payment Gateway Client Secret')
-        require_env('RAZORPAY_WEBHOOK_SECRET', 'Payment Gateway Webhook Verification Secret')
     
     # Database password should be set
     db_pass = os.environ.get('DB_PASSWORD')
@@ -172,11 +164,11 @@ config = {
     # Payments
     'PAYMENT_MODE': PAYMENT_MODE,
     'MEMBERSHIP_ACTIVATION_MODE': MEMBERSHIP_ACTIVATION_MODE,
+    'RAZORPAY_KEY_ID': optional_env('RAZORPAY_KEY_ID', 'rzp_test_replace_me'),
+    'RAZORPAY_KEY_SECRET': optional_env('RAZORPAY_KEY_SECRET', ''),
+    'RAZORPAY_WEBHOOK_SECRET': optional_env('RAZORPAY_WEBHOOK_SECRET', ''),
+    'RAZORPAY_DEMO_MODE': get_bool('RAZORPAY_DEMO_MODE', default=False),
     'PERMANENT_DELETE_DOCUMENT_POLICY': PERMANENT_DELETE_DOCUMENT_POLICY,
-    'RAZORPAY_KEY_ID': optional_env('RAZORPAY_KEY_ID', 'rzp_test_placeholder'),
-    'RAZORPAY_KEY_SECRET': optional_env('RAZORPAY_KEY_SECRET', 'placeholder_secret'),
-    'RAZORPAY_WEBHOOK_SECRET': optional_env('RAZORPAY_WEBHOOK_SECRET', 'placeholder_webhook_secret'),
-
     # Temporary rollout controls.  The underlying verification and back-office
     # code remains available, but neither is exposed until explicitly enabled.
     'REQUIRE_MEMBER_VERIFICATION': get_bool('REQUIRE_MEMBER_VERIFICATION', default=False),

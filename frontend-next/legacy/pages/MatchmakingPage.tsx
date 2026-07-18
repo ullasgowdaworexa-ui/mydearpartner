@@ -1,8 +1,8 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, User, Search, Network, Heart, CheckCircle2 } from 'lucide-react';
+import { User, Search, Network, Heart, CheckCircle2 } from 'lucide-react';
 import { getCompatibilityMatch, type MatchRequest } from '../services/matchmakingApi';
 import MatchResults from '../components/MatchResults';
 
@@ -299,7 +299,7 @@ export default function MatchmakingPage() {
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-5 h-5" />
+                      <Heart className="w-5 h-5 fill-current" />
                       Generate Compatibility Report
                     </>
                   )}

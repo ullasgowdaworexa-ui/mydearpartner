@@ -126,24 +126,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
     const restore = async () => {
-      let type = getStoredAccountType();
-      if (!type) {
-        try {
-          const response = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' });
-          const session = response.ok ? await response.json() as { account_type?: AccountType } : {};
-          type = session.account_type ?? null;
-        } catch {
-          type = null;
-        }
+      let type: AccountType | null = null;
+      let restoredAccess: string | null = null;
+      try {
+        const response = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' });
+        const session = response.ok
+          ? await response.json() as { account_type?: AccountType; authenticated?: boolean; access?: string }
+          : {};
+        type = session.authenticated ? session.account_type ?? null : null;
+        restoredAccess = typeof session.access === 'string' ? session.access : null;
+      } catch {
+        type = null;
       }
       if (!type) {
+        clearClientAuthState();
         if (active) setLoading(false);
         return;
       }
       const version = sessionVersion.current;
       try {
-        // Restore the session - allow automatic token refresh on 401
-        const restored = await fetchApi<UserType>(`/${authNamespace(type)}/me/`);
+        if (!restoredAccess) throw new Error('Session did not return an access token.');
+        storeClientAuthState(type, restoredAccess);
+        const restored = await fetchApi<UserType>(`/${authNamespace(type)}/me/`, { skipAuthRefresh: true });
         if (!active || version !== sessionVersion.current) return;
         setUser(normalizeUser(restored, type));
         setAccountType(type);

@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import { m } from 'framer-motion';
-import { ArrowLeft, CheckCircle, AlertTriangle, Shield, Sparkles, Network } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Shield, Network } from 'lucide-react';
 import type { MatchResponse } from '../services/matchmakingApi';
 
 interface MatchResultsProps {
@@ -107,7 +107,7 @@ export default function MatchResults({ data, onReset }: MatchResultsProps) {
           {/* Conclusion */}
           <div className="mb-10">
             <h3 className="text-xl font-bold text-[var(--ink)] flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-[var(--theme-secondary-500)]" />
+              <Network className="w-5 h-5 text-[var(--theme-secondary-500)]" />
               Compatibility Insights
             </h3>
             <div className="text-[var(--ink)] leading-relaxed bg-[var(--surface-strong)] p-6 rounded-2xl border border-[var(--line)] relative overflow-hidden">

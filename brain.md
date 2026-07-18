@@ -72,7 +72,7 @@ my-dear-partner/
 │   │   └── wsgi.py               # WSGI fallback hook
 │   ├── apps/                     # Django apps partition
 │   │   ├── accounts/             # Authentication, user roles, OTP challenge, location schema
-│   │   │   ├── management/       # Commands like 'reset_dev_data', 'seed_development_members'
+│   │   │   ├── management/       # Commands like 'create_super_admin', 'create_staff'
 │   │   │   ├── models.py         # Member, Admin, Staff, Support Agent, Locations, AccessScopes
 │   │   │   ├── views.py          # Auth, verification document views
 │   │   │   └── urls.py           # Subsystem endpoint router
@@ -121,11 +121,11 @@ my-dear-partner/
    python manage.py makemigrations accounts core
    python manage.py migrate
    ```
-4. **Seeding Development Data**:
+4. **Create Super Admin**:
    ```powershell
-   python manage.py seed_dev_data
+   python manage.py create_super_admin
    ```
-   *Note: This command runs only when `DEBUG = True` and `ALLOW_DEVELOPMENT_SEED = True` is declared in the environment.*
+   *Creates the initial super admin account for the administration portal.*
 5. **Starting the Dev Server**:
    ```powershell
    python manage.py runserver

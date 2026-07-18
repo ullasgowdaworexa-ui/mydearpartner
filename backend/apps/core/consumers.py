@@ -235,3 +235,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def _make_room_name(user_a, user_b):
         ordered = sorted([user_a, user_b])
         return f'chat_{ordered[0]}_{ordered[1]}'
+
+
+class NotificationConsumer(AsyncWebsocketConsumer):
+    """Authenticated per-member realtime notification stream."""
+
+    async def connect(self):
+        user = self.scope.get('user')
+        if (
+            not user or not user.is_authenticated
+            or str(getattr(user, 'account_type', '')) != AccountType.MEMBER
+        ):
+            await self.close(code=CLOSE_UNAUTHENTICATED)
+            return
+        self.group_name = f'notifications_{user.pk}'
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept(subprotocol=self.scope.get('jwt_subprotocol'))
+
+    async def disconnect(self, _close_code):
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def notification_created(self, event):
+        await self.send(text_data=json.dumps({'type': 'notification', **event['notification']}))

@@ -1,9 +1,9 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
 
 import { useState } from 'react';
-import { Link } from '@/lib/router-compat';
+import { Link, useNavigate } from '@/lib/router-compat';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -16,91 +16,101 @@ import {
   MessageCircle,
   Search,
   ShieldCheck,
-  Sparkles,
   Star,
   UserCheck,
   Heart,
+  Lock,
+  MessageSquare,
+  Users
 } from 'lucide-react';
 import HeroSection from '../components/home/HeroSection';
-
 
 const steps = [
   {
     icon: UserCheck, number: '01',
-    title: 'Tell us who you are',
-    text: 'Build a thoughtful profile around your values, family, lifestyle, and hopes for the future.',
+    title: 'Create Your Profile',
+    text: 'Fill your profile with all necessary information like your personal details, family background, education, profession, interests and preference for a partner.',
   },
   {
     icon: Search, number: '02',
-    title: 'Discover aligned matches',
-    text: 'Our compatibility system brings the most relevant verified profiles to the top.',
+    title: 'Discover Compatible Matches',
+    text: 'Our intelligent matching system recommends profiles based on your preferences, values, lifestyle, and compatibility—saving you time while helping you meet the right people.',
   },
   {
     icon: MessageCircle, number: '03',
-    title: 'Connect with confidence',
-    text: 'Private messaging and consent-first contact controls help every conversation feel safe.',
+    title: 'Connect with Confidence',
+    text: 'Express your interest, start secure conversations, exchange details, and involve your family whenever you’re ready to take the next step.',
   },
   {
     icon: HeartHandshake, number: '04',
-    title: 'Meet with intention',
-    text: 'Move from introduction to a meaningful relationship with support whenever you need it.',
+    title: 'Begin Your Forever',
+    text: 'When the connection feels right, let your story unfold. Every successful relationship begins with trust, understanding, and one meaningful conversation.',
   },
 ];
 
-const numbers = [
+const trustPoints = [
   {
     icon: ShieldCheck,
-    value: '100',
-    suffix: '%',
-    label: 'Profiles reviewed',
-    desc: 'Every profile is carefully screened to reduce fake accounts and protect genuine members seeking a real connection.',
+    title: 'Verified Profiles',
+    desc: 'Every profile goes through a careful verification process to create a genuine and trustworthy community.',
   },
   {
-    icon: Heart,
-    value: '50',
-    suffix: '+',
-    label: 'Compatibility signals',
-    desc: 'Values, family goals, lifestyle, and preferences shape every personalised recommendation we show you.',
+    icon: Lock,
+    title: 'Privacy First',
+    desc: 'Choose who can view your profile, photos, and personal information with advanced privacy settings.',
   },
   {
-    icon: LockKeyhole,
-    value: 'âˆž',
-    suffix: '',
-    label: 'Privacy controls',
-    desc: 'You decide who views your photos, details, and contact information, always with full consent-first design.',
+    icon: MessageSquare,
+    title: 'Secure Communication',
+    desc: 'Connect with Trust, build meaningful conversations in a private and secure environment.',
+  },
+  {
+    icon: HeartHandshake,
+    title: 'Dedicated Support',
+    desc: 'Always by Your Side. Expert guidance whenever you need it on your journey to finding the right partner.',
   },
 ];
 
-const promises = [
-  {
-    icon: ShieldCheck,
-    value: '100%',
-    title: 'Profiles reviewed',
-    desc: 'Our moderation team manually reviews every account before it goes live. Fake profiles cannot slip through.',
-  },
-  {
-    icon: LockKeyhole,
-    value: 'Private',
-    title: 'By design',
-    desc: 'You decide who can view your photos, contact details, and story. Nothing is shared without your explicit consent.',
-  },
-  {
-    icon: ShieldCheck,
-    value: 'Safe',
-    title: 'Community standards',
-    desc: 'Our dedicated trust and safety team enforces community standards and responds to concerns around the clock.',
-  },
+const premiumBenefits = [
+  'Unlimited Profile Views',
+  'Direct Contact Access',
+  'Priority Profile Visibility',
+  'Advanced Match Preferences',
+  'Relationship Advisor',
+  'Video Profile & Introductions',
+  'Priority Customer Support',
 ];
 
-const faqs: [string, string][] = [
-  ['Is registration free?', 'Yes. You can create a profile, set partner preferences, and explore compatible matches for free. Paid plans unlock additional communication and concierge features.'],
-  ['How are profiles verified?', 'Our review process combines mobile and email confirmation, profile moderation, and identity checks for enhanced verification badges.'],
-  ['Can my family help manage my profile?', 'Yes. My Dear Partner supports both self-managed and family-assisted journeys while keeping the member in control of privacy and communication.'],
-  ['How does compatibility matching work?', 'Recommendations consider partner preferences alongside deeper signals such as values, lifestyle, education, location, and long-term expectations.'],
+const faqList = [
+  {
+    q: "1. My family is traditional. Will we feel comfortable here?",
+    a: "We were built for families like yours. MyDearPartner isn't a dating app; it's a family-first platform where parents and elders are not just welcome but essential. Everything we do respects the way Indian families approach matchmaking, with privacy, trust, and shared decision-making."
+  },
+  {
+    q: "2. Can my parents create a profile for me?",
+    a: "Absolutely. Many of our members are parents registering on behalf of their children. You can involve as many family members as you like at any stage. We welcome families to create and manage profiles together."
+  },
+  {
+    q: "3. Do I have to pay to register?",
+    a: "No. Registration is completely free. You can create your profile, browse matches, and receive daily recommendations at no cost. Upgrade to premium only when you're ready to move faster."
+  },
+  {
+    q: "4. What if I'm not sure what I'm looking for?",
+    a: "That's perfectly okay. Many members start with a vague idea and discover what truly matters as they explore. Our relationship advisors can help you clarify your preferences over time. Your profile can evolve as your understanding deepens."
+  }
 ];
 
 export default function HomePage() {
+  const navigate = useNavigate();
   const [openFaq, setOpenFaq] = useState(0);
+  const [searchGender, setSearchGender] = useState('Female');
+  const [searchReligion, setSearchReligion] = useState('Hindu');
+  const [searchAge, setSearchAge] = useState('22-28');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    navigate(`/search?gender=${searchGender}&religion=${searchReligion}&age=${searchAge}`);
+  };
 
   const fadeUpView = (delay = 0) => ({
     initial: { opacity: 0, y: 28 },
@@ -112,69 +122,97 @@ export default function HomePage() {
   return (
     <div className="mh">
 
-      {/* â”€â”€ Â§1 HERO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── HERO ── */}
       <HeroSection />
 
+      {/* ── SEARCH SECTION ── */}
+      <section className="py-16 sm:py-24 bg-gradient-to-r from-red-50 to-orange-50/50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            
+            {/* Search Copy */}
+            <motion.div {...fadeUpView()}>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#be123c]/10 text-rose-850 uppercase tracking-widest mb-4 border border-[#be123c]/20">
+                Find Your Perfect Match
+              </span>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[var(--theme-primary-800)] font-display tracking-tight mb-4 leading-tight">
+                Begin Your Search with Confidently
+              </h2>
+              <p className="text-slate-650 text-base sm:text-lg leading-relaxed">
+                If you are looking for a perfect match from the perspective of faith, profession, education, community or any other criterion, MyDearPartner will help you find people who suit your requirements.
+              </p>
+            </motion.div>
 
-      {/* â”€â”€ Â§2 TRUST BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="mh-trust-bar">
-        <div className="mh-trust-bar-inner">
-          {[
-            [ShieldCheck, 'Every profile verified'],
-            [LockKeyhole, 'Privacy-first design'],
-            [ShieldCheck, '24 / 7 trust & safety'],
-            [Heart, '12,000+ families connected'],
-          ].map(([Icon, text]) => (
-            <div key={text as string} className="mh-trust-item">
-              {/* @ts-ignore */}
-              <Icon /> {text as string}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* â”€â”€ Â§3 INTRO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <section className="mh-intro">
-        <div className="mh-shell mh-intro-grid">
-          <motion.div {...fadeUpView()} className="mh-intro-left">
-            <div className="mh-intro-visual">
-              <SmartImage src="/images/couple-sunset.jpg" alt="A couple on their wedding day" />
-              <div className="mh-intro-stamp">
-                <Heart />
-                <div>
-                  <strong>Found on My Dear Partner</strong>
-                  <span>Married 2024 Â· Udaipur</span>
+            {/* Search Box Card */}
+            <motion.div 
+              {...fadeUpView(0.15)}
+              className="bg-white p-6 sm:p-8 rounded-[2rem] border border-red-100 shadow-xl"
+            >
+              <form onSubmit={handleSearchSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Looking For</label>
+                    <select 
+                      value={searchGender}
+                      onChange={(e) => setSearchGender(e.target.value)}
+                      className="w-full bg-slate-50 text-slate-700 px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#be123c]/20"
+                    >
+                      <option value="Female">Bride</option>
+                      <option value="Male">Groom</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Age Bracket</label>
+                    <select 
+                      value={searchAge}
+                      onChange={(e) => setSearchAge(e.target.value)}
+                      className="w-full bg-slate-50 text-slate-700 px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#be123c]/20"
+                    >
+                      <option value="18-24">18 to 24</option>
+                      <option value="25-30">25 to 30</option>
+                      <option value="31-35">31 to 35</option>
+                      <option value="36-100">36+</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="mh-intro-number">
-              <strong>50K</strong>
-              <span>Members</span>
-            </div>
-          </motion.div>
 
-          <motion.div {...fadeUpView(0.15)}>
-            <span className="mh-eyebrow dark">A better way to begin</span>
-            <h2>Matchmaking should feel human, not like endless scrolling.</h2>
-            <p>
-              We combine cultural understanding with thoughtful technology, helping you spend less time searching
-              and more time meeting people who genuinely align with your life.
-            </p>
-            <br /><br />
-            <Link to="/about" className="mh-link" id="intro-learn-more">Our approach <ArrowRight /></Link>
-          </motion.div>
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Religion</label>
+                  <select 
+                    value={searchReligion}
+                    onChange={(e) => setSearchReligion(e.target.value)}
+                    className="w-full bg-slate-50 text-slate-700 px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#be123c]/20"
+                  >
+                    <option value="Hindu">Hindu</option>
+                    <option value="Muslim">Muslim</option>
+                    <option value="Christian">Christian</option>
+                    <option value="Sikh">Sikh</option>
+                    <option value="Any">Any Community</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-[#be123c] to-[#9f1239] hover:from-[#9f1239] hover:to-[#be123c] text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg mt-6"
+                >
+                  <Search className="w-4 h-4" /> Find Matches
+                </button>
+              </form>
+            </motion.div>
+
+          </div>
         </div>
       </section>
 
-      {/* â”€â”€ Â§4 PROCESS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── SECTION 2 - JOURNEY ── */}
       <section className="mh-process">
         <div className="mh-shell">
           <div className="mh-process-head">
             <div>
-              <span className="mh-eyebrow">How it works</span>
-              <h2>Four considered steps.<br />One meaningful beginning.</h2>
+              <span className="mh-eyebrow">YOUR JOURNEY</span>
+              <h2>A Simple Path to Finding Your Forever</h2>
             </div>
-            <p>Simple enough to start today. Thoughtful enough for a decision that shapes the rest of your life.</p>
+            <p>Every successful relationship starts with a meaningful introduction. We have devised an easy and transparent journey for you that lets you meet the right person at the right time.</p>
           </div>
           <div className="mh-steps">
             {steps.map(({ icon: Icon, number, title, text }, i) => (
@@ -189,122 +227,80 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* â”€â”€ Â§5 STORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <section className="mh-story">
-        <div className="mh-story-visual">
-          <SmartImage src="/images/couple-sunset.jpg" alt="My Dear Partner success story" />
-          <div className="mh-story-overlay-card">
-            <div className="mh-story-overlay-icon"><Heart /></div>
-            <div className="mh-story-overlay-text">
-              <strong>Found on My Dear Partner</strong>
-              <span>Married February 2024 Â· Udaipur, Rajasthan</span>
-            </div>
-          </div>
-        </div>
-        <div className="mh-story-copy">
-          <span className="mh-eyebrow dark">A real beginning</span>
-          <div className="mh-stars">
-            {Array.from({ length: 5 }).map((_, i) => <Star key={i} fill="currentColor" />)}
-          </div>
-          <blockquote>
-            "It never felt like an algorithm chose for us. It felt like we were introduced to exactly
-            the right person at exactly the right time."
-          </blockquote>
-          <div className="mh-story-author">
-            <strong>Ravi &amp; Deepa</strong>
-            <span><MapPin /> Udaipur, Rajasthan Â· Married 2024</span>
-          </div>
-          <Link to="/success-stories" className="mh-link" id="story-more-link">
-            More success stories <ArrowRight />
-          </Link>
-        </div>
-      </section>
-
-      {/* â”€â”€ Â§6 NUMBERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <section className="mh-numbers">
-        <div className="mh-shell">
-          <div className="mh-numbers-head">
-            <span className="mh-eyebrow dark">Our commitment</span>
-            <h2>Built on trust,<br />delivered with care.</h2>
-          </div>
-          <div className="mh-numbers-grid">
-            {numbers.map(({ icon: Icon, value, suffix, label, desc }, i) => (
-              <motion.div key={label} {...fadeUpView(i * 0.12)} className="mh-number-card">
-                <div className="mh-number-icon"><Icon /></div>
-                <div className="mh-number-val">
-                  {value}<sup>{suffix}</sup>
-                </div>
-                <div className="mh-number-label">{label}</div>
-                <p className="mh-number-desc">{desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* â”€â”€ Â§7 PROMISE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <section className="mh-promise">
-        <div className="mh-shell">
-          <div className="mh-promise-head">
-            <div>
-              <span className="mh-eyebrow">Trust, built in</span>
-              <h2>Your journey deserves both warmth<br />and protection.</h2>
-            </div>
-            <p>
-              We built My Dear Partner with privacy-first values and human oversight at every step so every member
-              feels safe, seen, and respected.
+      {/* ── SECTION 3 - TRUST & SAFETY ── */}
+      <section className="py-16 sm:py-24 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="text-center mb-12 sm:mb-16">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#be123c]/10 text-rose-800 uppercase tracking-widest mb-4 border border-[#be123c]/20">
+              TRUST &amp; SAFETY
+            </span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[var(--theme-primary-800)] font-display tracking-tight mb-4">
+              Because Trust Comes Before Every Relationship
+            </h2>
+            <p className="text-slate-650 max-w-3xl mx-auto text-sm sm:text-base leading-relaxed">
+              At MyDearPartner, your safety and privacy are our highest priorities. Every feature is thoughtfully designed to help individuals and families connect with confidence while maintaining complete control over their personal information.
             </p>
           </div>
-          <div className="mh-promises">
-            {promises.map(({ icon: Icon, value, title, desc }, i) => (
-              <motion.div key={title} {...fadeUpView(i * 0.12)} className="mh-promise-card">
-                <div className="mh-promise-icon"><Icon /></div>
-                <div className="mh-promise-val">{value}</div>
-                <div className="mh-promise-title">{title}</div>
-                <p className="mh-promise-desc">{desc}</p>
-                <div className="mh-promise-badge"><Check /> My Dear Partner standard</div>
-              </motion.div>
-            ))}
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {trustPoints.map((point, idx) => {
+              const IconComponent = point.icon;
+              return (
+                <motion.div
+                  key={point.title}
+                  {...fadeUpView(idx * 0.08)}
+                  className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-rose-50 text-[#be123c] mb-5 shrink-0">
+                      <IconComponent className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-2">{point.title}</h3>
+                    <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">{point.desc}</p>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
+
         </div>
       </section>
 
-      {/* â”€â”€ Â§8 MEMBERSHIP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── SECTION 4 - PREMIUM MEMBERSHIP ── */}
       <section className="mh-membership">
         <div className="mh-membership-visual">
           <SmartImage src="/images/wedding-rings.jpg" alt="Wedding rings representing lasting commitment" />
         </div>
         <div className="mh-membership-copy">
           <div className="mh-membership-icon"><Crown /></div>
-          <span className="mh-eyebrow dark">Membership with purpose</span>
-          <h2>When you're ready to search more intentionally.</h2>
+          <span className="mh-eyebrow dark">PREMIUM EXPERIENCE</span>
+          <h2>Unlock More Meaningful Opportunities</h2>
           <p>
-            Unlock unlimited conversations, priority visibility, advanced preferences, and dedicated
-            relationship support with our premium membership.
+            Upgrade your membership to enjoy exclusive features that help you find your ideal life partner faster and more effectively.
           </p>
           <ul className="mh-membership-list">
-            <li><Check /> Unlimited contact views and messaging</li>
-            <li><Check /> Advanced compatibility filters</li>
-            <li><Check /> Personal relationship advisor</li>
-            <li><Check /> Priority profile placement</li>
+            {premiumBenefits.map((benefit) => (
+              <li key={benefit}><Check /> {benefit}</li>
+            ))}
           </ul>
           <Link to="/membership" id="membership-cta" className="btn-gold">
-            Explore membership <ArrowRight />
+            Explore Premium Plans <ArrowRight />
           </Link>
         </div>
       </section>
 
-      {/* â”€â”€ Â§9 FAQ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── FAQ SECTION ── */}
       <section className="mh-faq">
         <div className="mh-shell mh-faq-grid">
           <div className="mh-faq-left">
-            <span className="mh-eyebrow dark">Before you begin</span>
-            <h2>A few things you may be wondering.</h2>
+            <span className="mh-eyebrow dark">Frequently Asked Questions</span>
+            <h2>Honest answers to the questions families ask us most.</h2>
             <p>Still have a question? Our relationship support team would be glad to help.</p>
             <Link to="/contact" className="mh-link" id="faq-contact-link">Talk to our team <ArrowRight /></Link>
           </div>
           <div className="mh-faq-list">
-            {faqs.map(([question, answer], index) => {
+            {faqList.map(({ q: question, a: answer }, index) => {
               const open = openFaq === index;
               return (
                 <div key={question} className={`mh-faq-item${open ? ' open' : ''}`}>
@@ -328,23 +324,23 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* â”€â”€ Â§10 FINAL CTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── FINAL CTA ── */}
       <section className="mh-final">
         <div className="mh-final-ring mh-final-ring-1" aria-hidden="true" />
         <div className="mh-final-ring mh-final-ring-2" aria-hidden="true" />
         <div className="mh-final-ring mh-final-ring-3" aria-hidden="true" />
 
         <motion.div {...fadeUpView()} className="mh-final-inner">
-          <Sparkles className="mh-final-icon" />
-          <span className="mh-eyebrow">Your next chapter</span>
-          <h2>Someone meaningful may be closer than you think.</h2>
-          <p>Create your profile today. It's free, private, and takes only a few minutes.</p>
+          <Heart className="mh-final-icon fill-current text-amber-400" />
+          <span className="mh-eyebrow">YOUR STORY STARTS HERE</span>
+          <h2>The Right Person Could Be Just One Conversation Away.</h2>
+          <p>Thousands of meaningful relationships begin with a simple hello. Join MyDearPartner today and take the first step toward finding someone who truly understands your journey, values, and dreams.</p>
           <div className="mh-final-actions">
             <Link to="/register" id="final-signup-btn" className="btn-gold">
-              Begin your journey <ArrowRight />
+              Create Free Profile <ArrowRight />
             </Link>
-            <Link to="/login" id="final-login-btn" className="btn-ghost">
-              Already registered? Login
+            <Link to="/search" id="final-login-btn" className="btn-ghost">
+              Browse Matches
             </Link>
           </div>
         </motion.div>

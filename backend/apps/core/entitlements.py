@@ -1,189 +1,197 @@
-"""
-Membership plan entitlement definitions and enforcement helpers.
+"""Typed, database-backed membership entitlement resolution.
 
-Plans (by slug):
-    free      – default, no active MemberMembership needed
-    gold      – Rs. 2999 / 3 months
-    platinum  – Rs. 5999 / 6 months
-    elite     – Rs. 14999 / 12 months
+This is the sole plan-resolution boundary for member feature checks.  Callers
+receive an :class:`EntitlementSet`, never a plan JSON dictionary.  Results are
+deliberately not cached: a Super Admin plan change takes effect on the member's
+next request.
 """
+
+from dataclasses import asdict, dataclass
+from datetime import datetime, time, timedelta
 
 from django.utils import timezone
 
 
-# ---------------------------------------------------------------------------
-# Plan limits
-# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class EntitlementSet:
+    plan_id: str | None
+    plan_name: str
+    plan_slug: str
+    daily_profile_view_limit: int | None
+    can_send_interest: bool
+    daily_interest_limit: int | None
+    can_chat: bool
+    can_view_contact_details: bool
+    profile_visibility_boost: bool
+    can_see_who_viewed_profile: bool
+    can_view_received_interests: bool
+    priority_support: bool
+    max_photos: int
+    contact_access_mode: str
+    photo_access_mode: str
+    can_use_advanced_search: bool
 
-PLAN_LIMITS = {
-    'free': {
-        'daily_profile_views': 5,
-        'daily_interests': 3,
-        'can_message': False,
-        'can_view_contact': False,
-        'can_view_all_photos': False,
-        'advanced_search': False,
-        'can_boost': False,
-    },
-    'gold': {
-        'daily_profile_views': 50,
-        'daily_interests': 15,
-        'can_message': True,
-        'can_view_contact': False,   # Gold sees contact only on mutual acceptance
-        'can_view_all_photos': True,
-        'advanced_search': True,
-        'can_boost': False,
-    },
-    'platinum': {
-        'daily_profile_views': 200,
-        'daily_interests': 50,
-        'can_message': True,
-        'can_view_contact': True,
-        'can_view_all_photos': True,
-        'advanced_search': True,
-        'can_boost': True,
-    },
-    'elite': {
-        'daily_profile_views': 999,  # effectively unlimited
-        'daily_interests': 999,
-        'can_message': True,
-        'can_view_contact': True,
-        'can_view_all_photos': True,
-        'advanced_search': True,
-        'can_boost': True,
-    },
+    def as_dict(self):
+        return asdict(self)
+
+
+FREE_DEFAULTS = {
+    'daily_profile_view_limit': 5,
+    'can_send_interest': True,
+    'daily_interest_limit': 3,
+    'can_chat': False,
+    'can_view_contact_details': False,
+    'profile_visibility_boost': False,
+    'can_see_who_viewed_profile': False,
+    'can_view_received_interests': False,
+    'priority_support': False,
+    'max_photos': 6,
+    'contact_access_mode': 'NONE',
+    'photo_access_mode': 'PRIMARY_ONLY',
+    'can_use_advanced_search': False,
 }
 
-FREE_LIMITS = PLAN_LIMITS['free']
+
+def _limit(value, fallback):
+    if value is None:
+        return fallback
+    if isinstance(value, int) and value < 0:
+        return None
+    return value
 
 
-def _get_plan_slug(member):
-    """Return the slug of the member's active membership plan, or 'free'."""
-    try:
-        from apps.accounts.models import Member
-        if not isinstance(member, Member):
-            member = Member.objects.filter(pk=member.pk).first()
-            if not member:
-                return 'free'
+def _plan_values(plan):
+    """Normalise both formal JSON and legacy plan columns during rollout."""
+    raw = plan.entitlements or {}
+    return {
+        'daily_profile_view_limit': _limit(
+            raw.get('daily_profile_view_limit'),
+            plan.daily_profile_unlock_limit
+            if plan.daily_profile_unlock_limit is not None else plan.profile_view_limit_daily,
+        ),
+        'can_send_interest': bool(raw.get('can_send_interest', plan.can_send_interest)),
+        'daily_interest_limit': _limit(
+            raw.get('daily_interest_limit'),
+            plan.interest_limit if plan.interest_limit is not None else plan.interest_limit_daily,
+        ),
+        'can_chat': bool(raw.get('can_chat', plan.can_message or plan.messaging_mode != 'DISABLED')),
+        'can_view_contact_details': bool(
+            raw.get('can_view_contact_details', plan.can_view_contact or plan.contact_access_mode != 'NONE')
+        ),
+        'profile_visibility_boost': bool(
+            raw.get('profile_visibility_boost', plan.can_use_profile_boost or plan.profile_boost_level != 'NONE')
+        ),
+        'can_see_who_viewed_profile': bool(
+            raw.get('can_see_who_viewed_profile', plan.can_view_profile_visitors)
+        ),
+        'can_view_received_interests': bool(
+            raw.get('can_view_received_interests', plan.can_view_received_interests)
+        ),
+        'priority_support': bool(raw.get('priority_support', plan.support_priority == 'HIGH')),
+        'max_photos': max(1, int(raw.get('max_photos', 6))),
+        'contact_access_mode': raw.get('contact_access_mode', plan.contact_access_mode),
+        'photo_access_mode': raw.get('photo_access_mode', plan.photo_access_mode),
+        'can_use_advanced_search': bool(raw.get('can_use_advanced_search', plan.can_use_advanced_search)),
+    }
 
-        if getattr(member, 'account_status', 'ACTIVE') != 'ACTIVE' or not member.is_active:
-            return 'free'
 
-        membership = member.membership
-        if membership.is_active and membership.plan_id and getattr(membership, 'status', 'FREE') == 'ACTIVE':
-            if membership.end_date and membership.end_date <= timezone.now():
-                return 'free'
-            return (membership.plan.slug or 'free').lower()
-    except Exception:
-        pass
-    return 'free'
+def get_active_entitlements(member) -> EntitlementSet:
+    """Resolve a member's unexpired paid plan, otherwise the Free plan."""
+    from apps.accounts.models import Member
+    from apps.core.models import MemberMembership, MembershipPlan
+
+    if not isinstance(member, Member):
+        member = Member.objects.filter(pk=getattr(member, 'pk', None)).first()
+    paid_plan = None
+    if member and member.is_active and member.account_status == Member.AccountStatus.ACTIVE:
+        membership = (
+            MemberMembership.objects.select_related('plan')
+            .filter(member=member, is_active=True, status=MemberMembership.MembershipStatus.ACTIVE)
+            .order_by('-started_at', '-created_at')
+            .first()
+        )
+        if membership and membership.plan_id:
+            expiry = membership.expires_at or membership.end_date
+            if expiry is None or expiry > timezone.now():
+                paid_plan = membership.plan
+
+    plan = paid_plan or MembershipPlan.objects.filter(slug__iexact='free').first()
+    if not plan:
+        return EntitlementSet(plan_id=None, plan_name='Free', plan_slug='free', **FREE_DEFAULTS)
+    values = _plan_values(plan)
+    return EntitlementSet(
+        plan_id=str(plan.pk),
+        plan_name=plan.display_name or plan.name or 'Free',
+        plan_slug=plan.slug.lower(),
+        **values,
+    )
 
 
+def daily_resets_at():
+    local_now = timezone.localtime()
+    tomorrow = local_now.date() + timedelta(days=1)
+    return timezone.make_aware(datetime.combine(tomorrow, time.min), local_now.tzinfo)
+
+
+def usage_for(member, entitlements: EntitlementSet | None = None):
+    """Return DB-backed, unique daily usage consistent with existing unlocks."""
+    from apps.core.models import Interest, ProfileUnlock
+
+    entitlements = entitlements or get_active_entitlements(member)
+    today = timezone.localdate()
+    profile_used = ProfileUnlock.objects.filter(viewer=member, usage_date=today).count()
+    interest_used = Interest.objects.filter(sender=member, created_at__date=today).exclude(
+        status=Interest.Status.DECLINED
+    ).count()
+    remaining = lambda limit, used: None if limit is None else max(0, limit - used)
+    return {
+        'profile_views_used_today': profile_used,
+        'profile_views_remaining_today': remaining(entitlements.daily_profile_view_limit, profile_used),
+        'interests_used_today': interest_used,
+        'interests_remaining_today': remaining(entitlements.daily_interest_limit, interest_used),
+        'resets_at': daily_resets_at().isoformat(),
+    }
+
+
+def entitlement_denial(entitlements: EntitlementSet, entitlement: str, *, daily_limit=False):
+    """Canonical payload for every membership entitlement rejection."""
+    payload = {
+        'error': 'DAILY_LIMIT_REACHED' if daily_limit else 'ENTITLEMENT_DENIED',
+        'entitlement': entitlement,
+        'current_plan': entitlements.plan_name,
+        'upgrade_url': '/membership',
+    }
+    if daily_limit:
+        payload['resets_at'] = daily_resets_at().isoformat()
+    return payload
+
+
+# Compatibility wrappers for legacy imports. New code should use the typed API.
 def get_entitlements(member):
-    """
-    Return a dictionary of entitlements read dynamically from the database
-    for the member's current active MembershipPlan, falling back to FREE defaults.
-    """
-    slug = _get_plan_slug(member)
-    
-    try:
-        from apps.core.models import MembershipPlan
-        plan = MembershipPlan.objects.filter(slug__iexact=slug, is_active=True).first()
-        if not plan and slug != 'free':
-            plan = MembershipPlan.objects.filter(slug__iexact='free', is_active=True).first()
-            
-        if plan:
-            # Map standard DB fields to limit names
-            daily_views = plan.daily_profile_unlock_limit if plan.daily_profile_unlock_limit is not None else plan.profile_view_limit_daily
-            daily_interests = plan.interest_limit if plan.interest_limit is not None else plan.interest_limit_daily
-            
-            return {
-                'daily_profile_views': daily_views,
-                'daily_interests': daily_interests,
-                'can_message': plan.can_message,
-                'can_view_contact': plan.can_view_contact or (plan.contact_access_mode != 'NONE'),
-                'can_view_all_photos': plan.can_view_private_photos or (plan.photo_access_mode == 'ALL_APPROVED'),
-                'advanced_search': plan.can_use_advanced_search,
-                'can_boost': plan.can_use_profile_boost or (plan.profile_boost_level != 'NONE'),
-                'contact_access_mode': plan.contact_access_mode,
-                'photo_access_mode': plan.photo_access_mode,
-            }, slug
-    except Exception:
-        pass
-        
-    return PLAN_LIMITS.get(slug, FREE_LIMITS), slug
+    resolved = get_active_entitlements(member)
+    return resolved.as_dict(), resolved.plan_slug
 
 
-def can_view_profile(member, today_view_count: int) -> tuple[bool, str]:
-    """Return (allowed, reason). Check against daily profile view limit."""
-    limits, slug = get_entitlements(member)
-    limit = limits['daily_profile_views']
-    
-    # None or -1 represents unlimited
-    if limit is not None and limit >= 0:
-        if today_view_count >= limit:
-            if slug == 'free':
-                return False, 'You have used all 5 profile unlocks available today.'
-            return False, f'You have reached your daily profile view limit of {limit}. Upgrade your plan to view more profiles.'
-    return True, ''
+def can_view_profile(member, today_view_count):
+    resolved = get_active_entitlements(member)
+    allowed = resolved.daily_profile_view_limit is None or today_view_count < resolved.daily_profile_view_limit
+    return allowed, '' if allowed else 'Daily profile view limit reached.'
 
 
-def can_send_interest(member, today_interest_count: int) -> tuple[bool, str]:
-    """Return (allowed, reason). Check against daily interest limit."""
-    limits, slug = get_entitlements(member)
-    limit = limits['daily_interests']
-    if limit is not None and limit >= 0:
-        if today_interest_count >= limit:
-            return False, f'You have reached your daily interest limit of {limit}. Upgrade your plan to send more interests.'
-    return True, ''
+def can_send_interest(member, today_interest_count):
+    resolved = get_active_entitlements(member)
+    allowed = resolved.can_send_interest and (
+        resolved.daily_interest_limit is None or today_interest_count < resolved.daily_interest_limit
+    )
+    return allowed, '' if allowed else 'Daily interest limit reached.'
 
 
-def can_message(member) -> tuple[bool, str]:
-    """Return (allowed, reason). Check if member's plan includes messaging."""
-    limits, slug = get_entitlements(member)
-    if not limits['can_message']:
-        return False, 'Messaging is not available in your current membership plan.'
-    return True, ''
+def can_message(member):
+    resolved = get_active_entitlements(member)
+    return resolved.can_chat, '' if resolved.can_chat else 'Messaging is not included in your plan.'
 
 
-def can_view_contact(member, target_member=None) -> tuple[bool, str]:
-    """
-    Return (allowed, reason). Check if member can see contact details.
-    Gold members can only view contact details if there's a mutual accepted interest.
-    """
-    from apps.core.models import Interest  # local import to avoid circular
-    from django.db.models import Q
-
-    limits, slug = get_entitlements(member)
-    contact_access = limits.get('contact_access_mode', 'NONE')
-    
-    # Compatibility fallback if contact_access_mode is missing from limits dict
-    if contact_access == 'NONE' and limits.get('can_view_contact', False):
-        contact_access = 'FULL'
-
-    if contact_access == 'FULL' or limits.get('can_view_contact', False):
-        return True, ''
-    elif contact_access == 'MUTUAL_ONLY' and target_member is not None:
-        matched = Interest.objects.filter(
-            Q(sender=member, receiver=target_member) | Q(sender=target_member, receiver=member),
-            status=Interest.Status.ACCEPTED,
-        ).exists()
-        if matched:
-            return True, ''
-        return False, 'Contact details are visible to Gold members only upon mutual accepted interest.'
-    
-    return False, 'Contact details are visible to Platinum and Elite members.'
-
-
-def can_view_all_photos(member) -> tuple[bool, str]:
-    """Return (allowed, reason). Check if member can view all photos."""
-    limits, slug = get_entitlements(member)
-    photo_access = limits.get('photo_access_mode', 'PRIMARY_ONLY')
-    
-    # Compatibility fallback
-    if photo_access == 'PRIMARY_ONLY' and limits.get('can_view_all_photos', False):
-        photo_access = 'ALL_APPROVED'
-        
-    if photo_access == 'ALL_APPROVED' or limits.get('can_view_all_photos', False):
-        return True, ''
-    return False, 'View all photos with a Gold plan or above.'
+def can_view_all_photos(member):
+    resolved = get_active_entitlements(member)
+    allowed = resolved.photo_access_mode in {'ALL_APPROVED', 'ALL'}
+    return allowed, '' if allowed else 'Viewing all photos is not included in your plan.'

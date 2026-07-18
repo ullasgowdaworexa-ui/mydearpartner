@@ -1,13 +1,13 @@
-﻿'use client';
+'use client';
 
 import { motion } from 'framer-motion';
 import {
   Heart, Shield, Award, Users, Globe, Target, Zap, CheckCircle,
-  Sparkles, Star, ArrowRight, Quote, HeartHandshake, Fingerprint,
-  Crown, Gem, MapPin, TrendingUp, UserCheck
+  Star, ArrowRight, Quote, HeartHandshake, Fingerprint,
+  Crown, Gem, MapPin, TrendingUp, UserCheck, Lock
 } from 'lucide-react';
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STATS DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── STATS DATA ── */
 const stats = [
   { value: '25L+', label: 'Verified Profiles', icon: <Users className="w-5 h-5" />, color: '#be123c' },
   { value: '9+', label: 'Years of Trust', icon: <Shield className="w-5 h-5" />, color: '#d97706' },
@@ -15,95 +15,79 @@ const stats = [
   { value: '500+', label: 'Cities Covered', icon: <MapPin className="w-5 h-5" />, color: '#0891b2' },
 ];
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ VALUES DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-const values = [
+/* ── DIFFERENTIATORS ── */
+const differentiators = [
   {
-    icon: Shield,
-    title: 'Trust & Safety',
-    desc: 'Every profile is manually verified with government-issued ID. Zero bots, zero fakes - only authentic connections.',
+    icon: UserCheck,
+    title: 'Authenticity Above Everything',
+    desc: 'Every profile represents a genuine person looking for a meaningful relationship.',
     gradient: 'from-green-500 to-emerald-700',
     glow: 'rgba(16,185,129,0.3)',
-    tag: 'Verified',
+    tag: 'Authentic',
+  },
+  {
+    icon: Shield,
+    title: 'Trust at Every Step',
+    desc: 'From profile verification to privacy controls, every feature is designed to help you connect with confidence.',
+    gradient: 'from-rose-500 to-red-700',
+    glow: 'rgba(190,18,60,0.3)',
+    tag: 'Secure',
   },
   {
     icon: Heart,
-    title: 'Family Values',
-    desc: <span className="text-gradient-primary font-bold">We celebrate the pivotal role of family in the Indian marriage journey - honoring traditions while embracing modern love.</span>,
-    gradient: 'from-rose-500 to-red-700',
-    glow: 'rgba(190,18,60,0.3)',
-    tag: 'Culture First',
-  },
-  {
-    icon: Award,
-    title: 'Excellence',
-    desc: 'We obsess over every detail - from profile quality to 24/7 concierge support - so your journey feels premium.',
+    title: 'Relationships Before Algorithms',
+    desc: 'Technology helps us recommend compatible matches, but people, values, and genuine intentions remain at the heart of every connection.',
     gradient: 'from-amber-400 to-yellow-600',
     glow: 'rgba(217,119,6,0.3)',
-    tag: 'Premium',
+    tag: 'People First',
   },
   {
-    icon: Zap,
-    title: 'AI Innovation',
-    desc: 'Our proprietary matching engine learns from millions of data points to surface your most compatible matches first.',
+    icon: Users,
+    title: 'Designed for Individuals & Families',
+    desc: 'Marriage brings two lives together—and often two families as well. That’s why MyDearPartner creates an experience that respects both personal choice and family involvement.',
     gradient: 'from-violet-500 to-purple-700',
     glow: 'rgba(139,92,246,0.3)',
-    tag: 'Smart Tech',
-  },
-  {
-    icon: Globe,
-    title: 'Inclusivity',
-    desc: 'Hindu, Muslim, Christian, Sikh - every community, language, and background is welcomed with equal love and respect.',
-    gradient: 'from-sky-500 to-blue-700',
-    glow: 'rgba(14,165,233,0.3)',
-    tag: 'All Communities',
-  },
-  {
-    icon: Target,
-    title: 'Success Focus',
-    desc: 'Every feature, every algorithm tweak, every update - all driven by one goal: helping you find your forever person.',
-    gradient: 'from-orange-500 to-red-600',
-    glow: 'rgba(249,115,22,0.3)',
-    tag: 'Results Driven',
+    tag: 'Family First',
   },
 ];
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ TIMELINE DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-const timeline = [
-  { year: '2015', title: 'Founded with Purpose', desc: 'My Dear Partner was born with a vision to make matrimony safe, modern, and meaningful for every Indian.' },
-  { year: '2017', title: 'AI Matching Launched', desc: 'Rolled out our first-generation AI matchmaking engine, revolutionizing how compatible matches are discovered.' },
-  { year: '2019', title: '1 Million Profiles', desc: 'Crossed the 1 million verified profiles milestone - a testament to the trust the nation placed in us.' },
-  { year: '2021', title: 'Pan-India Expansion', desc: 'Expanded our network to 500+ cities, serving every state and community across India.' },
-  { year: '2023', title: 'Premium Experience', desc: 'Launched gold-tier concierge matchmaking and family connect features, redefining premium matrimony.' },
-  { year: '2025', title: '5 Lakh+ Couples', desc: 'Celebrated 5 lakh successful matches - each one a story of love, trust, and new beginnings.' },
-];
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ TESTIMONIALS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-const testimonials = [
+/* ── VALUES LIST ── */
+const valuesList = [
   {
-    quote: 'My Dear Partner understood exactly what we were looking for. The AI suggestions were spot-on, and within 3 months we found each other. We got married last December!',
-    name: 'Priya & Arjun Sharma',
-    location: 'Delhi',
-    avatar: 'PA',
+    label: 'Trust',
+    title: 'Trust',
+    desc: 'Every meaningful relationship begins with honesty.',
+    badgeColor: 'rgba(16,185,129,0.2)',
+    textColor: '#10b981'
   },
   {
-    quote: 'As a working professional, I had very little time. Their concierge service handled everything. I just showed up and met my now-husband. Truly magical!',
-    name: 'Meera Nair',
-    location: 'Bangalore',
-    avatar: 'MN',
+    label: 'Respect',
+    title: 'Respect',
+    desc: 'Every person, tradition, culture, and life story deserves respect.',
+    badgeColor: 'rgba(139,92,246,0.2)',
+    textColor: '#a78bfa'
   },
   {
-    quote: 'The profile verification gave our families immense confidence. A trustworthy platform that truly cares about safe and meaningful connections.',
-    name: 'Rahul & Divya Kapoor',
-    location: 'Mumbai',
-    avatar: 'RD',
+    label: 'Privacy',
+    title: 'Privacy',
+    desc: 'Your personal information belongs to you & protecting it is our responsibility.',
+    badgeColor: 'rgba(14,165,233,0.2)',
+    textColor: '#38bdf8'
   },
+  {
+    label: 'Commitment',
+    title: 'Commitment',
+    desc: 'We’re committed to helping people build relationships that stand the test of time.',
+    badgeColor: 'rgba(251,191,36,0.2)',
+    textColor: '#fcd34d'
+  }
 ];
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen pt-16 overflow-x-hidden">
 
-      {/* â”€â”€â”€â”€â”€â”€â”€ HERO â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── HERO ── */}
       <section className="relative min-h-[70vh] sm:min-h-[80vh] flex items-center justify-center overflow-hidden">
         <div
           className="absolute inset-0"
@@ -113,24 +97,7 @@ export default function AboutPage() {
           <div className="absolute top-1/4 left-1/4 w-72 h-72 sm:w-96 sm:h-96 rounded-full blur-3xl opacity-20" style={{ background: 'radial-gradient(circle, #be123c, transparent)' }} />
           <div className="absolute bottom-1/4 right-1/4 w-64 h-64 sm:w-80 sm:h-80 rounded-full blur-3xl opacity-15" style={{ background: 'radial-gradient(circle, #d97706, transparent)' }} />
         </div>
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(14)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute rounded-full"
-              style={{
-                width: Math.random() * 5 + 2,
-                height: Math.random() * 5 + 2,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                background: i % 3 === 0 ? 'rgba(251,191,36,0.8)' : i % 3 === 1 ? 'rgba(255,255,255,0.5)' : 'rgba(220,38,38,0.6)',
-              }}
-              animate={{ y: [0, -25, 0], opacity: [0.3, 1, 0.3] }}
-              transition={{ duration: 3 + Math.random() * 4, repeat: Infinity, delay: Math.random() * 5 }}
-            />
-          ))}
-        </div>
-
+        
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-20 sm:py-28">
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9 }}>
             <motion.div
@@ -140,16 +107,16 @@ export default function AboutPage() {
               className="inline-flex items-center gap-2 mb-8 px-5 py-2.5 rounded-full border border-amber-400/40"
               style={{ background: 'rgba(251,191,36,0.1)', backdropFilter: 'blur(10px)' }}
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span className="text-amber-200 text-xs sm:text-sm font-bold tracking-widest uppercase">India's #1 Trusted Matrimony</span>
-              <Sparkles className="w-4 h-4 text-amber-300" />
+            
+              <span className="text-amber-200 text-xs sm:text-sm font-bold tracking-widest uppercase">About MyDearPartner</span>
+       
             </motion.div>
 
             <h1
               className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-white leading-tight mb-6 font-display"
               style={{ textShadow: '0 0 60px rgba(255,255,255,0.15), 0 4px 30px rgba(0,0,0,0.5)' }}
             >
-              We Help{' '}
+              Every Forever Begins with a{' '}
               <span
                 className="text-transparent bg-clip-text"
                 style={{
@@ -157,17 +124,15 @@ export default function AboutPage() {
                   filter: 'drop-shadow(0 0 24px rgba(251,191,36,0.6))',
                 }}
               >
-                Hearts
+                Meaningful Connection.
               </span>
-              <br className="hidden sm:block" />
-              Find Home.
             </h1>
 
             <p
-              className="text-base sm:text-xl max-w-2xl mx-auto leading-relaxed font-medium mb-12"
-              style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+              className="text-sm sm:text-base max-w-4xl mx-auto leading-relaxed font-medium mb-12 text-justify sm:text-center"
+              style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
             >
-              India's most trusted premium matrimony platform, connecting hearts with intention, dignity, and joy since 2015.
+              <strong>Some journeys in life are chosen. Others are shared.</strong> Finding the person who will stand beside you through every season of life is one of the most meaningful decisions you’ll ever make. At MyDearPartner, we believe that every relationship deserves a beginning built on trust, understanding, and genuine intentions. We created MyDearPartner to offer more than just a platform for finding matches. We envisioned a place where people could confidently discover someone who shares their values, respects their dreams, and is ready to build a future together. Whether you’re searching for yourself or helping someone you love, every connection starts with hope, and we’re here to help that hope become a lifelong partnership.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 max-w-3xl mx-auto">
@@ -200,10 +165,12 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€ MISSION SECTION â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── OUR STORY, MISSION & VISION ── */}
       <section className="py-16 sm:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
+            
+            {/* Left Column: Our Story */}
             <motion.div
               initial={{ opacity: 0, x: -40 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -212,28 +179,29 @@ export default function AboutPage() {
             >
               <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-red-50 border border-red-100">
                 <HeartHandshake className="w-4 h-4 text-[var(--theme-primary-600)]" />
-                <span className="text-[var(--theme-primary-600)] text-xs font-black uppercase tracking-widest">Our Purpose</span>
+                <span className="text-[var(--theme-primary-600)] text-xs font-black uppercase tracking-widest">Our Story</span>
               </div>
+              
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display text-[var(--theme-primary-800)] mb-6 leading-tight">
-                Our{' '}
+                Inspired by{' '}
                 <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg,#be123c,#f59e0b)' }}>
-                  Mission
+                  Real Relationships
                 </span>
               </h2>
+              
               <p className="text-[var(--theme-primary-600)]/80 leading-relaxed mb-5 text-base sm:text-lg">
-                At My Dear Partner, we believe marriage is one of life's most profound decisions. Our mission is to make this journey safer, smarter, and more meaningful, combining cutting-edge AI with a deep reverence for Indian values.
+                In today’s fast-moving digital world, finding a genuine life partner can often feel overwhelming. Endless profiles, uncertain conversations, and a lack of trust can make an important journey unnecessarily difficult.
               </p>
+              
               <p className="text-[var(--theme-primary-600)]/70 leading-relaxed mb-8 text-sm sm:text-base">
-                We don't just match profiles, we match lives. Every feature is built with trust, privacy, and your success story in mind.
+                <strong>MyDearPartner was born from a simple belief:</strong> Finding your life partner should feel personal, respectful, and meaningful, not complicated. That’s why we’ve created a platform where technology supports human connections without replacing the values that matter most.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              
+              <div className="grid grid-cols-1 gap-3">
                 {[
-                  '100% Verified Profiles',
-                  'AI-Powered Matching',
-                  'Bank-Grade Security',
-                  'Dedicated Support 24/7',
-                  'Privacy First Approach',
-                  'Cultural Sensitivity',
+                  'Every profile represents a real person.',
+                  'Every conversation carries the possibility of a new beginning.',
+                  'Every successful match becomes part of a story worth celebrating.'
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-2.5 bg-red-50/50 rounded-xl px-3 py-2.5">
                     <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
@@ -243,12 +211,13 @@ export default function AboutPage() {
               </div>
             </motion.div>
 
+            {/* Right Column: Mission & Vision */}
             <motion.div
               initial={{ opacity: 0, x: 40 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.7 }}
-              className="relative mt-8 lg:mt-0"
+              className="relative"
             >
               <div
                 className="relative rounded-3xl p-6 sm:p-8 overflow-hidden"
@@ -261,60 +230,49 @@ export default function AboutPage() {
                 <div className="absolute top-4 right-4 opacity-10">
                   <Heart className="w-32 h-32 text-[var(--theme-primary-600)] fill-current" />
                 </div>
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-8">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg,#be123c,#9f1239)' }}>
-                      <Crown className="w-7 h-7 text-white" />
+                
+                <div className="relative z-10 space-y-6">
+                  {/* Mission Card */}
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white shadow-md" style={{ background: 'linear-gradient(135deg,#be123c,#9f1239)' }}>
+                      <Target className="w-6 h-6" />
                     </div>
                     <div>
-                      <div className="font-extrabold text-[var(--theme-primary-800)] font-display text-lg">My Dear Partner Promise</div>
-                      <div className="text-xs text-[var(--theme-primary-600)]/70">Building trust since 2015</div>
+                      <h3 className="font-extrabold text-[var(--theme-primary-800)] font-display text-lg">Our Mission</h3>
+                      <p className="text-xs text-[var(--theme-primary-600)]/70 uppercase font-black tracking-wider mb-2">Helping People Find More Than a Match</p>
+                      <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                        Our mission is to create a trusted environment where meaningful relationships can flourish naturally. By bringing together authenticity, privacy, and thoughtful matchmaking, we help individuals and families make one of life’s biggest decisions with confidence and peace of mind.
+                      </p>
+                      <p className="text-xs font-bold text-[var(--theme-primary-750)] border-l-2 border-[var(--theme-primary-300)] pl-2 italic">
+                        "Because marriage isn’t simply about finding someone. It’s about finding the right someone."
+                      </p>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    {[
-                      { icon: <UserCheck className="w-5 h-5" />, label: 'Manual Profile Verification', color: '#be123c' },
-                      { icon: <Shield className="w-5 h-5" />, label: '256-bit SSL Encryption', color: '#d97706' },
-                      { icon: <Fingerprint className="w-5 h-5" />, label: 'Govt. ID Authentication', color: '#7c3aed' },
-                      { icon: <TrendingUp className="w-5 h-5" />, label: 'AI Compatibility Scoring', color: '#0891b2' },
-                      { icon: <Gem className="w-5 h-5" />, label: 'Premium Concierge Support', color: '#059669' },
-                    ].map((item, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, x: 20 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: i * 0.1 }}
-                        className="flex items-center gap-3 p-3.5 rounded-xl bg-white/80 border border-white"
-                        style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
-                      >
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ color: item.color, background: `${item.color}18` }}>
-                          {item.icon}
-                        </div>
-                        <span className="text-sm font-semibold text-gray-800">{item.label}</span>
-                        <CheckCircle className="w-4 h-4 text-green-500 ml-auto shrink-0" />
-                      </motion.div>
-                    ))}
+
+                  {/* Vision Card */}
+                  <div className="flex gap-4 pt-4 border-t border-red-100">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white shadow-md" style={{ background: 'linear-gradient(135deg,#d97706,#b45309)' }}>
+                      <Globe className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-[var(--theme-primary-800)] font-display text-lg">Our Vision</h3>
+                      <p className="text-xs text-[var(--theme-primary-600)]/70 uppercase font-black tracking-wider mb-2">Every Relationship Begins with Trust</p>
+                      <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                        We dream of a world where meaningful relationships are built through honesty, respect, and shared values. Our vision is to become a platform that people don’t just use—but genuinely trust.
+                      </p>
+                      <p className="text-xs font-bold text-amber-700 border-l-2 border-amber-300 pl-2 italic">
+                        "A place where every introduction has purpose. Every conversation has meaning. And every successful match becomes the beginning of a beautiful new chapter."
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.5 }}
-                className="absolute -bottom-5 -left-4 sm:-left-6 rounded-2xl p-4 sm:p-5 shadow-2xl"
-                style={{ background: 'linear-gradient(135deg,#be123c,#9f1239)' }}
-              >
-                <div className="text-2xl sm:text-3xl font-black text-white font-display">9+</div>
-                <div className="text-xs text-white/80 font-medium">Years of Trust</div>
-              </motion.div>
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€ CORE VALUES â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── WHAT MAKES MYDEARPARTNER DIFFERENT ── */}
       <section className="py-16 sm:py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -325,19 +283,19 @@ export default function AboutPage() {
           >
             <div className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full bg-red-50 border border-red-100">
               <Star className="w-4 h-4 text-[var(--theme-primary-600)] fill-current" />
-              <span className="text-[var(--theme-primary-600)] text-xs font-black uppercase tracking-widest">What We Stand For</span>
+              <span className="text-[var(--theme-primary-600)] text-xs font-black uppercase tracking-widest">Our Approach</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display text-[var(--theme-primary-800)] mb-4">
-              Our Core{' '}
-              <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg,#be123c,#f59e0b)' }}>Values</span>
+              What Makes{' '}
+              <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg,#be123c,#f59e0b)' }}>MyDearPartner Different</span>
             </h2>
             <p className="text-[var(--theme-primary-600)]/70 max-w-xl mx-auto text-base sm:text-lg">
-              The principles that guide every decision we make, every feature we build, and every match we create.
+              We focus on intentions, trust, and human values to support your matchmaking journey.
             </p>
           </motion.div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 lg:gap-8">
-            {values.map((val, i) => (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-2 gap-6 max-w-5xl mx-auto">
+            {differentiators.map((val, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 30 }}
@@ -365,7 +323,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€ TIMELINE â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── OUR VALUES ── */}
       <section
         className="py-16 sm:py-24 relative overflow-hidden"
         style={{ background: 'linear-gradient(160deg,#0d0008 0%,#1f000e 40%,#2d0015 70%,#0d0008 100%)' }}
@@ -379,25 +337,25 @@ export default function AboutPage() {
             className="text-center mb-12 sm:mb-16"
           >
             <div className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full border border-amber-400/30" style={{ background: 'rgba(251,191,36,0.08)' }}>
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span className="text-amber-200 text-xs font-black uppercase tracking-widest">Our Journey</span>
+              <Star className="w-4 h-4 text-amber-300 fill-amber-300" />
+              <span className="text-amber-200 text-xs font-black uppercase tracking-widest">Our Values</span>
             </div>
             <h2
               className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display text-white mb-4"
               style={{ textShadow: '0 4px 20px rgba(0,0,0,0.5)' }}
             >
-              A Decade of{' '}
+              The Pillars of{' '}
               <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg,#fbbf24,#f59e0b,#fde68a)' }}>
-                Milestones
+                Our Platform
               </span>
             </h2>
           </motion.div>
 
           <div className="relative">
-            {/* Center line (desktop only) */}
+            {/* Center line */}
             <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2" style={{ background: 'linear-gradient(to bottom, transparent, rgba(190,18,60,0.6), rgba(251,191,36,0.6), transparent)' }} />
             <div className="space-y-6 sm:space-y-8">
-              {timeline.map((item, i) => (
+              {valuesList.map((item, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 30 }}
@@ -415,8 +373,11 @@ export default function AboutPage() {
                         backdropFilter: 'blur(10px)',
                       }}
                     >
-                      <div className="text-xs font-black uppercase tracking-widest mb-2 px-3 py-1 rounded-full inline-block" style={{ background: 'rgba(190,18,60,0.2)', color: '#fb7185' }}>
-                        {item.year}
+                      <div 
+                        className="text-xs font-black uppercase tracking-widest mb-2 px-3 py-1 rounded-full inline-block" 
+                        style={{ background: item.badgeColor, color: item.textColor }}
+                      >
+                        {item.label}
                       </div>
                       <h3 className="text-base sm:text-lg font-extrabold text-white font-display mb-2">{item.title}</h3>
                       <p className="text-white/60 text-sm leading-relaxed">{item.desc}</p>
@@ -433,7 +394,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€ TESTIMONIALS â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── WHY CHOOSE US & OUR PROMISE ── */}
       <section className="py-16 sm:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -444,52 +405,83 @@ export default function AboutPage() {
           >
             <div className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full bg-red-50 border border-red-100">
               <Heart className="w-4 h-4 text-[var(--theme-primary-600)] fill-current" />
-              <span className="text-[var(--theme-primary-600)] text-xs font-black uppercase tracking-widest">Love Stories</span>
+              <span className="text-[var(--theme-primary-600)] text-xs font-black uppercase tracking-widest">Why Us</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display text-[var(--theme-primary-800)] mb-4">
-              Voices of{' '}
+              Why Choose{' '}
               <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg,#be123c,#f59e0b)' }}>
-                Happy Couples
+                MyDearPartner?
               </span>
             </h2>
           </motion.div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 lg:gap-8">
-            {testimonials.map((t, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.12 }}
-                className="relative rounded-2xl sm:rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-red-50 to-orange-50 border border-red-100 hover:-translate-y-1 transition-all duration-300 hover:shadow-xl"
-              >
+          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            {/* Card 1: Why Choose Us */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-red-50 to-orange-50 border border-red-100 shadow-xl flex flex-col justify-between"
+            >
+              <div>
                 <Quote className="w-8 h-8 text-[var(--theme-primary-200)] mb-4" />
-                <p className="text-[var(--theme-primary-700)] text-sm leading-relaxed mb-6 italic">"{t.quote}"</p>
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-extrabold shrink-0"
-                    style={{ background: 'linear-gradient(135deg,#be123c,#9f1239)' }}
-                  >
-                    {t.avatar}
-                  </div>
-                  <div>
-                    <div className="font-extrabold text-[var(--theme-primary-800)] text-sm">{t.name}</div>
-                    <div className="text-xs text-[var(--theme-primary-500)]">ðŸ“ {t.location}</div>
-                  </div>
-                </div>
-                <div className="flex gap-0.5 mt-4">
-                  {[...Array(5)].map((_, s) => (
-                    <Star key={s} className="w-3.5 h-3.5 text-amber-400 fill-current" />
+                <h3 className="text-xl sm:text-2xl font-extrabold text-[var(--theme-primary-800)] font-display mb-6">
+                  Because you’re not looking for another profile...
+                </h3>
+                
+                <div className="space-y-4">
+                  {[
+                    "You’re looking for someone who feels like home.",
+                    "Someone who understands your journey.",
+                    "Someone who shares your dreams.",
+                    "Someone with whom I feel forever natural."
+                  ].map((point, idx) => (
+                    <div key={idx} className="flex items-start gap-3">
+                      <Heart className="w-4 h-4 text-[var(--theme-primary-600)] mt-1 shrink-0 fill-red-200" />
+                      <p className="text-sm font-semibold text-gray-800">{point}</p>
+                    </div>
                   ))}
                 </div>
-              </motion.div>
-            ))}
+              </div>
+              
+              <p className="text-base font-extrabold text-[var(--theme-primary-700)] mt-8 pt-4 border-t border-red-100/50">
+                At MyDearPartner, we’re honoured to be part of that journey.
+              </p>
+            </motion.div>
+
+            {/* Card 2: A Promise From Us */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.15 }}
+              className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-orange-50 to-red-50 border border-red-100 shadow-xl flex flex-col"
+            >
+              <Shield className="w-8 h-8 text-amber-500 mb-4" />
+              <h3 className="text-xl sm:text-2xl font-extrabold text-[var(--theme-primary-800)] font-display mb-6">
+                A Promise From Us
+              </h3>
+              
+              <div className="space-y-4 flex-grow">
+                {[
+                  "We promise to create a space where meaningful relationships can begin with confidence.",
+                  "A place where trust is earned.",
+                  "Where conversations are genuine.",
+                  "Where families feel secure.",
+                  "And where every introduction carries the possibility of a lifetime together."
+                ].map((point, idx) => (
+                  <div key={idx} className="flex items-start gap-3">
+                    <CheckCircle className="w-4 h-4 text-green-500 mt-1 shrink-0" />
+                    <p className="text-sm font-semibold text-gray-800">{point}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€ CTA SECTION â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── CTA SECTION ── */}
       <section
         className="py-16 sm:py-24 relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg,#be123c 0%,#9f1239 50%,#7f1d1d 100%)' }}
@@ -502,11 +494,14 @@ export default function AboutPage() {
               <Heart className="w-8 h-8 sm:w-10 sm:h-10 text-white fill-white" />
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold font-display text-white mb-5" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-              Begin Your Forever Today
+              Your Story Deserves the Right Beginning.
             </h2>
-            <p className="text-white/80 text-base sm:text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-              Join 25 lakh+ verified profiles and let our AI find the one who was meant for you. Free to register. Always safe. Always trusted.
-            </p>
+            <div className="text-white/90 text-sm sm:text-base mb-10 max-w-2xl mx-auto leading-relaxed space-y-2">
+              <p>Every successful marriage begins with a single conversation.</p>
+              <p>Every lasting relationship begins with a shared belief in tomorrow.</p>
+              <p>And every beautiful future begins with one meaningful connection.</p>
+              <p className="font-extrabold text-amber-300 text-lg mt-4">Welcome to MyDearPartner.</p>
+            </div>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
                 href="/register"

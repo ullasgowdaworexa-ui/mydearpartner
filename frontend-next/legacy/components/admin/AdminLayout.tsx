@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
 
@@ -226,7 +226,7 @@ export default function AdminLayout({ children }: { children?: ReactNode } = {})
             {hasAdminPermission('notifications.manage') && <Link to={user?.account_type === 'SUPER_ADMIN' ? '/super-admin/notifications' : '/admin/notifications'} className="admin-icon-btn admin-notification-btn" aria-label="Notifications"><Bell /><i /></Link>}
             <div className="admin-profile-menu" ref={profileRef}>
               <button type="button" className="admin-profile-trigger" onClick={() => setProfileOpen((value) => !value)} aria-expanded={profileOpen}>
-                <span className="admin-avatar">{user?.photo ? <SmartImage src={user.photo} alt="" /> : initials}</span>
+                <span className="admin-avatar">{user?.id ? <img src={`/api/proxy/users/${user.id}/avatar/`} alt="" /> : initials}</span>
                 <span className="admin-profile-copy"><strong>{displayName}</strong><small>{user?.admin_role_display || user?.admin_role_name || roleLabels[role]}</small></span>
                 <ChevronDown />
               </button>

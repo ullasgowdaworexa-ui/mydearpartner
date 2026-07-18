@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
 
@@ -6,18 +6,19 @@ import { motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowRight,
   Heart,
-  LockKeyhole,
-  MessageCircle,
   ShieldCheck,
-  Sparkles,
   UserCheck,
+  Users,
+  MapPin,
+  Star
 } from 'lucide-react';
 import { Link } from '@/lib/router-compat';
 
 const trustStats = [
-  { icon: Heart, value: '10L+', label: 'Happy Members' },
-  { icon: ShieldCheck, value: '100%', label: 'Verified Profiles' },
-  { icon: LockKeyhole, value: '25+', label: 'Years of Trust' },
+  { icon: Users, value: '50K+', label: 'Verified Members' },
+  { icon: Heart, value: '200+', label: 'Communities' },
+  { icon: MapPin, value: '100+', label: 'Connected Cities' },
+  { icon: Star, value: '4.9/5', label: 'Member Satisfaction' },
 ];
 
 const floatingCards = [
@@ -50,7 +51,6 @@ export default function HeroSection() {
         <div className="home-hero__copy-panel">
           <div className="home-hero__decor home-hero__decor--ring" aria-hidden="true" />
           <div className="home-hero__decor home-hero__decor--glow" aria-hidden="true" />
-          <Sparkles className="home-hero__decor home-hero__decor--sparkle" aria-hidden="true" />
 
           <motion.div
             className="home-hero__copy"
@@ -58,38 +58,30 @@ export default function HeroSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="home-hero__eyebrow">
-              <ShieldCheck aria-hidden="true" />
-              <span>Private Matchmaking Concierge</span>
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#be123c]/10 text-rose-300 border border-[#be123c]/20 mb-6 uppercase tracking-widest w-fit">
+              Trusted Matrimonial Platform
             </div>
 
             <h1 id="home-hero-title" className="home-hero__title">
-              <span>A more personal</span>
-              <span>way to find</span>
-              <em>your person.</em>
+              <span>Where Two Hearts Begin</span>
+              <em>One Beautiful Journey.</em>
             </h1>
 
-            <p className="home-hero__supporting-copy">
-              Curated introductions shaped around your values, family and futureâ€”not another
-              endless list of profiles.
+            <p className="home-hero__supporting-copy text-justify lg:text-left">
+              At MyDearPartner, we believe the strongest relationships are built on trust, shared values, and genuine understanding. Whether you’re searching for yourself or a loved one, we’re here to help you discover a connection that’s meant to last a lifetime.
             </p>
 
-            <div className="home-hero__actions">
+            <div className="home-hero__actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
               <Link to="/register" className="home-hero__primary-cta">
-                <span>Find Your Perfect Match</span>
+                <span>Create Free Profile</span>
                 <ArrowRight aria-hidden="true" />
               </Link>
-
-              <div className="home-hero__login-row">
-                <span>Already registered?</span>
-                <Link to="/login">
-                  <MessageCircle aria-hidden="true" />
-                  Login with phone number
-                </Link>
-              </div>
+              <Link to="/search" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold border border-white/20 text-white hover:bg-white/10 transition-all text-sm">
+                Explore Matches
+              </Link>
             </div>
 
-            <ul className="home-hero__stats" aria-label="My Dear Partner trust highlights">
+            <ul className="home-hero__stats" aria-label="MyDearPartner trust highlights">
               {trustStats.map(({ icon: Icon, value, label }) => (
                 <li key={label}>
                   <Icon aria-hidden="true" />
@@ -108,7 +100,6 @@ export default function HeroSection() {
           <div className="home-hero__image-orbit" aria-hidden="true" />
           <span className="home-hero__gold-dot home-hero__gold-dot--one" aria-hidden="true" />
           <span className="home-hero__gold-dot home-hero__gold-dot--two" aria-hidden="true" />
-          <Sparkles className="home-hero__image-sparkle" aria-hidden="true" />
 
           <SmartImage
             className="home-hero__couple-image"
@@ -117,6 +108,7 @@ export default function HeroSection() {
             width={1536}
             height={1024}
             decoding="async"
+            loading="eager"
             fetchPriority="high"
           />
 

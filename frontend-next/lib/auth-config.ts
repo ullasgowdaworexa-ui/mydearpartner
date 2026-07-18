@@ -14,8 +14,10 @@ export const namespaceAccounts = Object.fromEntries(
 
 export const REFRESH_COOKIE = "mdp_refresh";
 export const PORTAL_COOKIE = "mdp_portal";
+export const PHOTO_ACCESS_COOKIE = "mdp_photo_access";
 
 export function accountFromApiPath(path: string): AccountType | null {
   const namespace = path.split("/")[0] as keyof typeof namespaceAccounts;
   return namespaceAccounts[namespace] ?? null;
 }
+

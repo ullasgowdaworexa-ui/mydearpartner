@@ -71,7 +71,9 @@ export default function PhotosPage() {
 
   const displayPhotos = photosData?.photos ?? [];
   const maxPhotos = photosData?.max_photos ?? 6;
-  const canUploadMore = displayPhotos.length < maxPhotos;
+  const hasApprovedPhoto = displayPhotos.some((photo) => photo.status === 'approved');
+  const canUploadMore = displayPhotos.length < maxPhotos && (displayPhotos.length === 0 || hasApprovedPhoto);
+  const pendingCount = displayPhotos.filter((photo) => photo.status === 'pending').length;
   const userGender = typeof user?.gender === 'string' ? user.gender : undefined;
 
   useEffect(() => {
@@ -238,6 +240,12 @@ export default function PhotosPage() {
           </p>
         </motion.div>
 
+        {pendingCount ? (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            <strong>{pendingCount} photo{pendingCount === 1 ? '' : 's'} pending approval.</strong> Your photos are saved securely and visible to you, but other members will see a placeholder until an Admin or Super Admin approves them.
+          </div>
+        ) : null}
+
         <AnimatePresence>
           {error ? (
             <motion.div
@@ -255,6 +263,12 @@ export default function PhotosPage() {
             </motion.div>
           ) : null}
         </AnimatePresence>
+
+        {!canUploadMore && displayPhotos.length > 0 && !hasApprovedPhoto ? (
+          <div className="mb-8 rounded-lg border border-slate-200 bg-slate-100 p-4 text-sm text-slate-700">
+            Your first photo must be approved before you can add more photos.
+          </div>
+        ) : null}
 
         {canUploadMore ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">

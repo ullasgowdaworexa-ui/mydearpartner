@@ -1,6 +1,6 @@
 import pytest
 
-from apps.accounts.models import AdminActivityLog, Member, StaffActivityLog
+from apps.accounts.models import AdminActivityLog, Member, MemberDocument, StaffActivityLog
 from apps.core.models import (
     Notification,
     ProfileVerificationAssignment,
@@ -49,6 +49,31 @@ def test_admin_assigns_profile_review_to_staff_only(
         actor_id=admin_account.pk,
         action='PROFILE_VERIFICATION_ASSIGNED',
     ).exists()
+
+
+def test_super_admin_can_directly_approve_a_pending_document_verification(
+    authenticated_client, member, super_admin
+):
+    document = MemberDocument.objects.create(
+        member=member,
+        document_type='Government ID',
+        file_path='member_documents/test-id.pdf',
+        status=MemberDocument.Status.PENDING,
+    )
+    verification = new_verification(member, ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT)
+    verification.verification_documents.create(member_document=document)
+
+    response = authenticated_client(super_admin).post(
+        f'/api/v1/admin/verifications/{verification.pk}/',
+        {'action': 'approve'},
+        format='json',
+    )
+
+    assert response.status_code == 200, response.data
+    verification.refresh_from_db()
+    document.refresh_from_db()
+    assert verification.status == ProfileVerificationRequest.Status.APPROVED
+    assert document.status == MemberDocument.Status.APPROVED
 
 
 def test_staff_approval_updates_member_and_writes_separate_activity(

@@ -19,6 +19,7 @@ class VerificationStatus(NamedTuple):
     """Centralized verification status structure"""
     account_status: str  # pending | complete | verified | rejected | suspended
     is_verified: bool
+    contact: dict
     profile: dict
     primary_photo: dict
     documents: dict
@@ -113,6 +114,19 @@ class AccountVerificationService:
     @staticmethod
     def get_required_document_status(member: Member) -> dict:
         """Get required document verification status"""
+        # The back-office member action stores its approval on the member
+        # status. Treat that explicit KYC approval as canonical even when a
+        # legacy uploaded document used a more specific type label than
+        # "Government ID" (for example Aadhaar or Passport).
+        if member.document_status == Member.DocumentStatus.APPROVED:
+            return {
+                'status': 'approved',
+                'name': 'KYC Document Verified',
+                'approved': 1,
+                'pending': 0,
+                'rejected': 0,
+                'approved_at': member.updated_at,
+            }
         required_docs = member.documents.filter(
             document_type__in=AccountVerificationService.REQUIRED_DOCUMENT_TYPES
         )
@@ -161,6 +175,22 @@ class AccountVerificationService:
             }
 
     @staticmethod
+    def get_contact_status(member: Member) -> dict:
+        """Email and mobile must both be verified before membership checkout."""
+        if member.is_email_verified and member.is_mobile_verified:
+            return {'status': 'approved', 'name': 'Email and mobile verified'}
+        missing = []
+        if not member.is_email_verified:
+            missing.append('email')
+        if not member.is_mobile_verified:
+            missing.append('mobile number')
+        return {
+            'status': 'incomplete',
+            'name': 'Contact verification required',
+            'reason': f"Verify your {' and '.join(missing)} to purchase a membership.",
+        }
+
+    @staticmethod
     def get_verification_summary(member: Member) -> VerificationStatus:
         """
         Get complete verification status summary.
@@ -169,6 +199,7 @@ class AccountVerificationService:
         profile_status = AccountVerificationService.get_profile_status(member)
         photo_status = AccountVerificationService.get_primary_photo_status(member)
         document_status = AccountVerificationService.get_required_document_status(member)
+        contact_status = AccountVerificationService.get_contact_status(member)
 
         # Determine overall status
         is_verified = AccountVerificationService.is_account_verified(member)
@@ -181,7 +212,12 @@ class AccountVerificationService:
             account_status = AccountVerificationService.STATUS_REJECTED
         elif profile_status['status'] == 'pending' or photo_status['status'] == 'pending' or document_status['status'] == 'pending':
             account_status = AccountVerificationService.STATUS_IN_REVIEW
-        elif profile_status['status'] == 'incomplete' or photo_status['status'] == 'incomplete' or document_status['status'] == 'incomplete':
+        elif (
+            profile_status['status'] == 'incomplete'
+            or photo_status['status'] == 'incomplete'
+            or document_status['status'] == 'incomplete'
+            or contact_status['status'] != 'approved'
+        ):
             account_status = AccountVerificationService.STATUS_INCOMPLETE
         else:
             account_status = AccountVerificationService.STATUS_PENDING
@@ -189,6 +225,8 @@ class AccountVerificationService:
         # Determine next action
         if account_status == AccountVerificationService.STATUS_VERIFIED:
             next_action = 'Account is fully verified. You can access all features.'
+        elif contact_status['status'] != 'approved':
+            next_action = contact_status['reason']
         elif profile_status['status'] != 'approved':
             next_action = 'Complete and submit your profile for approval'
         elif photo_status['status'] != 'approved':
@@ -203,6 +241,7 @@ class AccountVerificationService:
         return VerificationStatus(
             account_status=account_status,
             is_verified=is_verified,
+            contact=contact_status,
             profile=profile_status,
             primary_photo=photo_status,
             documents=document_status,
@@ -216,12 +255,16 @@ class AccountVerificationService:
         
         REQUIREMENTS (ALL must be true):
         1. Profile is APPROVED
-        2. Primary photo is APPROVED
-        3. At least one required document is APPROVED
-        4. Account status is ACTIVE
+        2. Email and mobile are verified
+        3. Primary photo is APPROVED
+        4. At least one required document is APPROVED
+        5. Account status is ACTIVE
         """
         # Check profile approval
         if member.profile_status != 'APPROVED':
+            return False
+
+        if not member.is_email_verified or not member.is_mobile_verified:
             return False
 
         # Check primary photo approval
@@ -236,10 +279,10 @@ class AccountVerificationService:
             return False
 
         # Check required documents approval
-        required_doc_approved = member.documents.filter(
-            document_type__in=AccountVerificationService.REQUIRED_DOCUMENT_TYPES,
-            status='APPROVED'
-        ).exists()
+        required_doc_approved = (
+            member.document_status == Member.DocumentStatus.APPROVED
+            or member.documents.filter(status='APPROVED').exists()
+        )
         if not required_doc_approved:
             return False
 

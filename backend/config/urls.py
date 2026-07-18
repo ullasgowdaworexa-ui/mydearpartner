@@ -43,7 +43,6 @@ urlpatterns = [
     # existing /api/v1 routes intentionally remain unchanged below.
     path('member-auth/', include('apps.accounts.contract_urls')),
     path('', include('apps.matching.urls')),
-    path('', include('apps.memberships.urls')),
 
     # Canonical private profile-photo API.  It is intentionally separate from
     # normal JSON/profile routes because it returns authenticated raw WebP

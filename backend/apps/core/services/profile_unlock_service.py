@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from apps.core.models import ProfileUnlock, MemberMembership
 from apps.accounts.models import Member
-from .membership_service import MembershipService
+from apps.core.entitlements import get_active_entitlements
 
 
 class ProfileUnlockService:
@@ -71,9 +71,8 @@ class ProfileUnlockService:
             usage_date=today
         ).exists()
         
-        # Get plan and limits
-        plan = MembershipService.get_effective_plan(viewer)
-        daily_limit = plan.daily_profile_unlock_limit if plan else 5
+        # Typed resolver is the sole source of the member's current limit.
+        daily_limit = get_active_entitlements(viewer).daily_profile_view_limit
         
         # Count unlocks used today
         used_today = ProfileUnlock.objects.filter(
@@ -160,8 +159,7 @@ class ProfileUnlockService:
         today = ProfileUnlockService.get_today_date()
         resets_at = ProfileUnlockService.get_next_reset_time()
         
-        plan = MembershipService.get_effective_plan(viewer)
-        daily_limit = plan.daily_profile_unlock_limit if plan else 5
+        daily_limit = get_active_entitlements(viewer).daily_profile_view_limit
         
         used_today = ProfileUnlock.objects.filter(
             viewer=viewer,

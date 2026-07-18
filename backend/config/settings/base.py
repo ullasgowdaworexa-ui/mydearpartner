@@ -32,12 +32,12 @@ TWILIO_ACCOUNT_SID = config['TWILIO_ACCOUNT_SID']
 TWILIO_AUTH_TOKEN = config['TWILIO_AUTH_TOKEN']
 TWILIO_PHONE_NUMBER = config['TWILIO_PHONE_NUMBER']
 
+PAYMENT_MODE = config['PAYMENT_MODE']
+MEMBERSHIP_ACTIVATION_MODE = config['MEMBERSHIP_ACTIVATION_MODE']
 RAZORPAY_KEY_ID = config['RAZORPAY_KEY_ID']
 RAZORPAY_KEY_SECRET = config['RAZORPAY_KEY_SECRET']
 RAZORPAY_WEBHOOK_SECRET = config['RAZORPAY_WEBHOOK_SECRET']
-PAYMENT_GATEWAY_VERIFICATION_SECRET = RAZORPAY_WEBHOOK_SECRET
-PAYMENT_MODE = config['PAYMENT_MODE']
-MEMBERSHIP_ACTIVATION_MODE = config['MEMBERSHIP_ACTIVATION_MODE']
+RAZORPAY_DEMO_MODE = config['RAZORPAY_DEMO_MODE']
 REQUIRE_MEMBER_VERIFICATION = config['REQUIRE_MEMBER_VERIFICATION']
 ENABLE_ADMIN_PORTAL = config['ENABLE_ADMIN_PORTAL']
 
@@ -46,14 +46,6 @@ ENABLE_ADMIN_PORTAL = config['ENABLE_ADMIN_PORTAL']
 # audit record by selecting ``retain_metadata``.
 PERMANENT_DELETE_DOCUMENT_POLICY = config['PERMANENT_DELETE_DOCUMENT_POLICY']
 
-# Amounts are expressed in the smallest currency unit expected by Razorpay
-# (paise for INR). Deployments may override this mapping in their settings
-# module without putting payment credentials in source control.
-PLAN_CONFIG = {
-    'gold': {'name': 'Gold', 'amount': 99900, 'currency': 'INR', 'views_limit': 50},
-    'platinum': {'name': 'Platinum', 'amount': 149900, 'currency': 'INR', 'views_limit': 100},
-    'elite': {'name': 'Elite', 'amount': 249900, 'currency': 'INR', 'views_limit': 250},
-}
 FREE_PROFILE_VIEW_LIMIT = int(os.environ.get('FREE_PROFILE_VIEW_LIMIT', 5))
 
 ALLOW_DEVELOPMENT_SEED = config['ENABLE_DEVELOPMENT_SEED']

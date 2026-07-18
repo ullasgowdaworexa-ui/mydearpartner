@@ -6,7 +6,6 @@ to avoid circular imports.
 """
 
 from .membership_views import (
-    MembershipActivateView,
     MembershipSummaryView,
     MembershipDeactivateView,
 )
@@ -37,9 +36,7 @@ from .legacy_views import (
     PaymentHistoryView,
     ProfileDetailView,
     ProfileListView,
-    SecurePaymentCreateOrderView,
-    SecurePaymentVerifyView,
-    SecurePaymentWebhookView,
+    ProfileVisitorListView,
     MemberComplaintListCreateView,
     MemberProfileReportCreateView,
     SuccessStoryListView,
@@ -68,7 +65,6 @@ from ..role_views import (
 
 __all__ = [
     # New views
-    'MembershipActivateView',
     'MembershipSummaryView',
     'MembershipDeactivateView',
     'PublicMembershipPlanListView',
@@ -94,9 +90,7 @@ __all__ = [
     'PaymentHistoryView',
     'ProfileDetailView',
     'ProfileListView',
-    'SecurePaymentCreateOrderView',
-    'SecurePaymentVerifyView',
-    'SecurePaymentWebhookView',
+    'ProfileVisitorListView',
     'MemberComplaintListCreateView',
     'MemberProfileReportCreateView',
     'SuccessStoryListView',

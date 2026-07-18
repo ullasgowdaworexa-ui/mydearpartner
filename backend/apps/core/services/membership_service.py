@@ -75,15 +75,15 @@ class MembershipService:
         end_date = start_date + timedelta(days=duration_days) if duration_days else None
         
         # Create or update membership
-        membership, created = MemberMembership.objects.update_or_create(
+        membership = MemberMembership.objects.create(
             member=member,
-            defaults={
-                'plan': plan,
-                'start_date': start_date,
-                'end_date': end_date,
-                'is_active': True,
-                'status': MemberMembership.MembershipStatus.ACTIVE,
-            }
+            plan=plan,
+            start_date=start_date,
+            end_date=end_date,
+            started_at=start_date,
+            expires_at=end_date,
+            is_active=True,
+            status=MemberMembership.MembershipStatus.ACTIVE,
         )
         
         # Update member's premium status
@@ -185,14 +185,11 @@ class MembershipService:
         Returns:
             MemberMembership or None
         """
-        try:
-            return MemberMembership.objects.select_related('plan').get(
-                member=member,
-                is_active=True,
-                status=MemberMembership.MembershipStatus.ACTIVE
-            )
-        except MemberMembership.DoesNotExist:
-            return None
+        return MemberMembership.objects.select_related('plan').filter(
+            member=member,
+            is_active=True,
+            status=MemberMembership.MembershipStatus.ACTIVE,
+        ).order_by('-started_at', '-created_at').first()
     
     @staticmethod
     def get_effective_plan(member):
@@ -211,7 +208,8 @@ class MembershipService:
             return None
         
         # Check if membership has expired
-        if membership.end_date and membership.end_date <= timezone.now():
+        expiry = membership.expires_at or membership.end_date
+        if expiry and expiry <= timezone.now():
             return None
         
         # Check member account status
@@ -236,10 +234,13 @@ class MembershipService:
         if not membership:
             return False
         
-        if membership.end_date and membership.end_date <= timezone.now():
+        expiry = membership.expires_at or membership.end_date
+        if expiry and expiry <= timezone.now():
             membership.is_active = False
             membership.status = MemberMembership.MembershipStatus.EXPIRED
-            membership.save(update_fields=['is_active', 'status'])
+            membership.end_date = expiry
+            membership.expires_at = expiry
+            membership.save(update_fields=['is_active', 'status', 'end_date', 'expires_at', 'updated_at'])
             
             member.is_premium = False
             member.save(update_fields=['is_premium', 'updated_at'])
@@ -283,8 +284,8 @@ class MembershipService:
         
         # Calculate days remaining
         days_remaining = None
-        if membership and membership.end_date:
-            delta = membership.end_date - timezone.now()
+        if membership and (membership.expires_at or membership.end_date):
+            delta = (membership.expires_at or membership.end_date) - timezone.now()
             days_remaining = max(0, delta.days)
         
         return {
@@ -292,8 +293,8 @@ class MembershipService:
             'plan_name': plan.name,
             'plan_slug': plan.slug,
             'is_free': False,
-            'start_date': membership.start_date if membership else None,
-            'end_date': membership.end_date if membership else None,
+            'start_date': (membership.started_at or membership.start_date) if membership else None,
+            'end_date': (membership.expires_at or membership.end_date) if membership else None,
             'days_remaining': days_remaining,
             'daily_profile_unlock_limit': plan.daily_profile_unlock_limit,
             'daily_interest_limit': plan.interest_limit,

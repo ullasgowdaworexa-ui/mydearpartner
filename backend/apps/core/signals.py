@@ -1,7 +1,8 @@
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from apps.accounts.models import Staff, CustomerSupportAgent
-from apps.core.models import EmployeeAvailability, Workload, SupportTicket, ProfileVerificationRequest
+from apps.core.models import EmployeeAvailability, Workload, SupportTicket, ProfileVerificationRequest, Notification
 
 @receiver(post_save, sender=Staff)
 @receiver(post_save, sender=CustomerSupportAgent)
@@ -46,3 +47,11 @@ def trigger_verification_auto_assignment(sender, instance, created, **kwargs):
         from apps.core.assignment_engine import auto_assign_verification
         auto_assign_verification(instance)
         instance._auto_assigning = False
+
+
+@receiver(post_save, sender=Notification)
+def publish_notification_after_commit(sender, instance, created, **kwargs):
+    """Covers legacy direct creates as well as create_notification callers."""
+    if created:
+        from apps.core.api_utils import broadcast_notification
+        transaction.on_commit(lambda: broadcast_notification(instance))

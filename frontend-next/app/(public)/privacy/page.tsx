@@ -1,3 +1,12 @@
 import type { Metadata } from 'next';
-export const metadata: Metadata = { title: 'Privacy Policy', alternates: { canonical: '/privacy' } };
-export default function PrivacyPage() { return <main className="public-content-page"><article className="content-shell" style={{ maxWidth: 820 }}><p>Legal</p><h1>Privacy Policy</h1><p>My Dear Partner is designed around member choice, data minimisation, controlled profile visibility, and secure access. Profile, document, contact, and conversation information is used only to provide and protect the service, meet legal obligations, and support members. Private verification documents are restricted to authorised workflows and are not public assets.</p><p>Members may request access, correction, restriction, or deletion of eligible personal information by contacting support. Retention may continue where required for fraud prevention, security, disputes, or law.</p></article></main>; }
+import PrivacyClient from './privacy-client';
+
+export const metadata: Metadata = { 
+  title: 'Privacy Policy - MyDearPartner', 
+  alternates: { canonical: '/privacy' } 
+};
+
+export default function PrivacyPage() {
+  return <PrivacyClient />;
+}
+

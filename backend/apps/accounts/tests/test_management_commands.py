@@ -3,7 +3,8 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import override_settings
 
-from apps.accounts.models import Admin, CustomerSupportAgent, Member, Staff, SuperAdmin
+from apps.accounts.models import Admin, CustomerSupportAgent, Member, MemberProfile, Staff, SuperAdmin
+from apps.core.models import Notification
 
 
 pytestmark = pytest.mark.django_db
@@ -41,3 +42,54 @@ def test_rebuild_refuses_when_debug_is_false():
 def test_rebuild_requires_explicit_destructive_flag():
     with pytest.raises(CommandError, match='ALLOW_DESTRUCTIVE_DEV_RESET'):
         call_command('rebuild_development_database', confirm=':memory:')
+
+
+def test_reset_database_keep_users_is_dry_run_by_default(capsys):
+    members = [
+        Member.objects.create_user(
+            email=f'keep-{index}@example.com',
+            password='TestPassword!123',
+            first_name='Keep',
+        )
+        for index in range(4)
+    ]
+    Notification.objects.create(
+        member_recipient=members[0],
+        notification_type='TEST',
+        title='Test',
+        message='Dry run must not delete this.',
+    )
+
+    call_command('reset_database_keep_users', *(member.email for member in members))
+
+    assert Member.objects.count() == 4
+    assert Notification.objects.count() == 1
+    assert 'Dry run complete' in capsys.readouterr().out
+
+
+def test_reset_database_keep_users_preserves_only_accounts_and_member_profiles():
+    members = [
+        Member.objects.create_user(
+            email=f'retain-{index}@example.com',
+            password='TestPassword!123',
+            first_name='Retain',
+        )
+        for index in range(4)
+    ]
+    MemberProfile.objects.create(member=members[0], about='Retained profile')
+    removed = Member.objects.create_user(
+        email='remove@example.com', password='TestPassword!123', first_name='Remove'
+    )
+    MemberProfile.objects.create(member=removed, about='Removed profile')
+    Notification.objects.create(
+        member_recipient=members[0], notification_type='TEST', title='Test', message='Delete me.'
+    )
+
+    call_command(
+        'reset_database_keep_users', *(member.email for member in members), execute=True
+    )
+
+    assert set(Member.objects.values_list('email', flat=True)) == {member.email for member in members}
+    assert MemberProfile.objects.count() == 1
+    assert MemberProfile.objects.get().member_id == members[0].pk
+    assert Notification.objects.count() == 0

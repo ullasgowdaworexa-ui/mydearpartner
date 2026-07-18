@@ -25,6 +25,7 @@ class MembershipPlan(models.Model):
     description = models.TextField(blank=True)
     currency = models.CharField(max_length=10, default='INR')
     duration_days = models.IntegerField(default=30)
+    entitlements = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     display_order = models.IntegerField(default=0)
@@ -45,6 +46,7 @@ class MembershipPlan(models.Model):
     can_view_contact = models.BooleanField(default=False)
     can_view_private_photos = models.BooleanField(default=False)
     can_view_profile_visitors = models.BooleanField(default=False)
+    can_view_received_interests = models.BooleanField(default=False)
     can_get_priority_listing = models.BooleanField(default=False)
     can_use_profile_boost = models.BooleanField(default=False)
     
@@ -83,19 +85,23 @@ class MembershipPlan(models.Model):
 
 class MemberMembership(models.Model):
     class MembershipStatus(models.TextChoices):
-        FREE = 'FREE', 'Free'
-        PAYMENT_PENDING = 'PAYMENT_PENDING', 'Payment Pending'
-        PENDING_VERIFICATION = 'PENDING_VERIFICATION', 'Pending Verification'
+        PENDING_PAYMENT = 'PENDING_PAYMENT', 'Pending Payment'
         ACTIVE = 'ACTIVE', 'Active'
         EXPIRED = 'EXPIRED', 'Expired'
         CANCELLED = 'CANCELLED', 'Cancelled'
-        REFUNDED = 'REFUNDED', 'Refunded'
+        FAILED = 'FAILED', 'Failed'
+        # Legacy values remain readable for rows created before the payment
+        # flow was restored. New code never creates them.
+        FREE = 'FREE', 'Free (legacy)'
+        PAYMENT_PENDING = 'PAYMENT_PENDING', 'Payment Pending (legacy)'
+        PENDING_VERIFICATION = 'PENDING_VERIFICATION', 'Pending Verification (legacy)'
+        REFUNDED = 'REFUNDED', 'Refunded (legacy)'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    member = models.OneToOneField(
+    member = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='membership',
+        related_name='memberships',
     )
     plan = models.ForeignKey(MembershipPlan, on_delete=models.SET_NULL, null=True, blank=True)
     start_date = models.DateTimeField(null=True, blank=True)
@@ -107,6 +113,13 @@ class MemberMembership(models.Model):
         default=MembershipStatus.FREE,
         db_index=True,
     )
+    razorpay_order_id = models.CharField(max_length=100, null=True, blank=True, unique=True)
+    razorpay_payment_id = models.CharField(max_length=100, null=True, blank=True, unique=True)
+    razorpay_signature = models.CharField(max_length=255, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'member_memberships'
@@ -1024,6 +1037,7 @@ class Notification(models.Model):
     notification_type = models.CharField(max_length=64, db_index=True)
     title = models.CharField(max_length=255)
     message = models.TextField()
+    link_url = models.CharField(max_length=500, blank=True)
     related_object_type = models.CharField(max_length=64, blank=True)
     related_object_id = models.CharField(max_length=100, blank=True)
     priority = models.CharField(max_length=12, choices=Priority.choices, default=Priority.NORMAL)
@@ -1371,6 +1385,7 @@ class ProfileViewLog(models.Model):
         ordering = ('-viewed_at',)
         indexes = [
             models.Index(fields=('viewer', 'view_date'), name='profile_view_log_viewer_date'),
+            models.Index(fields=('viewed', '-viewed_at'), name='profile_view_log_viewed_recent'),
         ]
         constraints = [
             models.CheckConstraint(
@@ -1706,4 +1721,3 @@ class AssignmentAudit(models.Model):
     class Meta:
         db_table = 'assignment_audits'
         ordering = ('-created_at',)
-

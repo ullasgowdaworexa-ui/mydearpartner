@@ -83,7 +83,7 @@ ROLE_PERMISSIONS = {
     RoleCode.SUPER_ADMIN: set(PERMISSIONS),
     RoleCode.ADMIN: {
         'dashboard.view',
-        'members.view', 'members.manage', 'members.suspend', 'members.sensitive',
+        'members.view', 'members.manage', 'members.suspend', 'members.delete', 'members.sensitive',
         'staff.view', 'staff.create', 'staff.manage', 'staff.activity',
         'support_agents.view', 'support_agents.create', 'support_agents.manage',
         'support_agents.activity',

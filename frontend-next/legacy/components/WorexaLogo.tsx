@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
 
@@ -13,11 +13,12 @@ export default function WorexaLogo({ className = '', height = 32 }: WorexaLogoPr
   return (
     <div className={`inline-flex items-center ${className}`}>
       <SmartImage
-        src="/images/worexa-logo.jpg"
+        src="/images/worexa-logo.png"
         alt="Worexa Technologies"
         className="object-contain"
-        style={{ 
-          height, 
+        style={{
+          width: 'auto',
+          height,
           mixBlendMode: 'screen', // Blends black background away completely
           filter: 'brightness(1.2)' // Makes the orange/white colors pop more on a dark footer
         }}

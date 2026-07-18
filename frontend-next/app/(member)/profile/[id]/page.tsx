@@ -143,16 +143,15 @@ export default function ProfileDetailPage() {
       : [];
   const primaryPhoto = photos[0] ?? null;
 
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen pb-16 bg-gradient-to-b from-slate-50 to-white"
+      className="min-h-screen pb-20 bg-[#faf6f0]"
     >
       {/* Sticky Header */}
       <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-100 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <button onClick={() => router.back()} className="flex items-center gap-2 text-rose-600 hover:text-rose-700 font-bold text-sm">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
@@ -168,243 +167,269 @@ export default function ProfileDetailPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-
-        {/* Portrait profile images always retain the shared 4:5 crop. */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`relative mt-6 overflow-hidden rounded-3xl shadow-2xl ${primaryPhoto ? 'group cursor-pointer' : ''}`}
-          onClick={primaryPhoto ? () => openLightbox(0) : undefined}
-        >
-          <div className="relative mx-auto aspect-[4/5] w-full max-w-2xl">
-            <ProfileImage
-              photoId={primaryPhoto?.id}
-              src={primaryPhoto?.image_url ?? primaryPhoto?.thumbnail_url}
-              variant="image"
-              version={primaryPhoto?.updated_at}
-              alt={`${profile.user.full_name}'s profile photo`}
-              size="full"
-              aspectRatio="4:5"
-              shape="square"
-              gender={profile.gender}
-              className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.02]"
-            />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-            <div className="flex items-end justify-between">
-              <div>
-                <h2 className="text-3xl font-black mb-1">{profile.user.full_name}, {profile.age}</h2>
-                <p className="text-white/80 text-sm flex items-center gap-1">
-                  <MapPin className="w-4 h-4" /> {profile.location?.city || profile.user.work_location || 'India'}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        <div className="grid md:grid-cols-[360px_1fr] gap-8 items-start">
+          
+          {/* Left Column (Sticky Image, Gallery & Actions) */}
+          <div className="space-y-6 md:sticky md:top-20">
+            {/* Profile Photo */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`relative overflow-hidden rounded-[2rem] shadow-[0_15px_35px_rgba(43,16,29,0.08)] border border-slate-100/50 ${primaryPhoto ? 'group cursor-pointer' : ''}`}
+              onClick={primaryPhoto ? () => openLightbox(0) : undefined}
+            >
+              <div className="relative aspect-[4/5] w-full bg-[#160910]">
+                <ProfileImage
+                  photoId={primaryPhoto?.id}
+                  src={primaryPhoto?.image_url ?? primaryPhoto?.thumbnail_url}
+                  variant="image"
+                  version={primaryPhoto?.updated_at}
+                  alt={`${profile.user.full_name}'s profile photo`}
+                  size="full"
+                  aspectRatio="4:5"
+                  shape="square"
+                  gender={profile.gender}
+                  className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.02]"
+                />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 text-white z-10">
+                <h2 className="text-2xl font-black mb-1">{profile.user.full_name}, {profile.age}</h2>
+                <p className="text-white/80 text-xs flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-[var(--gold-400)]" /> {profile.location?.city || profile.user.work_location || 'India'}
                 </p>
               </div>
-              <div className="flex flex-col gap-2 items-end">
-                {profile.user.is_verified && (
-                  <span className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                    <Shield className="w-3 h-3" /> Verified
-                  </span>
-                )}
-                {profile.user.is_premium && (
-                  <span className="bg-amber-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                    <Crown className="w-3 h-3" /> Premium
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          {photos.length > 1 && (
-            <div className="absolute top-4 right-4 bg-black/50 text-white text-xs font-bold px-3 py-1.5 rounded-full">
-              📷 {photos.length} Photos
-            </div>
-          )}
-        </motion.div>
+              {photos.length > 1 && (
+                <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-full border border-white/10">
+                  📷 {photos.length} Photos
+                </div>
+              )}
+            </motion.div>
 
-        {/* Photo Gallery Grid */}
-        {photos.length > 1 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-4">
-            <div className="grid grid-cols-5 gap-2">
-              {photos.map((ph: any, idx: number) => (
-                <div
-                  key={ph.id || idx}
-                  onClick={() => openLightbox(idx)}
-                  className="relative aspect-[4/5] overflow-hidden rounded-2xl border-2 border-transparent shadow-sm transition-all hover:border-rose-400 cursor-pointer group"
-                >
-                  <ProfileImage
-                    photoId={ph.id}
-                    src={ph.thumbnail_url}
-                    variant="thumbnail"
-                    version={ph.updated_at}
-                    alt={`${profile.user.full_name} photo ${idx + 1}`}
-                    size="full"
-                    aspectRatio="4:5"
-                    shape="square"
-                    gender={profile.gender}
-                    className="absolute inset-0 transition-transform duration-300 group-hover:scale-105"
-                  />
-                  {ph.is_primary && (
-                    <span className="absolute top-1 left-1 bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded shadow">★</span>
+            {/* Gallery Thumbnails */}
+            {photos.length > 1 && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-5 gap-2">
+                {photos.map((ph: any, idx: number) => (
+                  <div
+                    key={ph.id || idx}
+                    onClick={() => openLightbox(idx)}
+                    className="relative aspect-[4/5] overflow-hidden rounded-xl border-2 border-transparent shadow-sm transition-all hover:border-[var(--rose-500)] cursor-pointer group bg-[#160910]"
+                  >
+                    <ProfileImage
+                      photoId={ph.id}
+                      src={ph.thumbnail_url}
+                      variant="thumbnail"
+                      version={ph.updated_at}
+                      alt={`${profile.user.full_name} photo ${idx + 1}`}
+                      size="full"
+                      aspectRatio="4:5"
+                      shape="square"
+                      gender={profile.gender}
+                      className="absolute inset-0 transition-transform duration-300 group-hover:scale-105"
+                    />
+                    {ph.is_primary && (
+                      <span className="absolute top-1 left-1 bg-[var(--gold-500)] text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow">★</span>
+                    )}
+                  </div>
+                ))}
+              </motion.div>
+            )}
+
+            {/* Main Action Buttons */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
+              {!isOwnProfile && (
+                <>
+                  <button
+                    onClick={handleSendInterest}
+                    disabled={interestLoading || interestSent}
+                    className={`w-full py-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                      interestSent
+                        ? 'bg-green-50 text-green-700 border border-green-200 cursor-default'
+                        : 'bg-gradient-to-r from-[var(--rose-500)] to-[#4a162b] text-white hover:opacity-95 shadow-lg shadow-rose-200'
+                    }`}
+                  >
+                    {interestSent ? (
+                      <><Check className="w-4 h-4" /> Interest Sent!</>
+                    ) : interestLoading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+                    ) : (
+                      <><Heart className="w-4 h-4 fill-white" /> Send Interest</>
+                    )}
+                  </button>
+
+                  {profile.can_message && (
+                    <Link
+                      href={`/messages?user=${profileId}`}
+                      className="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <MessageCircle className="w-4 h-4" /> Message Candidate
+                    </Link>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleShortlist}
+                      disabled={shortlistLoading}
+                      className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all border flex items-center justify-center gap-1.5 ${
+                        shortlisted
+                          ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {shortlistLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : shortlisted ? (
+                        <><BookmarkCheck className="w-4 h-4 fill-rose-500 stroke-none" /> Shortlisted</>
+                      ) : (
+                        <><Bookmark className="w-4 h-4" /> Shortlist</>
+                      )}
+                    </button>
+
+                    <Link
+                      href={`/compare?candidate=${profileId}`}
+                      className="flex-1 py-3.5 bg-white border border-gray-200 text-gray-700 rounded-2xl font-bold text-sm hover:bg-gray-50 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <Scale className="w-4 h-4" /> Compare
+                    </Link>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+
+          {/* Right Column (Info Panels) */}
+          <div className="space-y-6">
+            {/* Header info badge card */}
+            <div className="bg-white rounded-[2rem] border border-gray-100 p-6 flex flex-wrap justify-between items-center gap-4 shadow-sm">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Candidate Profile</span>
+                  {profile.user.is_verified && (
+                    <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-wide flex items-center gap-0.5">
+                      <Shield className="w-3 h-3" /> Verified
+                    </span>
+                  )}
+                  {profile.user.is_premium && (
+                    <span className="bg-amber-50 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-100 uppercase tracking-wide flex items-center gap-0.5">
+                      <Crown className="w-3 h-3" /> Premium
+                    </span>
                   )}
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Action Buttons */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="mt-6 flex flex-wrap gap-3">
-          {!isOwnProfile && (
-            <>
-              <button
-                onClick={handleSendInterest}
-                disabled={interestLoading || interestSent}
-                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${
-                  interestSent
-                    ? 'bg-green-100 text-green-700 border border-green-200 cursor-default'
-                    : 'bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:from-rose-600 hover:to-pink-700 shadow-lg shadow-rose-200'
-                }`}
-              >
-                {interestSent ? (
-                  <><Check className="w-4 h-4" /> Interest Sent!</>
-                ) : interestLoading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
-                ) : (
-                  <><Heart className="w-4 h-4 fill-white" /> Send Interest</>
-                )}
-              </button>
-
-              {profile.can_message && (
-                <Link
-                  href={`/messages?user=${profileId}`}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-50 hover:bg-blue-500 hover:text-white text-blue-700 border border-blue-200 rounded-2xl font-bold text-sm transition-all"
+                <h1 className="text-2xl font-extrabold font-display text-slate-900">{profile.user.full_name}</h1>
+              </div>
+              {!isOwnProfile && (
+                <button
+                  onClick={() => setReportModalOpen(true)}
+                  className="px-4 py-2 border border-slate-200 text-slate-400 hover:text-rose-600 rounded-xl font-bold text-xs hover:bg-slate-50 transition-all flex items-center gap-1.5"
                 >
-                  <MessageCircle className="w-4 h-4" /> Message
-                </Link>
+                  <Flag className="w-3.5 h-3.5" /> Report Profile
+                </button>
               )}
-
-              <button
-                onClick={handleShortlist}
-                disabled={shortlistLoading}
-                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm transition-all border ${
-                  shortlisted
-                    ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                {shortlistLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : shortlisted ? (
-                  <><BookmarkCheck className="w-4 h-4 fill-rose-500 stroke-none" /> Shortlisted</>
-                ) : (
-                  <><Bookmark className="w-4 h-4" /> Shortlist</>
-                )}
-              </button>
-
-              <Link
-                href={`/compare?candidate=${profileId}`}
-                className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-700 rounded-2xl font-bold text-sm hover:bg-gray-50 transition-all"
-              >
-                <Scale className="w-4 h-4" /> Compare
-              </Link>
-
-              <button
-                onClick={() => setReportModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 rounded-2xl font-bold text-sm hover:bg-gray-50 transition-all ml-auto"
-              >
-                <Flag className="w-4 h-4" /> Report
-              </button>
-            </>
-          )}
-        </motion.div>
-
-        {/* Profile Info Grid */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-8 grid md:grid-cols-2 gap-6">
-          {/* Personal Details */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 space-y-4">
-            <h3 className="text-base font-black text-gray-900 border-b border-gray-100 pb-3">Personal Details</h3>
-            <div className="space-y-3 text-sm">
-              {[
-                { icon: Calendar, label: 'Age', value: profile.age ? `${profile.age} years` : null },
-                { icon: Ruler, label: 'Height', value: profile.height },
-                { icon: Globe, label: 'Religion', value: profile.religion },
-                { icon: Users, label: 'Mother Tongue', value: profile.mother_tongue },
-                { icon: Home, label: 'Marital Status', value: profile.marital_status },
-                { icon: MapPin, label: 'Family Type', value: profile.family_type },
-              ].map(({ icon: Icon, label, value }) => value && (
-                <div key={label} className="flex items-center gap-3 text-gray-700">
-                  <div className="w-8 h-8 bg-rose-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-4 h-4 text-rose-500" />
-                  </div>
-                  <span className="text-gray-400 w-28 flex-shrink-0 text-xs font-semibold uppercase">{label}</span>
-                  <span className="font-semibold">{value}</span>
-                </div>
-              ))}
             </div>
+
+            {/* About Card */}
+            {profile.about && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[2rem] border border-gray-100 p-6 sm:p-8 shadow-sm">
+                <h3 className="text-base font-black text-slate-900 mb-3 font-display">About Candidate</h3>
+                <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{profile.about}</p>
+              </motion.div>
+            )}
+
+            {/* General & Physical Details */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid sm:grid-cols-2 gap-6">
+              <div className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
+                <h3 className="text-base font-black text-slate-900 border-b border-slate-100 pb-3 font-display">Personal Profile</h3>
+                <div className="space-y-4">
+                  {[
+                    { icon: Calendar, label: 'Age', value: profile.age ? `${profile.age} years` : null },
+                    { icon: Ruler, label: 'Height', value: profile.height },
+                    { icon: Globe, label: 'Religion', value: profile.religion },
+                    { icon: Users, label: 'Mother Tongue', value: profile.mother_tongue },
+                    { icon: Home, label: 'Marital Status', value: profile.marital_status },
+                    { icon: MapPin, label: 'Family Type', value: profile.family_type },
+                  ].map(({ icon: Icon, label, value }) => value && (
+                    <div key={label} className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-rose-50 rounded-xl flex items-center justify-center shrink-0 border border-rose-100/50">
+                        <Icon className="w-4 h-4 text-rose-500" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                        <p className="text-sm font-semibold text-slate-700 mt-0.5">{value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Career & Education Details */}
+              <div className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
+                <h3 className="text-base font-black text-slate-900 border-b border-slate-100 pb-3 font-display">Career & Education</h3>
+                <div className="space-y-4">
+                  {[
+                    { icon: GraduationCap, label: 'Education Details', value: profile.education },
+                    { icon: Briefcase, label: 'Occupation', value: profile.occupation },
+                    { icon: MapPin, label: 'Work City', value: profile.location?.city || profile.user.work_location },
+                    { icon: Star, label: 'Annual Income', value: profile.income },
+                  ].map(({ icon: Icon, label, value }) => value && (
+                    <div key={label} className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 border border-blue-100/50">
+                        <Icon className="w-4 h-4 text-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                        <p className="text-sm font-semibold text-slate-700 mt-0.5">{value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Hobbies & Interests */}
+            {profile.hobbies && profile.hobbies.length > 0 && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[2rem] border border-gray-100 p-6 sm:p-8 shadow-sm">
+                <h3 className="text-base font-black text-slate-900 mb-4 font-display">Hobbies & Interests</h3>
+                <div className="flex flex-wrap gap-2.5">
+                  {profile.hobbies.map((h: string, index: number) => (
+                    <span key={`${h}-${index}`} className="px-4 py-2 bg-rose-50 text-[var(--rose-500)] border border-rose-100/60 rounded-xl text-xs font-bold">
+                      {h}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Contact Details Panel */}
+            {profile.can_view_contact && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-gradient-to-br from-emerald-50 to-white rounded-[2rem] border border-emerald-100 p-6 sm:p-8 shadow-sm space-y-4">
+                <h3 className="text-base font-black text-emerald-950 flex items-center gap-2 font-display">
+                  <Phone className="w-5 h-5 text-emerald-600" /> Direct Contact Information
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {profile.user.phone && (
+                    <div className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-emerald-100/50 shadow-sm">
+                      <Phone className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Mobile Number</p>
+                        <a href={`tel:${profile.user.phone}`} className="text-sm font-bold text-slate-800 hover:text-emerald-600 transition-colors mt-0.5 block">{profile.user.phone}</a>
+                      </div>
+                    </div>
+                  )}
+                  {profile.user.email && (
+                    <div className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-emerald-100/50 shadow-sm">
+                      <Mail className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Email Address</p>
+                        <a href={`mailto:${profile.user.email}`} className="text-sm font-bold text-slate-800 hover:text-emerald-600 transition-colors mt-0.5 block">{profile.user.email}</a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
           </div>
-
-          {/* Career & Education */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 space-y-4">
-            <h3 className="text-base font-black text-gray-900 border-b border-gray-100 pb-3">Career & Education</h3>
-            <div className="space-y-3 text-sm">
-              {[
-                { icon: GraduationCap, label: 'Education', value: profile.education },
-                { icon: Briefcase, label: 'Occupation', value: profile.occupation },
-                { icon: MapPin, label: 'Work City', value: profile.location?.city || profile.user.work_location },
-                { icon: Star, label: 'Annual Income', value: profile.income },
-              ].map(({ icon: Icon, label, value }) => value && (
-                <div key={label} className="flex items-center gap-3 text-gray-700">
-                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <span className="text-gray-400 w-28 flex-shrink-0 text-xs font-semibold uppercase">{label}</span>
-                  <span className="font-semibold">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* About */}
-        {profile.about && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="mt-6 bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-base font-black text-gray-900 mb-3">About</h3>
-            <p className="text-gray-600 text-sm leading-relaxed">{profile.about}</p>
-          </motion.div>
-        )}
-
-        {/* Hobbies */}
-        {profile.hobbies && profile.hobbies.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-6 bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-base font-black text-gray-900 mb-3">Hobbies & Interests</h3>
-            <div className="flex flex-wrap gap-2">
-              {profile.hobbies.map((h: string, index: number) => (
-                <span key={`${h}-${index}`} className="px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-100 rounded-full text-xs font-bold">{h}</span>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Contact Info */}
-        {profile.can_view_contact && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="mt-6 bg-green-50 rounded-3xl border border-green-200 p-6">
-            <h3 className="text-base font-black text-gray-900 mb-3 flex items-center gap-2"><Phone className="w-5 h-5 text-green-600" /> Contact Information</h3>
-            <div className="space-y-2">
-              {profile.user.phone && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="w-4 h-4 text-green-600" />
-                  <span className="text-gray-900 font-semibold">{profile.user.phone}</span>
-                </div>
-              )}
-              {profile.user.email && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="w-4 h-4 text-green-600" />
-                  <span className="text-gray-900 font-semibold">{profile.user.email}</span>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+        </div>
       </div>
 
       {/* Photo Lightbox */}

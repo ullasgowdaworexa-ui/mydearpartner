@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { getInterests, updateInterestStatus } from '@/legacy/services/dataService';
+import { ApiError } from '@/legacy/services/apiClient';
 
 type Interest = { id: string; sender: any; receiver: any; status: string; created_at: string };
 
@@ -11,11 +12,18 @@ export function InterestsClient({ mode }: { mode: 'received' | 'sent' | 'accepte
   const [items, setItems] = useState<Interest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [locked, setLocked] = useState(false);
   const load = useCallback(() => {
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setLocked(false);
     getInterests(outgoing ? 'outgoing' : 'incoming')
       .then((rows) => setItems(mode === 'accepted' ? rows.filter((row) => row.status === 'ACCEPTED') : rows))
-      .catch((caught) => setError(caught instanceof Error ? caught.message : 'Interests could not be loaded.'))
+      .catch((caught) => {
+        if (caught instanceof ApiError && caught.status === 403) {
+          setLocked(true);
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : 'Interests could not be loaded.');
+      })
       .finally(() => setLoading(false));
   }, [mode, outgoing]);
   useEffect(load, [load]);
@@ -29,6 +37,7 @@ export function InterestsClient({ mode }: { mode: 'received' | 'sent' | 'accepte
     <p>Your connections</p><h1>{mode === 'sent' ? 'Sent interests' : mode === 'accepted' ? 'Accepted interests' : 'Received interests'}</h1>
     <nav aria-label="Interest views" style={{ display: 'flex', gap: 12, marginTop: 20 }}><Link href="/interests/received">Received</Link><Link href="/interests/sent">Sent</Link><Link href="/interests/accepted">Accepted</Link></nav>
     {loading ? <div className="content-grid" role="status"><div className="skeleton-card" /><div className="skeleton-card" /></div>
+      : locked ? <div className="content-card" style={{ marginTop: 24 }}><h2>Unlock received interests</h2><p>Your current plan does not include seeing who sent you an interest.</p><Link href="/membership">View membership plans</Link></div>
       : error ? <div className="content-card" role="alert" style={{ marginTop: 24 }}><h2>Could not load interests</h2><p>{error}</p><button onClick={load}>Retry</button></div>
         : items.length ? <div className="content-grid">{items.map((interest) => {
           const profile = outgoing ? interest.receiver : interest.sender;

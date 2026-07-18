@@ -1,6 +1,8 @@
+from datetime import timedelta
+
 import pytest
 from django.utils import timezone
-from apps.core.models import MembershipPlan, MembershipRequest, MemberMembership
+from apps.core.models import Interest, MembershipPlan, MembershipRequest, MemberMembership
 from apps.accounts.models import Member, SuperAdmin, Admin
 
 pytestmark = pytest.mark.django_db
@@ -20,27 +22,44 @@ def plan(db):
     )
     return plan
 
-def test_member_membership_request_creation(authenticated_client, member, plan):
+def test_manual_membership_request_endpoint_is_removed(authenticated_client, member, plan):
     client = authenticated_client(member)
     response = client.post(
         '/api/v1/memberships/request/',
         {'plan_slug': 'platinum'},
         format='json'
     )
-    assert response.status_code == 201, response.data
-    assert response.data['success'] is True
-    assert response.data['data']['status'] == 'pending'
-    
-    # Check duplicate pending request is blocked
-    response_dup = client.post(
-        '/api/v1/memberships/request/',
-        {'plan_slug': 'platinum'},
-        format='json'
-    )
-    assert response_dup.status_code == 400
-    assert response_dup.data['success'] is False
+    assert response.status_code == 404
 
-def test_admin_list_membership_requests(authenticated_client, admin_account, member, plan):
+
+def test_free_member_cannot_view_received_interests(authenticated_client, member, other_member):
+    Interest.objects.create(sender=other_member, receiver=member)
+
+    response = authenticated_client(member).get('/api/v1/interests/?type=incoming')
+
+    assert response.status_code == 403
+    assert response.data['error'] == 'ENTITLEMENT_DENIED'
+    assert response.data['entitlement'] == 'can_view_received_interests'
+
+
+def test_paid_member_can_view_received_interests(authenticated_client, member, other_member):
+    plan = MembershipPlan.objects.create(
+        name='Gold', slug='gold-received-interests', price=4999,
+        duration='3 Months', duration_days=90, features=[],
+        can_view_received_interests=True,
+    )
+    MemberMembership.objects.create(
+        member=member, plan=plan, status=MemberMembership.MembershipStatus.ACTIVE,
+        is_active=True, started_at=timezone.now(), expires_at=timezone.now() + timedelta(days=90),
+    )
+    Interest.objects.create(sender=other_member, receiver=member)
+
+    response = authenticated_client(member).get('/api/v1/interests/?type=incoming')
+
+    assert response.status_code == 200
+    assert len(response.data['data']) == 1
+
+def test_manual_membership_admin_queue_is_removed(authenticated_client, admin_account, member, plan):
     # Setup a pending request
     req = MembershipRequest.objects.create(
         user=member,
@@ -50,12 +69,9 @@ def test_admin_list_membership_requests(authenticated_client, admin_account, mem
     
     client = authenticated_client(admin_account)
     response = client.get('/api/v1/admin/membership-requests/')
-    assert response.status_code == 200
-    assert response.data['success'] is True
-    assert len(response.data['data']['results']) == 1
-    assert response.data['data']['results'][0]['id'] == str(req.pk)
+    assert response.status_code == 404
 
-def test_admin_approve_membership_request(authenticated_client, admin_account, member, plan):
+def test_admin_cannot_approve_membership_requests(authenticated_client, admin_account, member, plan):
     # Setup pending request
     req = MembershipRequest.objects.create(
         user=member,
@@ -69,23 +85,11 @@ def test_admin_approve_membership_request(authenticated_client, admin_account, m
         {'action': 'approve'},
         format='json'
     )
-    assert response.status_code == 200, response.data
-    assert response.data['success'] is True
-    
-    # Verify request updated
+    assert response.status_code == 404
     req.refresh_from_db()
-    assert req.status == 'approved'
-    assert req.is_active is True
-    
-    # Verify user premium status & active membership
-    member.refresh_from_db()
-    assert member.is_premium is True
-    
-    membership = MemberMembership.objects.get(member=member, is_active=True)
-    assert membership.plan == plan
-    assert membership.is_active is True
+    assert req.status == 'pending'
 
-def test_admin_reject_membership_request(authenticated_client, admin_account, member, plan):
+def test_admin_cannot_reject_membership_requests(authenticated_client, admin_account, member, plan):
     req = MembershipRequest.objects.create(
         user=member,
         selected_plan=plan,
@@ -93,29 +97,15 @@ def test_admin_reject_membership_request(authenticated_client, admin_account, me
     )
     
     client = authenticated_client(admin_account)
-    # Reject without reason should fail
-    response_fail = client.patch(
-        f'/api/v1/admin/membership-requests/{req.pk}/',
-        {'action': 'reject'},
-        format='json'
-    )
-    assert response_fail.status_code == 400
-    
-    # Reject with reason
     response = client.patch(
         f'/api/v1/admin/membership-requests/{req.pk}/',
         {'action': 'reject', 'rejection_reason': 'Invalid documentation'},
         format='json'
     )
-    assert response.status_code == 200, response.data
+    assert response.status_code == 404
     
     req.refresh_from_db()
-    assert req.status == 'rejected'
-    assert req.rejection_reason == 'Invalid documentation'
-    assert req.is_active is False
-    
-    member.refresh_from_db()
-    assert member.is_premium is False
+    assert req.status == 'pending'
 
 def test_admin_direct_membership_override(authenticated_client, admin_account, member, plan):
     client = authenticated_client(admin_account)

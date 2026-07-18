@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import ProfileImage from '@/components/profile/ProfileImage';
 
 type SmartImageProps = Omit<ImageProps, 'src' | 'width' | 'height'> & {
+  userId?: string | null;
   src?: unknown;
   width?: number;
   height?: number;
@@ -15,18 +16,20 @@ type SmartImageProps = Omit<ImageProps, 'src' | 'width' | 'height'> & {
 function isPrivateProfilePhotoUrl(source: string): boolean {
   try {
     const parsed = new URL(source, 'https://profile-image.local');
-    return /(?:^|\/)profile-photos\/[^/]+\/(?:image|thumbnail)\/?$/.test(parsed.pathname);
+    return /(?:^|\/)profile-photos\/[^/]+\/(?:image|thumbnail)\/?$/.test(parsed.pathname) ||
+           /(?:^|\/)users\/[^/]+\/avatar\/?$/.test(parsed.pathname);
   } catch {
     return false;
   }
 }
 
 export default function SmartImage({
+  userId,
   src,
   alt,
   width = 800,
   height = 800,
-  fallbackSrc = '/images/bride-portrait.jpg',
+  fallbackSrc,
   unoptimized,
   onError,
   className,
@@ -34,9 +37,42 @@ export default function SmartImage({
   style,
   ...props
 }: SmartImageProps) {
-  const initial = typeof src === 'string' && src.trim() ? src : fallbackSrc;
+  const initial = typeof src === 'string' && src.trim() ? src : fallbackSrc || null;
   const [current, setCurrent] = useState(initial);
   useEffect(() => setCurrent(initial), [initial]);
+
+  const hasLayoutClasses = Boolean(className?.match(/(?:^|\s)[wh]-/));
+
+  if (userId) {
+    return (
+      <ProfileImage
+        userId={userId}
+        alt={alt || 'Profile photo'}
+        size="auto"
+        aspectRatio={className?.includes('aspect-[4/5]') ? '4:5' : '1:1'}
+        shape={className?.includes('rounded-full') ? 'circle' : 'rounded'}
+        className={className}
+        style={style ?? (hasLayoutClasses ? undefined : { width, height })}
+        priority={priority}
+      />
+    );
+  }
+
+  // Do not substitute a stock portrait for an absent or unapproved member
+  // photo. A neutral placeholder makes the moderation state unambiguous.
+  if (!current) {
+    return (
+      <ProfileImage
+        alt={alt || 'Profile photo'}
+        size="auto"
+        aspectRatio={className?.includes('aspect-[4/5]') ? '4:5' : '1:1'}
+        shape={className?.includes('rounded-full') ? 'circle' : 'rounded'}
+        className={className}
+        style={style ?? (hasLayoutClasses ? undefined : { width, height })}
+        priority={priority}
+      />
+    );
+  }
 
   // Profile images are protected Django BYTEA endpoints. Next's Image loader
   // cannot attach the in-memory bearer token, so route every existing card,
@@ -68,7 +104,7 @@ export default function SmartImage({
     style={style}
     unoptimized={unoptimized ?? authorizedOrRemote}
     onError={(event) => {
-      if (current !== fallbackSrc) setCurrent(fallbackSrc);
+      if (fallbackSrc && current !== fallbackSrc) setCurrent(fallbackSrc);
       onError?.(event);
     }}
   />;

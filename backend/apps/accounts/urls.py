@@ -30,7 +30,6 @@ from apps.profiles.views import (
 
 # Import membership views from core app
 from apps.core.views.membership_views import (
-    MembershipActivateView,
     MembershipSummaryView,
     MembershipDeactivateView,
 )
@@ -57,7 +56,6 @@ urlpatterns = [
     path('otp/verify/', MemberOtpVerifyView.as_view(), name='otp_verify'),
     
     # Membership management endpoints
-    path('membership/activate/', MembershipActivateView.as_view(), name='membership_activate'),
     path('membership/summary/', MembershipSummaryView.as_view(), name='membership_summary'),
     path('membership/deactivate/', MembershipDeactivateView.as_view(), name='membership_deactivate'),
     

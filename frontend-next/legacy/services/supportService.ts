@@ -51,6 +51,7 @@ export interface Notification {
   notification_type: string;
   title: string;
   message: string;
+  link_url?: string;
   is_read: boolean;
   related_object_type?: string | null;
   related_object_id?: string | null;

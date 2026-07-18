@@ -1048,6 +1048,7 @@ class MemberVerificationStatusView(APIView):
         data = {
             'account_status': verification_summary.account_status,
             'is_verified': verification_summary.is_verified,
+            'contact': verification_summary.contact,
             'profile': verification_summary.profile,
             'primary_photo': verification_summary.primary_photo,
             'documents': verification_summary.documents,

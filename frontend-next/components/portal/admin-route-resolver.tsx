@@ -35,6 +35,7 @@ const Assignments = load(() => import('@/legacy/pages/admin/AdminAssignmentsPage
 const Permissions = load(() => import('@/legacy/pages/admin/AdminPermissionsPage'));
 const Departments = load(() => import('@/legacy/pages/admin/SuperAdminDepartmentsPage'));
 const Designations = load(() => import('@/legacy/pages/admin/SuperAdminDesignationsPage'));
+const MemberDetail = load(() => import('@/legacy/pages/admin/AdminMemberDetailPage'));
 
 type RouteEntry = { component: ComponentType<any>; permission?: string; props?: Record<string, unknown> };
 
@@ -97,7 +98,9 @@ function ForbiddenRedirect() {
 export function AdminRouteResolver({ portal }: { portal: 'admin' | 'super-admin' }) {
   const pathname = usePathname();
   const { user, hasAdminPermission } = useAuth();
-  const entry = routes[routeKey(pathname, portal)];
+  const segments = pathname.replace(new RegExp(`^/${portal}/?`), '').split('/').filter(Boolean);
+  const memberId = segments[0] === 'members' ? segments[1] : undefined;
+  const entry = memberId ? { component: MemberDetail, permission: 'members.manage', props: { memberId } } : routes[routeKey(pathname, portal)];
   if (!entry) notFound();
   if (entry.permission && user?.account_type !== 'SUPER_ADMIN' && !hasAdminPermission(entry.permission)) return <ForbiddenRedirect />;
   const Component = entry.component;

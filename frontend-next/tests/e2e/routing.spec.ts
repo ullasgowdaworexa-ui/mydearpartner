@@ -30,9 +30,9 @@ test.describe('role-protected routing', () => {
     ['/staff/tasks', '/staff/login'],
     ['/support/tickets', '/support/login'],
   ] as const) {
-    test(`redirects unauthenticated ${path} requests`, async ({ request }) => {
+    test(`redirects unauthenticated ${path} requests`, async ({ request, baseURL }) => {
       const response = await request.get(`${path}?smoke=1`, { maxRedirects: 0 });
-      const location = new URL(response.headers().location);
+      const location = new URL(response.headers().location || '', baseURL || 'http://localhost:3000');
 
       expect(response.status()).toBe(307);
       expect(location.pathname).toBe(login);
@@ -40,14 +40,14 @@ test.describe('role-protected routing', () => {
     });
   }
 
-  test('rejects a portal cookie from the wrong account type', async ({ request }) => {
+  test('rejects a portal cookie from the wrong account type', async ({ request, baseURL }) => {
     const response = await request.get('/admin/dashboard', {
       headers: { cookie: 'mdp_portal=MEMBER' },
       maxRedirects: 0,
     });
 
     expect(response.status()).toBe(307);
-    expect(new URL(response.headers().location).pathname).toBe('/403');
+    expect(new URL(response.headers().location || '', baseURL || 'http://localhost:3000').pathname).toBe('/403');
   });
 
   test('allows the matching account type through the middleware boundary', async ({ request }) => {

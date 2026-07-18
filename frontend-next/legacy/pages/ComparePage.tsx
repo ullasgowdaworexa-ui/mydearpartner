@@ -4,7 +4,7 @@
 import { useState, useEffect, memo } from 'react';
 import { Link, useSearchParams } from '@/lib/router-compat';
 import { motion } from 'framer-motion';
-import { Heart, Check, Star, Scale, User, ChevronDown, Sparkles } from 'lucide-react';
+import { Heart, Check, Star, Scale, User, ChevronDown } from 'lucide-react';
 import { checkCompatibility, getProfile, getProfiles, getShortlists, sendInterest } from '../services/dataService';
 import { fetchApi } from '../services/apiClient';
 import type { Profile } from '../types/domain';
@@ -84,19 +84,26 @@ export default function ComparePage() {
         setMyProfile(wireToProfile(me));
 
         // Load shortlisted candidates
-        // A shortlist is optional for comparison.  A temporary backend error
-        // must not prevent a candidate opened directly from their profile.
         const sl = await getShortlists().catch(() => ({ count: 0, results: [] }));
         const shortlisted = sl.results || [];
         setShortlistedCandidates(shortlisted);
 
-        const selected = requestedCandidateId
+        let selected = requestedCandidateId
           ? shortlisted.find((profile) => profile.id === requestedCandidateId)
           : undefined;
+
+        if (!selected && requestedCandidateId) {
+          try {
+            selected = await getProfile(requestedCandidateId);
+          } catch (err) {
+            console.error('Failed to fetch requested candidate directly:', err);
+          }
+        }
+
         if (selected) {
           setProfileB(await withCompatibility(selected));
-        } else {
-          if (shortlisted.length > 0) setProfileB(await withCompatibility(shortlisted[0]));
+        } else if (shortlisted.length > 0) {
+          setProfileB(await withCompatibility(shortlisted[0]));
         }
       } catch (err) {
         console.error('ComparePage init error', err);
@@ -258,7 +265,7 @@ export default function ComparePage() {
                   <p className="text-xs font-bold uppercase tracking-widest text-rose-600">Gemini AI insights</p>
                   <h2 className="mt-1 text-xl font-black text-slate-900">{analysing ? 'Analysing your shared preferences…' : `${aiAnalysis?.total_score ?? profileB.compatibility}% compatibility`}</h2>
                 </div>
-                <Sparkles className={`h-6 w-6 text-rose-500 ${analysing ? 'animate-pulse' : ''}`} />
+                <Heart className={`h-6 w-6 text-rose-500 fill-current ${analysing ? 'animate-pulse' : ''}`} />
               </div>
               <p className="mt-3 text-sm leading-relaxed text-slate-600">{aiAnalysis?.conclusion || 'Select a profile to receive a personalised, preference-based comparison.'}</p>
               {aiAnalysis?.dimensions?.length ? <div className="mt-4 grid gap-2 sm:grid-cols-2">{aiAnalysis.dimensions.map((dimension) => <div key={dimension.name} className="rounded-xl bg-white/80 px-3 py-2 text-xs text-slate-600"><b className="text-slate-800">{dimension.name}: {dimension.score}/{dimension.max_score}</b><br />{dimension.insight}</div>)}</div> : null}

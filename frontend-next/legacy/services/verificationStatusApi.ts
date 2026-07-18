@@ -3,6 +3,11 @@ import { baseApi } from './baseApi';
 export interface VerificationStatus {
   account_status: 'INCOMPLETE' | 'PENDING' | 'IN_REVIEW' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';
   is_verified: boolean;
+  contact: {
+    status: 'incomplete' | 'approved';
+    name: string;
+    reason?: string | null;
+  };
   profile: {
     status: 'incomplete' | 'pending' | 'approved' | 'rejected';
     submitted_at: string | null;

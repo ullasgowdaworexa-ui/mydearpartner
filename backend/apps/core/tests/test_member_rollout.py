@@ -20,55 +20,14 @@ IN_MEMORY_CHANNEL_LAYER = {
 }
 
 
-@override_settings(REQUIRE_MEMBER_VERIFICATION=False, ENABLE_ADMIN_PORTAL=False)
-def test_unverified_members_can_activate_a_plan_browse_and_chat(
-    authenticated_client, member, other_member
-):
-    """The temporary member rollout has no review gate but keeps plan access."""
-
-    plan = MembershipPlan.objects.create(
-        name='Gold',
-        display_name='Gold',
-        slug='gold-rollout-test',
-        price=999,
-        duration='30 days',
-        duration_days=30,
-        features=[],
-        can_message=True,
-        is_active=True,
-    )
-    member.gender = 'Male'
-    other_member.gender = 'Female'
-    member.save(update_fields=['gender'])
-    other_member.save(update_fields=['gender'])
-
-    client = authenticated_client(member)
-    activation = client.post(
+def test_members_cannot_activate_paid_plans_directly(authenticated_client, member):
+    response = authenticated_client(member).post(
         '/api/v1/member-auth/membership/activate/',
-        {'plan_slug': plan.slug},
+        {'plan_slug': 'gold'},
         format='json',
     )
 
-    assert activation.status_code == 200, activation.data
-    assert activation.data['data']['status'] == 'active'
-    membership = MemberMembership.objects.get(member=member)
-    assert membership.status == MemberMembership.MembershipStatus.ACTIVE
-    assert membership.is_active is True
-    member.refresh_from_db()
-    assert member.is_premium is True
-
-    profiles = client.get('/api/v1/profiles/')
-    assert profiles.status_code == 200, profiles.data
-    profile_ids = {row['id'] for row in profiles.data['data']['results']}
-    assert str(other_member.pk) in profile_ids
-
-    message = client.post(
-        f'/api/v1/conversations/{other_member.pk}/messages/',
-        {'text': 'Hello from an unverified member'},
-        format='json',
-    )
-    assert message.status_code == 201, message.data
-    assert message.data['data']['receiver_id'] == str(other_member.pk)
+    assert response.status_code == 404
 
 
 @override_settings(ENABLE_ADMIN_PORTAL=False)

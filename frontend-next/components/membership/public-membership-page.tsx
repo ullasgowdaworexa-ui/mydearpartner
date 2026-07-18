@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Sparkles, Crown, Star, Heart, Loader2, X, ArrowRight, Shield, Headphones, Gift } from 'lucide-react';
+import { Check, Gem, Crown, Star, Heart, Loader2, X, ArrowRight, Shield, Headphones, Gift } from 'lucide-react';
 import { useGetMembershipPlansQuery, type MembershipPlan } from '@/legacy/services/membershipApi';
 import Link from 'next/link';
 
@@ -10,7 +10,7 @@ import Link from 'next/link';
 const iconMap: Record<string, any> = {
   'free': Heart,
   'gold': Star,
-  'platinum': Sparkles,
+  'platinum': Gem,
   'elite': Crown,
 };
 
@@ -18,19 +18,19 @@ const iconMap: Record<string, any> = {
 const faqs = [
   {
     q: 'Can I upgrade my plan anytime?',
-    a: 'Yes, you can upgrade at any time. Just select a new plan and it will be activated instantly.',
+    a: 'Yes. Select a plan and submit a membership request; an administrator will review and activate it.',
   },
   {
-    q: 'Is my payment information secure?',
-    a: 'Absolutely. All payments are encrypted with 256-bit SSL and processed through PCI-DSS compliant payment gateways.',
+    q: 'How are paid plans activated?',
+    a: 'Paid plans are activated after manual administrator approval. The platform does not collect online payments at this time.',
   },
   {
     q: 'What is the refund policy?',
     a: 'We offer a 7-day refund policy for paid plans. If you are not satisfied, contact our support team within 7 days of purchase.',
   },
   {
-    q: 'What payment methods are accepted?',
-    a: 'We accept all major credit/debit cards, UPI (GPay, PhonePe, Paytm), Net Banking, and EMI options.',
+    q: 'Can I pay online?',
+    a: 'No. Online checkout is not available while memberships are handled through manual approval.',
   },
   {
     q: 'Can I cancel my plan anytime?',
@@ -44,7 +44,7 @@ const faqs = [
 
 // Trust indicators
 const trustIndicators = [
-  { icon: Shield, title: 'Secure Payment', desc: '256-bit SSL encryption' },
+  { icon: Shield, title: 'Manual Approval', desc: 'Memberships reviewed by our team' },
   { icon: Shield, title: 'Verified Profiles', desc: 'Government ID verified' },
   { icon: Headphones, title: '24/7 Support', desc: 'Always here for you' },
   { icon: Gift, title: '7-Day Refund', desc: 'No questions asked' },
@@ -69,8 +69,8 @@ export default function PublicMembershipPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="text-red-500 mb-2">Failed to load membership plans</div>
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="text-blue-500 underline"
           >
             Try again
@@ -97,7 +97,7 @@ export default function PublicMembershipPage() {
 
   const getFeatures = (plan: MembershipPlan): string[] => {
     const features = [];
-    
+
     if (plan.slug === 'free') {
       features.push('Create your profile');
       features.push('Browse profiles');
@@ -106,40 +106,44 @@ export default function PublicMembershipPage() {
       features.push('Basic search filters');
     } else {
       features.push('Everything in Free');
-      
+
       if (plan.daily_profile_unlock_limit) {
         features.push(`${plan.daily_profile_unlock_limit} profile unlocks/day`);
       } else {
         features.push('Unlimited profile unlocks');
       }
-      
+
       if (plan.interest_limit) {
         features.push(`${plan.interest_limit} interests/day`);
       } else {
         features.push('Unlimited interests');
       }
-      
+
       if (plan.messaging_mode !== 'DISABLED') {
         features.push('Direct messaging');
       }
-      
+
       if (plan.can_use_advanced_search) {
         features.push('Advanced search filters');
       }
-      
+
+      if (plan.can_view_received_interests) {
+        features.push('See received interests');
+      }
+
       if (plan.contact_access_mode !== 'NONE') {
         features.push('Contact information access');
       }
-      
+
       if (plan.photo_access_mode === 'ALL_APPROVED' || plan.photo_access_mode === 'ALL') {
         features.push('View all photos');
       }
-      
+
       if (plan.can_use_horoscope) {
         features.push('Horoscope matching');
       }
     }
-    
+
     return features;
   };
 
@@ -177,11 +181,10 @@ export default function PublicMembershipPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className={`relative rounded-2xl border-2 transition-all bg-white shadow-lg overflow-hidden ${
-                      plan.is_featured
+                    className={`relative rounded-2xl border-2 transition-all bg-white shadow-lg overflow-hidden ${plan.is_featured
                         ? 'border-amber-500 ring-2 ring-amber-500/20 md:scale-105'
                         : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     {/* Featured Badge */}
                     {plan.is_featured && (
@@ -236,15 +239,14 @@ export default function PublicMembershipPage() {
                       {/* CTA Button */}
                       <Link
                         href={plan.slug === 'free' ? '/register' : '/register?plan=' + plan.slug}
-                        className={`w-full py-3 px-4 rounded-lg font-bold transition-all inline-flex items-center justify-center gap-2 ${
-                          plan.slug === 'free'
+                        className={`w-full py-3 px-4 rounded-lg font-bold transition-all inline-flex items-center justify-center gap-2 ${plan.slug === 'free'
                             ? 'bg-gray-200 text-gray-800 hover:bg-gray-300'
                             : plan.is_featured
-                            ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg'
-                            : 'bg-gradient-to-r from-rose-500 to-pink-500 text-white hover:from-rose-600 hover:to-pink-600 shadow-lg'
-                        }`}
+                              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg'
+                              : 'bg-gradient-to-r from-rose-500 to-pink-500 text-white hover:from-rose-600 hover:to-pink-600 shadow-lg'
+                          }`}
                       >
-                        {plan.slug === 'free' ? 'Start Free' : 'Get ' + plan.display_name}
+                        {plan.slug === 'free' ? 'Start Free' : 'Request ' + plan.display_name}
                         <ArrowRight className="w-4 h-4" />
                       </Link>
                     </div>
@@ -313,7 +315,7 @@ export default function PublicMembershipPage() {
                     </svg>
                   </motion.div>
                 </button>
-                
+
                 <AnimatePresence>
                   {openFaq === idx && (
                     <motion.div

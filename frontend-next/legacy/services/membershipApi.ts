@@ -20,9 +20,24 @@ export interface MembershipPlan {
   photo_access_mode: 'PRIMARY_ONLY' | 'ALL_APPROVED' | 'ALL';
   can_use_advanced_search: boolean;
   can_use_horoscope: boolean;
+  can_view_received_interests?: boolean;
   is_featured: boolean;
   display_order: number;
   created_at: string;
+  entitlements?: Record<string, unknown>;
+}
+
+export interface RazorpayOrder {
+  order_id: string;
+  amount: number;
+  currency: string;
+  key_id: string;
+  demo_mode: boolean;
+  plan: { id: string; name: string; duration_days: number };
+}
+
+export interface PaymentVerification {
+  membership: { id: string; status: string; plan_name: string; expires_at: string };
 }
 
 /**
@@ -66,9 +81,12 @@ export interface ActiveMembership {
 /**
  * Plan Activation Response
  */
-export interface ActivatePlanResponse {
-  status: string;
-  membership: ActiveMembership;
+export interface MembershipRequestResponse {
+  id: string;
+  plan_name: string;
+  plan_slug: string;
+  status: 'pending';
+  requested_at: string;
 }
 
 /**
@@ -85,12 +103,21 @@ export const membershipApi = baseApi.injectEndpoints({
       providesTags: ['MembershipPlans'],
     }),
 
-    // Activate a membership plan
-    activatePlan: builder.mutation<ActivatePlanResponse, string>({
-      query: (planSlug) => ({
-        url: '/member-auth/membership/activate/',
+    createMembershipOrder: builder.mutation<RazorpayOrder, { plan_id: string }>({
+      query: (body) => ({
+        url: '/member/memberships/create-order/',
         method: 'POST',
-        body: { plan_slug: planSlug },
+        body,
+      }),
+    }),
+
+    verifyMembershipPayment: builder.mutation<PaymentVerification, {
+      razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string;
+    }>({
+      query: (body) => ({
+        url: '/member/memberships/verify/',
+        method: 'POST',
+        body,
       }),
       invalidatesTags: ['MembershipSummary'],
     }),
@@ -118,7 +145,8 @@ export const membershipApi = baseApi.injectEndpoints({
 // Export hooks for usage in functional components
 export const {
   useGetMembershipPlansQuery,
-  useActivatePlanMutation,
+  useCreateMembershipOrderMutation,
+  useVerifyMembershipPaymentMutation,
   useGetMembershipSummaryQuery,
   useDeactivateMembershipMutation,
 } = membershipApi;

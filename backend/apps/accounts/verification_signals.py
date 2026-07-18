@@ -10,8 +10,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 from .models import Member
-from apps.core.membership_activation_service import MembershipActivationService
-from apps.accounts.verification_service import AccountVerificationService
 
 
 @receiver(post_save, sender=Member)
@@ -22,7 +20,8 @@ def on_member_saved(sender, instance, created, update_fields, **kwargs):
     Check if account was just verified (account_status changed to ACTIVE,
     profile_status changed to APPROVED).
     
-    If verified, automatically activate any pending_verification membership.
+    Membership activation is payment-driven. Verification only enables a
+    member to create a Razorpay order; it must never activate a plan itself.
     """
     if created:
         # New member - no action needed
@@ -41,24 +40,7 @@ def on_member_saved(sender, instance, created, update_fields, **kwargs):
         # No verification-related fields changed
         return
 
-    # Check if account is now fully verified
-    if AccountVerificationService.is_account_verified(instance):
-        # Account just became verified - activate pending membership
-        pending = MembershipActivationService.get_pending_membership(instance)
-        
-        if pending:
-            result = MembershipActivationService.activate_pending_membership(instance)
-            
-            if result.success:
-                # Send notification to member
-                from apps.core.models import Notification
-                Notification.objects.create(
-                    member=instance,
-                    notification_type='membership_activated',
-                    title='Membership Activated!',
-                    message=f'Your account has been verified. {result.message}',
-                    priority='HIGH'
-                )
+    return
 
 
 def ready():

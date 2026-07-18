@@ -4,6 +4,7 @@ import {
   accountFromApiPath,
   PORTAL_COOKIE,
   REFRESH_COOKIE,
+  PHOTO_ACCESS_COOKIE,
   type AccountType,
 } from "@/lib/auth-config";
 
@@ -59,6 +60,41 @@ function isProtectedPhotoPath(path: string) {
   return /(?:^|\/)profile-photos\/[^/]+\/(?:image|thumbnail)\/?$/.test(path);
 }
 
+/**
+ * Perform a server-side token refresh using the HttpOnly refresh cookie so
+ * users who were logged in before mdp_photo_access was introduced don't need
+ * to sign in again.  Returns the new access token, or null on failure.
+ */
+async function inlineRefreshForPhoto(request: NextRequest): Promise<string | null> {
+  const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
+  if (!refreshToken) return null;
+  const portalHint = request.cookies.get(PORTAL_COOKIE)?.value;
+  const namespaceMap: Record<string, string> = {
+    MEMBER: "member-auth",
+    SUPER_ADMIN: "super-admin-auth",
+    ADMIN: "admin-auth",
+    STAFF: "staff-auth",
+    CUSTOMER_SUPPORT: "customer-support-auth",
+  };
+  const namespace = portalHint ? (namespaceMap[portalHint] ?? "member-auth") : "member-auth";
+  try {
+    const base = serverEnv.INTERNAL_API_BASE_URL.replace(/\/$/, "");
+    const refreshUrl = `${base}/${namespace}/token/refresh/`;
+    const resp = await fetch(refreshUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ refresh: refreshToken }),
+      cache: "no-store",
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json() as Record<string, unknown>;
+    const data = (json.data && typeof json.data === "object") ? json.data as Record<string, unknown> : json;
+    return typeof data.access === "string" ? data.access : null;
+  } catch {
+    return null;
+  }
+}
+
 function extractRefresh(payload: unknown): { refresh: string | null; account: AccountType | null } {
   if (!payload || typeof payload !== "object") return { refresh: null, account: null };
   const envelope = payload as Record<string, unknown>;
@@ -70,6 +106,15 @@ function extractRefresh(payload: unknown): { refresh: string | null; account: Ac
     refresh: typeof data.refresh === "string" ? data.refresh : null,
     account: typeof user?.account_type === "string" ? user.account_type as AccountType : null,
   };
+}
+
+function extractAccess(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const envelope = payload as Record<string, unknown>;
+  const data = envelope.data && typeof envelope.data === "object"
+    ? envelope.data as Record<string, unknown>
+    : envelope;
+  return typeof data.access === "string" ? data.access : null;
 }
 
 function stripRefresh(payload: unknown) {
@@ -119,6 +164,17 @@ export async function forwardToDjango(request: NextRequest, segments: string[]) 
   for (const name of ["accept", "content-type", "authorization", "if-none-match", "x-request-id"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
+  }
+  if (isProtectedPhotoPath(path) && !headers.has("authorization")) {
+    let photoAccessToken = request.cookies.get(PHOTO_ACCESS_COOKIE)?.value;
+    // If the cookie is missing (user logged in before this feature was deployed),
+    // perform an inline server-side refresh to obtain a fresh access token.
+    if (!photoAccessToken) {
+      photoAccessToken = (await inlineRefreshForPhoto(request)) ?? undefined;
+    }
+    if (photoAccessToken) {
+      headers.set("authorization", `Bearer ${photoAccessToken}`);
+    }
   }
   headers.set("x-forwarded-host", request.headers.get("host") ?? request.nextUrl.host);
   headers.set("x-forwarded-proto", request.nextUrl.protocol.replace(":", ""));
@@ -188,10 +244,24 @@ export async function forwardToDjango(request: NextRequest, segments: string[]) 
       response.cookies.set(REFRESH_COOKIE, tokens.refresh, cookieOptions());
       if (account) response.cookies.set(PORTAL_COOKIE, account, cookieOptions());
     }
+    const accessTokenVal = extractAccess(payload);
+    if (accessTokenVal) {
+      // Use root path so the cookie is sent on ALL /api/proxy/* image requests
+      // regardless of subdirectory depth, avoiding narrow-path cookie issues.
+      response.cookies.set(PHOTO_ACCESS_COOKIE, accessTokenVal, {
+        ...cookieOptions(),
+        path: "/",
+      });
+    }
   }
   if (logoutPath.test(`/${path}`)) {
     response.cookies.set(REFRESH_COOKIE, "", { ...cookieOptions(), maxAge: 0 });
     response.cookies.set(PORTAL_COOKIE, "", { ...cookieOptions(), maxAge: 0 });
+    response.cookies.set(PHOTO_ACCESS_COOKIE, "", {
+      ...cookieOptions(),
+      path: "/",
+      maxAge: 0,
+    });
   }
   return response;
 }

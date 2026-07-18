@@ -11,15 +11,17 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.utils import CaptureQueriesContext
 from PIL import Image, ImageOps, TiffImagePlugin
 from rest_framework import status
+from rest_framework.test import APIRequestFactory
 
 from apps.accounts.models import AdminPermission, AdminRolePermission
+from apps.core.serializers import MemberPublicSerializer
 from apps.core.models import (
     ProfileBlock,
     ProfileVerificationAssignment,
     ProfileVerificationRequest,
     WorkAssignment,
 )
-from apps.profiles.models import ProfilePhoto, ProfilePhotoAuditLog
+from apps.profiles.models import ProfilePhoto, ProfilePhotoAuditLog, UserProfileImage
 from apps.profiles.photo_permissions import can_view_profile_photo
 from apps.profiles.serializers import MemberProfileSummarySerializer
 from apps.profiles.services.image_processing import ImageProcessingService
@@ -148,6 +150,29 @@ def test_supported_uploads_are_webp_bytea_and_return_only_metadata(
     assert isinstance(photo.thumbnail_data, (bytes, memoryview))
     assert photo.mime_type == "image/webp"
     assert (photo.width, photo.height) == (1200, 1500)
+
+
+def test_legacy_registration_image_endpoint_uses_moderated_photo_pipeline(
+    authenticated_client, member
+):
+    response = authenticated_client(member).post(
+        "/api/user-profile-images/",
+        {"images": image_upload("PNG")},
+        format="multipart",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    payload = response.data["data"]
+    assert len(payload) == 1
+    photo = ProfilePhoto.objects.get(pk=payload[0]["id"])
+    assert photo.status == ProfilePhoto.Status.PENDING
+    assert photo.mime_type == "image/webp"
+    assert not UserProfileImage.objects.filter(user=member).exists()
+    assert ProfileVerificationRequest.objects.filter(
+        member=member,
+        verification_type=ProfileVerificationRequest.VerificationType.PROFILE_PHOTO,
+        status=ProfileVerificationRequest.Status.PENDING,
+    ).exists()
     assert (photo.thumbnail_width, photo.thumbnail_height) == (240, 300)
     assert photo.compressed_size_bytes <= 600 * 1024
     assert photo.thumbnail_size_bytes <= 100 * 1024
@@ -279,9 +304,23 @@ def test_visibility_rules_cover_owner_approval_rejection_and_blocks(
     assert photo.verified_by_super_admin_id == super_admin.pk
     assert other.get(f"/api/profile-photos/{photo.pk}/thumbnail/").status_code == status.HTTP_200_OK
 
+    # Photo approval is independent from the broader profile-review workflow.
+    # A target's DRAFT profile must not hide a photo the moderator approved.
+    member.profile_status = "DRAFT"
+    member.save(update_fields=["profile_status", "updated_at"])
+    assert other.get(f"/api/profile-photos/{photo.pk}/thumbnail/").status_code == status.HTTP_200_OK
+    request = APIRequestFactory().get("/api/profiles/")
+    request.user = other_member
+    payload = MemberPublicSerializer(member, context={"request": request}).data
+    assert payload["photo"] and str(photo.pk) in payload["photo"]
+    assert payload["photo_visibility"] == "visible"
+
+    # An active viewer's own profile-review state also must not hide approved
+    # discovery photos. Account status, blocks, and per-photo approval remain
+    # the enforcement boundaries.
     other_member.profile_status = "PENDING"
     other_member.save(update_fields=["profile_status", "updated_at"])
-    assert other.get(f"/api/profile-photos/{photo.pk}/thumbnail/").status_code == status.HTTP_403_FORBIDDEN
+    assert other.get(f"/api/profile-photos/{photo.pk}/thumbnail/").status_code == status.HTTP_200_OK
     other_member.profile_status = "APPROVED"
     other_member.save(update_fields=["profile_status", "updated_at"])
 
@@ -416,7 +455,7 @@ def test_primary_constraint_reorder_set_primary_and_six_photo_cap(
     assert "maximum of 6" in str(over_cap.data)
 
 
-def test_rejected_only_gallery_recovers_primary_on_new_upload(
+def test_rejected_primary_blocks_another_upload_until_approved(
     authenticated_client, member, super_admin
 ):
     primary = create_photo(member)
@@ -435,11 +474,9 @@ def test_rejected_only_gallery_recovers_primary_on_new_upload(
         {"photo": image_upload("PNG", color=(180, 70, 40))},
         format="multipart",
     )
-    assert uploaded.status_code == status.HTTP_201_CREATED
-    new_photo = ProfilePhoto.objects.get(pk=uploaded.data["data"]["id"])
-    assert new_photo.status == ProfilePhoto.Status.PENDING
-    assert new_photo.is_primary is True
-    assert ProfilePhoto.objects.filter(user=member, is_primary=True).count() == 1
+    assert uploaded.status_code == status.HTTP_403_FORBIDDEN
+    assert uploaded.data["errors"]["code"] == "PRIMARY_PHOTO_NOT_VERIFIED"
+    assert ProfilePhoto.objects.filter(user=member).count() == 1
 
 
 def test_public_primary_stays_placeholder_without_an_approved_primary(member):

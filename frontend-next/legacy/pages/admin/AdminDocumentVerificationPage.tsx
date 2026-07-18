@@ -20,6 +20,8 @@ export default function AdminDocumentVerificationPage() {
   const [status, setStatus] = useState(searchParams.get('status') || 'PENDING');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [busyVerificationId, setBusyVerificationId] = useState<string | null>(null);
   
   // Assign modal state
   const [assignTargetId, setAssignTargetId] = useState<string | null>(null);
@@ -56,6 +58,28 @@ export default function AdminDocumentVerificationPage() {
   }, [status, page]);
 
   const canAssign = hasAdminPermission('verification.assign');
+  const canApprove = hasAdminPermission('verification.approve');
+  const canReject = hasAdminPermission('verification.reject');
+
+  const review = async (verificationId: string, action: 'approve' | 'reject') => {
+    const reason = action === 'reject'
+      ? window.prompt('Enter the rejection reason:')?.trim()
+      : '';
+    if (action === 'reject' && !reason) return;
+    if (action === 'approve' && !window.confirm('Approve this document verification?')) return;
+    setBusyVerificationId(verificationId);
+    setActionError('');
+    try {
+      await fetchApi(`/admin/verifications/${verificationId}/`, {
+        method: 'POST', body: JSON.stringify({ action, ...(reason ? { reason } : {}) }),
+      });
+      await load();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : 'The document verification could not be updated.');
+    } finally {
+      setBusyVerificationId(null);
+    }
+  };
 
   if (loading && !verifications.length) return <AdminLoading label="Loading document verifications queueâ€¦" />;
   if (error && !verifications.length) return <AdminErrorState message={error} onRetry={load} />;
@@ -86,6 +110,7 @@ export default function AdminDocumentVerificationPage() {
         </div>
 
         {loading && <div className="admin-table-progress"><LoaderCircle className="admin-spinner" /> Updatingâ€¦</div>}
+        {actionError && <div className="admin-inline-error" role="alert">{actionError}</div>}
 
         {verifications.length ? (
           <div className="admin-table-wrap">
@@ -93,11 +118,12 @@ export default function AdminDocumentVerificationPage() {
               <thead>
                 <tr>
                   <th>Member</th>
+                  <th>Uploaded document</th>
                   <th>Priority</th>
                   <th>Status</th>
                   <th>Current Assignee</th>
                   <th>Submitted At</th>
-                  {canAssign && <th className="admin-table-actions-heading">Actions</th>}
+                  {(canAssign || canApprove || canReject) && <th className="admin-table-actions-heading">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -114,6 +140,16 @@ export default function AdminDocumentVerificationPage() {
                         </p>
                       </div>
                     </td>
+                    <td data-label="Uploaded document">
+                      {Array.isArray(v.verification_documents) && v.verification_documents.length
+                        ? v.verification_documents.map((document: any) => (
+                          <div key={document.id}>
+                            <strong>{document.document_type}</strong>
+                            <small style={{ display: 'block', color: 'var(--admin-text-muted, #9ca3af)' }}>{document.status}</small>
+                          </div>
+                        ))
+                        : <span style={{ color: 'var(--admin-text-muted, #9ca3af)' }}>Document details unavailable</span>}
+                    </td>
                     <td data-label="Priority">{v.priority}</td>
                     <td data-label="Status"><AdminStatusBadge status={v.status} /></td>
                     <td data-label="Current Assignee">
@@ -122,9 +158,20 @@ export default function AdminDocumentVerificationPage() {
                       )}
                     </td>
                     <td data-label="Submitted">{formatAdminDate(v.submitted_at)}</td>
-                    {canAssign && (
+                    {(canAssign || canApprove || canReject) && (
                       <td className="admin-row-actions" data-label="Actions">
+                        {canApprove && v.status === 'PENDING' && (
+                          <button type="button" className="admin-btn" disabled={busyVerificationId === v.id} onClick={() => review(v.id, 'approve')}>
+                            Approve
+                          </button>
+                        )}
+                        {canReject && v.status === 'PENDING' && (
+                          <button type="button" className="admin-btn admin-btn-secondary" disabled={busyVerificationId === v.id} onClick={() => review(v.id, 'reject')}>
+                            Reject
+                          </button>
+                        )}
                         {v.status === 'PENDING' && (
+                          canAssign && (
                           <button
                             type="button"
                             className="admin-btn"
@@ -133,6 +180,7 @@ export default function AdminDocumentVerificationPage() {
                           >
                             <ClipboardCheck size={14} /> Assign Task
                           </button>
+                          )
                         )}
                         {v.status !== 'PENDING' && (
                           <span style={{ color: 'var(--admin-text-muted, #9ca3af)', fontSize: '0.85rem' }}>Assigned</span>

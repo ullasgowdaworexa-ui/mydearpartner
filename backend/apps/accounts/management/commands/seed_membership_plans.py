@@ -20,6 +20,11 @@ class Command(BaseCommand):
                 'interest_limit_daily': 3,
                 'message_limit_daily': 0,
                 'can_message': False,
+                'can_view_profile_visitors': False,
+                'can_view_received_interests': False,
+                'can_view_private_photos': False,
+                'can_get_priority_listing': False,
+                'can_use_profile_boost': False,
                 'contact_access_mode': 'NONE',
                 'photo_access_mode': 'PRIMARY_ONLY',
                 'can_use_advanced_search': False,
@@ -29,6 +34,7 @@ class Command(BaseCommand):
                 'description': 'Basic search and matching with limitations',
                 'color': 'from-gray-400 to-gray-600',
                 'features': ['Basic profiles search', 'Send 3 interests daily', 'View primary photos only']
+                ,'entitlements': {'daily_profile_view_limit': 10, 'can_send_interest': True, 'daily_interest_limit': 3, 'can_chat': False, 'can_view_contact_details': False, 'profile_visibility_boost': False, 'can_see_who_viewed_profile': False, 'can_view_received_interests': False, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'NONE', 'photo_access_mode': 'PRIMARY_ONLY', 'can_use_advanced_search': False}
             },
             {
                 'slug': 'gold',
@@ -43,6 +49,11 @@ class Command(BaseCommand):
                 'interest_limit_daily': 15,
                 'message_limit_daily': 15,
                 'can_message': True,
+                'can_view_profile_visitors': True,
+                'can_view_received_interests': True,
+                'can_view_private_photos': True,
+                'can_get_priority_listing': False,
+                'can_use_profile_boost': False,
                 'contact_access_mode': 'MUTUAL_ONLY',
                 'photo_access_mode': 'ALL_APPROVED',
                 'can_use_advanced_search': True,
@@ -52,6 +63,7 @@ class Command(BaseCommand):
                 'description': 'For active seekers who want priority connections',
                 'color': 'from-amber-400 to-amber-600',
                 'features': ['Send 15 interests daily', 'Messaging allowed on accepted interest', 'Mutual contact details access', 'View all approved photos', 'Advanced filter searches']
+                ,'entitlements': {'daily_profile_view_limit': 50, 'can_send_interest': True, 'daily_interest_limit': 15, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': False, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'MUTUAL_ONLY', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True}
             },
             {
                 'slug': 'platinum',
@@ -66,6 +78,11 @@ class Command(BaseCommand):
                 'interest_limit_daily': 50,
                 'message_limit_daily': 50,
                 'can_message': True,
+                'can_view_profile_visitors': True,
+                'can_view_received_interests': True,
+                'can_view_private_photos': True,
+                'can_get_priority_listing': True,
+                'can_use_profile_boost': True,
                 'contact_access_mode': 'FULL',
                 'photo_access_mode': 'ALL_APPROVED',
                 'can_use_advanced_search': True,
@@ -75,6 +92,7 @@ class Command(BaseCommand):
                 'description': 'Our most popular plan for faster premium matchmaking',
                 'color': 'from-cyan-500 to-blue-600',
                 'features': ['Send 50 interests daily', 'Unrestricted direct messaging', 'Unrestricted contact details access', 'Medium profile visibility boost', 'Advanced filters & horoscope match']
+                ,'entitlements': {'daily_profile_view_limit': 200, 'can_send_interest': True, 'daily_interest_limit': 50, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': True, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'FULL', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True}
             },
             {
                 'slug': 'elite',
@@ -89,6 +107,11 @@ class Command(BaseCommand):
                 'interest_limit_daily': 999,
                 'message_limit_daily': 999,
                 'can_message': True,
+                'can_view_profile_visitors': True,
+                'can_view_received_interests': True,
+                'can_view_private_photos': True,
+                'can_get_priority_listing': True,
+                'can_use_profile_boost': True,
                 'contact_access_mode': 'FULL',
                 'photo_access_mode': 'ALL_APPROVED',
                 'can_use_advanced_search': True,
@@ -98,6 +121,7 @@ class Command(BaseCommand):
                 'description': 'The ultimate matrimonial package with VIP concierge services',
                 'color': 'from-purple-600 to-indigo-800',
                 'features': ['Unlimited profile views & interests', 'Unlimited messaging & contacts', 'Strongest profile visibility boost', 'Priority support services', 'Assisted personal matchmaking']
+                ,'entitlements': {'daily_profile_view_limit': None, 'can_send_interest': True, 'daily_interest_limit': None, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': True, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': True, 'max_photos': 6, 'contact_access_mode': 'FULL', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True}
             }
         ]
 

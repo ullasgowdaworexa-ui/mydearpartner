@@ -77,24 +77,37 @@ export function ResetPasswordForm() {
 
 type OtpForm = { identifier: string; code: string };
 export function VerifyOtpForm() {
-  const { requestOtp, loginWithOtp } = useAuth();
+  const { requestOtp, loginWithOtp, isAuthenticated, user, updateUser } = useAuth();
   const router = useRouter();
   const { register, getValues, handleSubmit, formState: { isSubmitting } } = useForm<OtpForm>();
   const [message, setMessage] = useState('');
+  const contactMode = isAuthenticated;
   const request = async () => {
     const parsed = identifierSchema.safeParse(getValues('identifier'));
     if (!parsed.success) { setMessage(parsed.error.issues[0].message); return; }
     try {
-      const result = await requestOtp(parsed.data, 'PASSWORDLESS_LOGIN');
+      const result = await requestOtp(parsed.data, contactMode ? 'PHONE_VERIFY' : 'PASSWORDLESS_LOGIN');
       setMessage(result.developer_otp ? `Code sent. Development code: ${result.developer_otp}` : 'If this member exists, a code has been sent.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'A code could not be sent.'); }
   };
   const verify = handleSubmit(async ({ identifier, code }) => {
-    try { await loginWithOtp(identifier.trim(), code.trim()); router.replace('/dashboard'); }
+    try {
+      if (contactMode) {
+        const result = await fetchApi<{ user: Record<string, unknown> }>('/member-auth/otp/verify/', {
+          method: 'POST',
+          body: JSON.stringify({ identifier: identifier.trim(), code: code.trim(), purpose: 'PHONE_VERIFY' }),
+        });
+        updateUser(result.user as any);
+        router.replace('/verification');
+      } else {
+        await loginWithOtp(identifier.trim(), code.trim());
+        router.replace('/dashboard');
+      }
+    }
     catch (error) { setMessage(error instanceof Error ? error.message : 'The code is invalid or expired.'); }
   });
-  return <AuthCard title="Sign in with a one-time code" copy="Use a verified email address or mobile number."><form onSubmit={verify}>
-    <label>Email or mobile<input autoComplete="username" {...register('identifier', { required: true })} /></label>
+  return <AuthCard title={contactMode ? 'Verify your contact details' : 'Sign in with a one-time code'} copy={contactMode ? 'Verify your registered email address and mobile number one at a time.' : 'Use a verified email address or mobile number.'}><form onSubmit={verify}>
+    <label>Email or mobile<input autoComplete="username" defaultValue={user?.mobile_number || user?.email || ''} {...register('identifier', { required: true })} /></label>
     <button type="button" onClick={request}>Send code</button>
     <label>Verification code<input inputMode="numeric" autoComplete="one-time-code" {...register('code', { required: true })} /></label>
     <button disabled={isSubmitting}>{isSubmitting ? 'Verifying…' : 'Verify and sign in'}</button>

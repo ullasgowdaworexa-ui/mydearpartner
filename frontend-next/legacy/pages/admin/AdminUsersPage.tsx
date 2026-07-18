@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
 
@@ -28,7 +28,7 @@ interface PendingAction {
 
 export default function AdminUsersPage() {
   const { user: currentUser, hasAdminPermission } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isSuper = window.location.pathname.startsWith('/super-admin');
   const basePath = isSuper ? '/super-admin/members' : '/admin/members';
@@ -82,18 +82,12 @@ export default function AdminUsersPage() {
       const data = await getAdminUsers({ page, page_size: 20, search, status: status || undefined, ordering });
       setUsers(data.results);
       setCount(data.count);
-      const next = new URLSearchParams();
-      if (search) next.set('search', search);
-      if (status) next.set('status', status);
-      if (ordering !== '-date_joined') next.set('ordering', ordering);
-      if (page > 1) next.set('page', String(page));
-      setSearchParams(next, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Users could not be loaded.');
     } finally {
       setLoading(false);
     }
-  }, [ordering, page, search, setSearchParams, status]);
+  }, [ordering, page, search, status]);
 
   useEffect(() => {
     load();
@@ -176,7 +170,7 @@ export default function AdminUsersPage() {
                   const protectedAdmin = member.is_staff && currentUser?.admin_role !== 'SUPER_ADMIN';
                   return (
                     <tr key={member.id}>
-                      <td data-label="Member"><div className="admin-member-cell"><span className="admin-list-avatar">{member.photo ? <SmartImage src={member.photo} alt="" /> : (member.full_name || member.email)[0].toUpperCase()}</span><p><button type="button" onClick={() => navigate(`${basePath}/${member.id}`)} style={{ background: 'none', border: 'none', color: '#818cf8', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', padding: 0 }}>{member.full_name || 'Unnamed member'}</button><small>{member.email}</small><small>{member.mobile_number || 'No phone provided'}</small></p></div></td>
+                      <td data-label="Member"><div className="admin-member-cell"><span className="admin-list-avatar">{member.id ? <img src={`/api/proxy/users/${member.id}/avatar/`} alt="" /> : (member.full_name || member.email)[0].toUpperCase()}</span><p><button type="button" onClick={() => navigate(`${basePath}/${member.id}`)} style={{ background: 'none', border: 'none', color: '#818cf8', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', padding: 0 }}>{member.full_name || 'Unnamed member'}</button><small>{member.email}</small><small>{member.mobile_number || 'No phone provided'}</small></p></div></td>
                       <td data-label="Profile"><p className="admin-cell-stack"><strong>{member.gender || 'Not specified'}</strong><small>{member.work_location || 'Location unavailable'}</small></p></td>
                       <td data-label="Verification"><AdminStatusBadge status={member.is_verified ? 'Verified' : 'Pending'} /></td>
                       <td data-label="Access"><AdminStatusBadge status={member.is_active ? 'Active' : 'Suspended'} /></td>
@@ -190,7 +184,7 @@ export default function AdminUsersPage() {
                                 <div className="admin-action-menu">
                                   {!member.is_verified && hasAdminPermission('members.manage') && <button type="button" onClick={() => { setPendingAction({ user: member, action: 'verify', label: 'Verify member', description: `Confirm that ${member.full_name || member.email} meets the verification requirements.`, dangerous: false }); setOpenActions(null); }}><UserCheck /> Verify member</button>}
                                   {hasAdminPermission('members.suspend') && <button type="button" onClick={() => { setPendingAction({ user: member, action: member.is_active ? 'deactivate' : 'activate', label: member.is_active ? 'Suspend member access?' : 'Restore member access?', description: member.is_active ? 'The member will be signed out and unable to access their account until restored.' : 'The member will regain access to their account.', dangerous: member.is_active }); setOpenActions(null); }}>{member.is_active ? <UserX /> : <CheckCircle2 />}{member.is_active ? 'Suspend access' : 'Restore access'}</button>}
-                                  {hasAdminPermission('members.delete') && currentUser?.admin_role === 'SUPER_ADMIN' && member.id !== currentUser.id && <button type="button" className="danger" onClick={() => { setPendingAction({ user: member, action: 'soft_delete', label: 'Delete this member?', description: 'The account will be removed from normal views. This sensitive action is recorded in the activity log.', dangerous: true }); setOpenActions(null); }}><Trash2 /> Delete account</button>}
+                                  {hasAdminPermission('members.delete') && <button type="button" className="danger" onClick={() => { setPendingAction({ user: member, action: 'soft_delete', label: 'Delete this member?', description: 'The account will be removed from normal views. This sensitive action is recorded in the activity log.', dangerous: true }); setOpenActions(null); }}><Trash2 /> Delete account</button>}
                                 </div>
                               )}
                             </div>

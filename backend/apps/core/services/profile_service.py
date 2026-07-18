@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Member
 from apps.core.eligibility import get_eligible_profiles_for
-from apps.core.models import ProfileBlock
+from apps.core.models import ProfileBlock, ProfileViewLog
 from apps.profiles.models import ProfilePhoto
 from .membership_service import MembershipService
 from .profile_unlock_service import ProfileUnlockService
@@ -156,7 +156,13 @@ class ProfileService:
                     'resets_at': access_data.get('resets_at'),
                 }
             )
-        
+
+        ProfileViewLog.objects.create(
+            viewer=viewer,
+            viewed=member,
+            view_date=timezone.now().date(),
+        )
+
         # Calculate compatibility
         from apps.core.matching import get_compatibility_provider
         provider = get_compatibility_provider()

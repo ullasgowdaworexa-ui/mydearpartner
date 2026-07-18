@@ -7,7 +7,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import connection, transaction
-from django.db.models import Prefetch, Q
+from django.db.models import OuterRef, Prefetch, Q, Subquery
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -15,6 +15,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework import permissions, status, serializers
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
+from rest_framework.response import Response
 
 from apps.accounts.models import AccountType, Member, MemberDocument
 from apps.accounts.permissions import IsMember, IsVerifiedMember
@@ -172,13 +173,21 @@ class ProfileListView(APIView):
 
     def get(self, request):
         from apps.core.eligibility import get_eligible_profiles_for
-        from apps.core.entitlement_service import MembershipEntitlementService
+        from apps.core.entitlements import entitlement_denial, get_active_entitlements, usage_for
         import datetime
         from django.utils import timezone
         
         viewer = request.user
-        plan = MembershipEntitlementService.get_effective_plan(viewer)
-        can_use_advanced_search = plan.can_use_advanced_search if plan else False
+        entitlements = get_active_entitlements(viewer)
+        can_use_advanced_search = entitlements.can_use_advanced_search
+        usage = usage_for(viewer, entitlements)
+        if (
+            entitlements.daily_profile_view_limit is not None
+            and usage['profile_views_used_today'] >= entitlements.daily_profile_view_limit
+        ):
+            return Response(
+                entitlement_denial(entitlements, 'daily_profile_view_limit', daily_limit=True), status=403
+            )
 
         # Get eligible profiles (opposite gender, active, non-hidden, non-suspended, non-blocked)
         queryset = (
@@ -253,7 +262,13 @@ class ProfileDetailView(APIView):
         )
         if not success:
             if payload and payload.get('code') == 'daily_profile_unlock_limit_reached':
-                return Response(payload, status=status.HTTP_403_FORBIDDEN)
+                if 'limit' in payload:
+                    payload['views_limit'] = payload['limit']
+                from apps.core.entitlements import entitlement_denial, get_active_entitlements
+                return Response(
+                    entitlement_denial(get_active_entitlements(request.user), 'daily_profile_view_limit', daily_limit=True),
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             return ApiResponse(
                 success=False,
                 message=message,
@@ -272,11 +287,66 @@ class ProfileDetailView(APIView):
         })
 
 
+class ProfileVisitorListView(APIView):
+    """List recent unique profile visitors without leaking locked identities."""
+
+    permission_classes = (permissions.IsAuthenticated, IsMember)
+
+    def get(self, request):
+        from apps.core.entitlements import get_active_entitlements
+
+        try:
+            limit = max(1, min(int(request.query_params.get("limit", 3)), 20))
+        except (TypeError, ValueError):
+            return bad_request("limit must be an integer between 1 and 20.")
+
+        base = ProfileViewLog.objects.filter(viewed=request.user)
+        total_unique_visitors = base.values("viewer_id").distinct().count()
+        entitlements = get_active_entitlements(request.user)
+        can_view_visitors = entitlements.can_see_who_viewed_profile
+        if not can_view_visitors:
+            return ApiResponse(data={
+                "can_view_visitors": False,
+                "total_unique_visitors": total_unique_visitors,
+                "results": [],
+            })
+
+        latest_for_viewer = base.filter(viewer_id=OuterRef("viewer_id")).order_by("-viewed_at", "-pk")
+        visits = (
+            base.filter(pk=Subquery(latest_for_viewer.values("pk")[:1]))
+            .select_related("viewer", "viewer__profile")
+            .prefetch_related(
+                Prefetch("viewer__profile_photos", queryset=ProfilePhoto.objects.without_binary())
+            )
+            .order_by("-viewed_at", "-pk")[:limit]
+        )
+        return ApiResponse(data={
+            "can_view_visitors": True,
+            "total_unique_visitors": total_unique_visitors,
+            "results": [
+                {
+                    "id": str(visit.pk),
+                    "viewed_at": visit.viewed_at.isoformat(),
+                    "profile": MemberPublicSerializer(visit.viewer, context={"request": request}).data,
+                }
+                for visit in visits
+            ],
+        })
+
+
 class InterestListCreateView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsMember)
 
     def get(self, request):
+        from apps.core.entitlements import entitlement_denial, get_active_entitlements, usage_for
+
         direction = request.query_params.get('type', 'incoming')
+        if direction not in {'incoming', 'outgoing'}:
+            return bad_request('type must be incoming or outgoing.')
+        if direction == 'incoming':
+            entitlements = get_active_entitlements(request.user)
+            if not entitlements.can_view_received_interests:
+                return Response(entitlement_denial(entitlements, 'can_view_received_interests'), status=403)
         queryset = Interest.objects.select_related(
             'sender', 'receiver', 'sender__profile', 'receiver__profile'
         )
@@ -285,16 +355,18 @@ class InterestListCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        from apps.core.entitlement_service import MembershipEntitlementService
+        from apps.core.entitlements import entitlement_denial, get_active_entitlements
         from apps.core.eligibility import get_eligible_profiles_for
         viewer = request.user
-        allowed, reason = MembershipEntitlementService.can_send_interest(viewer)
+        entitlements = get_active_entitlements(viewer)
+        interest_usage = usage_for(viewer, entitlements)
+        allowed = entitlements.can_send_interest and (
+            entitlements.daily_interest_limit is None
+            or interest_usage['interests_used_today'] < entitlements.daily_interest_limit
+        )
         if not allowed:
-            return ApiResponse(
-                success=False,
-                message=reason,
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            key = 'can_send_interest' if not entitlements.can_send_interest else 'daily_interest_limit'
+            return Response(entitlement_denial(entitlements, key, daily_limit=key == 'daily_interest_limit'), status=403)
 
         receiver_id = request.data.get('receiver_id')
         receiver = get_eligible_profiles_for(viewer).filter(pk=receiver_id).first()
@@ -383,23 +455,23 @@ class MessageHistoryView(APIView):
     def _check_messaging(self, request, partner=None):
         """Enforce messaging entitlement. Returns None if allowed, else Response."""
         from apps.core.entitlement_service import MembershipEntitlementService
+        from apps.core.entitlements import entitlement_denial, get_active_entitlements
         from rest_framework.response import Response
         
         # General check if partner is not specified
         if not partner:
-            plan = MembershipEntitlementService.get_effective_plan(request.user)
-            if not plan or getattr(plan, 'messaging_mode', 'DISABLED') == 'DISABLED':
-                return Response(
-                    data={
-                        "code": "messaging_not_included",
-                        "message": "Messaging is not included in your Free membership."
-                    },
-                    status=status.HTTP_403_FORBIDDEN
-                )
+            entitlements = get_active_entitlements(request.user)
+            if not entitlements.can_chat:
+                return Response(entitlement_denial(entitlements, 'can_chat'), status=status.HTTP_403_FORBIDDEN)
             return None
 
         allowed, reason = MembershipEntitlementService.can_message(request.user, partner)
         if not allowed:
+            if reason == 'messaging_not_included':
+                return Response(
+                    entitlement_denial(get_active_entitlements(request.user), 'can_chat'),
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             code = reason
             message = "Messaging is not available in your current membership plan."
             if code == "messaging_not_included":
@@ -499,6 +571,9 @@ class MemberSupportTicketListView(APIView):
         if not category:
             return bad_request('Choose a valid support category.')
         attachment = values.pop('attachment', None)
+        from apps.core.entitlements import get_active_entitlements
+        if get_active_entitlements(request.user).priority_support:
+            values['priority'] = SupportTicket.Priority.HIGH
         ticket = SupportTicket.objects.create(
             member=request.user,
             created_by_member=request.user,

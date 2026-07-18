@@ -15,11 +15,15 @@ from .views import (
     ProfilePhotoSetPrimaryView,
     ProfilePhotoThumbnailView,
     ProfilePhotoUploadView,
+    UserProfileImageUploadView,
+    UserAvatarView,
 )
 
 app_name = "profiles"
 
 urlpatterns = [
+    path("user-profile-images/", UserProfileImageUploadView.as_view(), name="user-profile-image-upload"),
+    path("users/<uuid:user_id>/avatar/", UserAvatarView.as_view(), name="user-avatar"),
     # Canonical API.  The project mounts this under both /api/ and /api/v1/
     # during the frontend transition, but response URLs use the canonical /api/
     # form so clients have one stable secure image location.

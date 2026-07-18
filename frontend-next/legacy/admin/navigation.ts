@@ -37,7 +37,6 @@ export const adminNavigation: AdminNavItem[] = [
   { path: '/admin/memberships/payments', label: 'Payments', description: 'Track successful, pending and failed payments.', icon: CreditCard, section: 'Operations', permissions: ['payments.view'], roles: leadership, implemented: true },
   { path: '/admin/memberships/refunds', label: 'Refunds', description: 'Review and process eligible refund requests.', icon: RefreshCcw, section: 'Operations', permissions: ['payments.refund'], roles: superAdmin },
   { path: '/admin/support-tickets', label: 'Support tickets', description: 'Triage, assign and resolve support work.', icon: TicketCheck, section: 'Support', permissions: ['tickets.view_all'], roles: leadership, implemented: true },
-  { path: '/admin/assigned-tickets', label: 'Assigned tickets', description: 'Your assigned customer support queue.', icon: ListTodo, section: 'Support', permissions: ['tickets.view_assigned'], roles: staff, implemented: true },
   { path: '/admin/contact-enquiries', label: 'Contact enquiries', description: 'Track and resolve incoming enquiries.', icon: MessageSquareMore, section: 'Support', permissions: ['tickets.view_all'], implemented: true },
   { path: '/admin/complaints', label: 'Complaints', description: 'Review member complaints and escalations.', icon: Megaphone, section: 'Support', permissions: ['complaints.view_all'], roles: leadership },
   { path: '/admin/reported-profiles', label: 'Reported profiles', description: 'Investigate suspicious and reported profiles.', icon: Flag, section: 'Support', permissions: ['profile_reports.manage'], roles: leadership },
@@ -60,7 +59,7 @@ export const adminNavigation: AdminNavItem[] = [
   // Staff-only navigation (under /staff/* portal)
   { path: '/staff/dashboard', label: 'Dashboard', description: 'Your assigned verification work queue.', icon: LayoutDashboard, section: 'Workspace', roles: ['STAFF'], implemented: true },
   { path: '/staff/my-work', label: 'My work', description: 'Your assigned work queue.', icon: ClipboardCheck, section: 'Workspace', roles: ['STAFF'], implemented: true },
-  { path: '/staff/assigned-tickets', label: 'Assigned tickets', description: 'Support tickets assigned to you.', icon: ListTodo, section: 'Support', roles: ['STAFF'], implemented: true },
+  { path: '/staff/my-work', label: 'Assigned verification work', description: 'Your assigned verification and moderation work.', icon: ListTodo, section: 'Support', roles: ['STAFF'], implemented: true },
   // Customer Support-only navigation (under /customer-support/* portal)
   { path: '/customer-support/dashboard', label: 'Dashboard', description: 'Your support ticket queue.', icon: LayoutDashboard, section: 'Workspace', roles: ['CUSTOMER_SUPPORT'], implemented: true },
   { path: '/customer-support/tickets', label: 'Tickets', description: 'Assigned customer support tickets.', icon: ListTodo, section: 'Workspace', roles: ['CUSTOMER_SUPPORT'], implemented: true },

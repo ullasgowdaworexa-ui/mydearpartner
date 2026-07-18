@@ -1,7 +1,7 @@
 export interface Profile {
   id: string; name: string; age: number; height: string; religion: string; caste: string;
   education: string; occupation: string; income: string; location: string; photo: string;
-  verified: boolean; premium: boolean; compatibility: number; about: string;
+  verified: boolean; premium: boolean; compatibility: number; about: string; photoVisibility?: 'visible' | 'pending_approval' | 'unavailable';
   familyType: string; motherTongue: string; maritalStatus: string; hobbies: string[]; partnerPrefs: string;
   chat_public_key?: string;
   access?: any;

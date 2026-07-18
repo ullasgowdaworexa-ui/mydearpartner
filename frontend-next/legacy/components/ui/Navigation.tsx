@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import SmartImage from '@/components/shared/smart-image';
 
@@ -39,6 +39,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items }) => {
 
 // Avatar component
 interface AvatarProps {
+  userId?: string | null;
   src?: string | null;
   name: string;
   size?: 'sm' | 'md' | 'lg';
@@ -46,6 +47,7 @@ interface AvatarProps {
 }
 
 export const Avatar: React.FC<AvatarProps> = ({
+  userId,
   src,
   name,
   size = 'md',
@@ -63,9 +65,10 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   return (
     <div className={`relative shrink-0 select-none ${className}`}>
-      {src ? (
+      {userId || src ? (
         <SmartImage
-          src={src}
+          userId={userId}
+          src={userId ? undefined : src}
           alt={name}
           className={`${sizes[size]} rounded-full object-cover shadow-inner`}
         />

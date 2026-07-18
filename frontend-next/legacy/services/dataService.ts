@@ -2,15 +2,6 @@ import { fetchApi } from './apiClient';
 import { type Profile, type SuccessStory, type Testimonial, type MembershipPlan, type Conversation, type Message, type BlogPost } from '../types/domain';
 
 type UserWire = Record<string, any> & { id: string };
-const demoPortraits = [
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=82',
-  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=900&q=82',
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=900&q=82',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=82',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=900&q=82',
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=900&q=82',
-];
-const portraitFor = (id: string) => demoPortraits[[...id].reduce((total, char) => total + char.charCodeAt(0), 0) % demoPortraits.length];
 const profileFromWire = (user: UserWire): Profile => ({
   id: user.id,
   name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Member',
@@ -22,9 +13,11 @@ const profileFromWire = (user: UserWire): Profile => ({
   occupation: user.occupation || 'Not specified',
   income: user.annual_income || 'Not specified',
   location: user.work_location || 'Not specified',
-  // Development seed photos are intentionally replaced by varied online
-  // portraits so the browse and gallery views do not repeat one image.
-  photo: String(user.photo || '').includes('/seed_') ? portraitFor(user.id) : (user.photo || portraitFor(user.id)),
+  // A missing photo means the current viewer is not allowed to retrieve it.
+  // Preserve that signal so the UI shows the neutral placeholder rather than
+  // requesting a protected thumbnail that would return 403.
+  photo: user.photo || '',
+  photoVisibility: user.photo_visibility === 'pending_approval' ? 'pending_approval' : user.photo ? 'visible' : 'unavailable',
   verified: Boolean(user.is_verified),
   premium: Boolean(user.is_premium),
   compatibility: Number(user.compatibility || 0),
@@ -136,11 +129,4 @@ export const isProfileShortlisted = async (profileId: string): Promise<boolean> 
   } catch {
     return false;
   }
-};
-
-export const verifyPayment = async (paymentData: { payment_id: string; order_id: string; plan_slug: string }): Promise<any> => {
-  return fetchApi<any>('/payments/verify/', {
-    method: 'POST',
-    body: JSON.stringify(paymentData),
-  });
 };

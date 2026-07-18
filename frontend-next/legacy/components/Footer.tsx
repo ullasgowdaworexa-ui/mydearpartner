@@ -1,24 +1,18 @@
-﻿'use client';
+'use client';
 
 import { Link } from '@/lib/router-compat';
 import {
   Award,
-  Facebook,
   Instagram,
-  Linkedin,
   Mail,
   MapPin,
   Phone,
   ShieldCheck,
-  Twitter,
-  Youtube,
-  LayoutDashboard,
   ArrowRight,
 } from 'lucide-react';
 import HeartLogo from './HeartLogo';
 import WorexaLogo from './WorexaLogo';
 
-const adminPortalEnabled = process.env.NEXT_PUBLIC_ENABLE_ADMIN_PORTAL === 'true';
 
 const linkGroups = [
   {
@@ -51,11 +45,7 @@ const linkGroups = [
 ];
 
 const socials = [
-  { icon: Facebook,  label: 'Facebook',  href: '#', color: '#1877F2' },
-  { icon: Twitter,   label: 'Twitter',   href: '#', color: '#1DA1F2' },
-  { icon: Instagram, label: 'Instagram', href: '#', color: '#E1306C' },
-  { icon: Linkedin,  label: 'LinkedIn',  href: '#', color: '#0A66C2' },
-  { icon: Youtube,   label: 'YouTube',   href: '#', color: '#FF0000' },
+  { icon: Instagram, label: 'Instagram', href: 'https://www.instagram.com/my_dearpartnermatrimony?igsh=ZGsxd243c3dzNWM4', color: '#E1306C' },
 ];
 
 const stats = [
@@ -74,17 +64,16 @@ function FooterBrand() {
         </span>
         <span>
           <span className="footer-brand-title">
-            Mati<span style={{ color: '#d9b36c' }}>romony</span>
+            MyDear<span style={{ color: '#d9b36c' }}>Partner</span>
           </span>
           <span className="footer-brand-subtitle">
-            Verified matchmaking
+            Where Meaningful Connections Become Lifelong Commitments
           </span>
         </span>
       </Link>
 
       <p className="footer-brand-desc">
-        A trusted matrimony platform built for serious families, modern professionals,
-        and culturally rooted connections, with verified profiles and smart compatibility matching.
+        Behind every successful marriage is a meaningful connection. At MyDearPartner, we help transform introductions into lasting relationships by creating a trusted environment where genuine people, shared values, and lifelong aspirations come together naturally.
       </p>
 
       {/* Trust pill */}
@@ -190,7 +179,7 @@ function FooterBottom() {
     <div className="footer-bottom-bar">
       <div className="footer-bottom-text">
         <p className="footer-copyright">
-          Â© 2026 My Dear Partner. All rights reserved. India's trusted matrimony platform.
+          © 2026 MyDearPartner. All rights reserved. India's trusted matrimony platform.
         </p>
         <div className="footer-attribution">
           <span>Designed &amp; Developed by</span>
@@ -201,12 +190,6 @@ function FooterBottom() {
       </div>
 
       <div className="footer-bottom-actions">
-        {adminPortalEnabled && (
-          <Link to="/admin/login" className="footer-admin-btn">
-            <LayoutDashboard style={{ width: 14, color: '#d9b36c' }} />
-            Admin
-          </Link>
-        )}
 
         {/* Social icons */}
         {socials.map(({ icon: Icon, label, href, color }) => (

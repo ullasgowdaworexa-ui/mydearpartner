@@ -92,14 +92,33 @@ function normalizeStatus(value: unknown): ProfilePhotoStatus {
  */
 export function normalizeMemberPhoto(value: unknown): MemberPhoto {
   const record = asRecord(value);
-  const id = String(record.id ?? '');
+  let id = String(record.id ?? '');
+
+  // Backend `get_photos` returns {url, is_primary} without an id key.
+  // Also fall back to record.url when image_url is absent (same serializer quirk).
+  const rawImageUrl =
+    stringOrNull(record.image_url) ??
+    stringOrNull(record.url) ??
+    null;
+  const rawThumbnailUrl =
+    stringOrNull(record.thumbnail_url) ??
+    stringOrNull(record.thumbnail) ??
+    null;
+
+  // If id is missing but we have a URL, extract the UUID from the path so
+  // ProfileImage can still build a protectedEndpoint from it.
+  if (!id && rawImageUrl) {
+    const m = rawImageUrl.match(/profile-photos\/([\w-]+)\//);
+    if (m) id = m[1];
+  }
+
   const defaultImageUrl = id ? `/api/profile-photos/${encodeURIComponent(id)}/image/` : null;
   const defaultThumbnailUrl = id ? `/api/profile-photos/${encodeURIComponent(id)}/thumbnail/` : null;
 
   return {
     id,
-    image_url: stringOrNull(record.image_url) ?? defaultImageUrl,
-    thumbnail_url: stringOrNull(record.thumbnail_url) ?? defaultThumbnailUrl,
+    image_url: rawImageUrl ?? defaultImageUrl,
+    thumbnail_url: rawThumbnailUrl ?? rawImageUrl ?? defaultThumbnailUrl,
     is_primary: Boolean(record.is_primary),
     status: normalizeStatus(record.status),
     rejection_reason: stringOrNull(record.rejection_reason),

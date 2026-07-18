@@ -320,6 +320,11 @@ export default function SearchPage() {
                           alt={profile.name}
                           className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500"
                         />
+                        {profile.photoVisibility === 'pending_approval' ? (
+                          <div className="absolute inset-x-3 bottom-3 rounded-lg bg-slate-900/80 px-3 py-2 text-center text-xs font-bold text-white">
+                            Photo pending approval
+                          </div>
+                        ) : null}
                         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-xl shadow text-xs font-black text-rose-500 flex items-center gap-1">
                           <Star className="w-3.5 h-3.5 fill-rose-500 stroke-none" /> {profile.compatibility}%
                         </div>

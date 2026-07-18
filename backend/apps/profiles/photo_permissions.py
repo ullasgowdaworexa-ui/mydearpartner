@@ -26,14 +26,6 @@ def is_active_member(member) -> bool:
     )
 
 
-def is_approved_member(member) -> bool:
-    """A member eligible to view another member's private image bytes."""
-    return bool(
-        is_active_member(member)
-        and getattr(member, "profile_status", None) == "APPROVED"
-    )
-
-
 def _active_administrative_actor(user) -> bool:
     account_type = str(getattr(user, "account_type", ""))
     if account_type == AccountType.SUPER_ADMIN:
@@ -131,11 +123,19 @@ def can_view_profile_photo(user, photo: ProfilePhoto) -> bool:
         return False
     if photo.status != ProfilePhoto.Status.APPROVED:
         return False
-    # Images are intentionally stricter than general profile browsing. A
-    # draft, pending, rejected, blocked, hidden, or deactivated member cannot
-    # fetch another member's approved bytes.
-    if not is_approved_member(user) or not is_approved_member(photo.user):
+    # Full-profile and photo approval are separate moderation workflows. A
+    # signed-in, active member can see an approved primary photo of another
+    # active member. This keeps discovery consistent while blocks and plan
+    # entitlements still protect sensitive and secondary images.
+    if not is_active_member(user) or not is_active_member(photo.user):
         return False
+
+    # Check photo viewing entitlements: Free members can only view primary photos.
+    if not photo.is_primary:
+        from apps.core.entitlements import can_view_all_photos as check_photo_entitlement
+        allowed, _ = check_photo_entitlement(user)
+        if not allowed:
+            return False
 
     return not ProfileBlock.objects.filter(
         Q(blocker_id=user.pk, blocked_id=photo.user_id)
