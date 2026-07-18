@@ -275,26 +275,19 @@ class Member(BaseAccount):
         ARCHIVED = 'ARCHIVED', 'Archived'
         DELETED = 'DELETED', 'Deleted'
 
-    class ProfileStatus(models.TextChoices):
-        DRAFT = 'DRAFT', 'Draft'
-        PENDING = 'PENDING', 'Pending'
-        IN_REVIEW = 'IN_REVIEW', 'In Review'
-        APPROVED = 'APPROVED', 'Approved'
-        REJECTED = 'REJECTED', 'Rejected'
-        RESUBMITTED = 'RESUBMITTED', 'Resubmitted'
-
-    class PhotoStatus(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        APPROVED = 'APPROVED', 'Approved'
-        REJECTED = 'REJECTED', 'Rejected'
-        ARCHIVED = 'ARCHIVED', 'Archived'
-
-    class DocumentStatus(models.TextChoices):
-        NOT_UPLOADED = 'NOT_UPLOADED', 'Not Uploaded'
-        PENDING = 'PENDING', 'Pending'
-        APPROVED = 'APPROVED', 'Approved'
-        REJECTED = 'REJECTED', 'Rejected'
-        EXPIRED = 'EXPIRED', 'Expired'
+    class VerificationStatus(models.TextChoices):
+        """Standardized verification status for all verification types"""
+        NOT_STARTED = 'not_started', 'Not Started'
+        DRAFT = 'draft', 'Draft'
+        PENDING_REVIEW = 'pending_review', 'Pending Review'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+        CHANGES_REQUESTED = 'changes_requested', 'Changes Requested'
+    
+    # Aliases for backwards compatibility
+    ProfileStatus = VerificationStatus
+    PhotoStatus = VerificationStatus
+    DocumentStatus = VerificationStatus
 
     gender = models.CharField(max_length=10, choices=Gender.choices, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
@@ -313,22 +306,35 @@ class Member(BaseAccount):
     )
     profile_status = models.CharField(
         max_length=20,
-        choices=ProfileStatus.choices,
-        default=ProfileStatus.DRAFT,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.NOT_STARTED,
         db_index=True,
     )
     photo_status = models.CharField(
         max_length=20,
-        choices=PhotoStatus.choices,
-        default=PhotoStatus.PENDING,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.NOT_STARTED,
         db_index=True,
     )
     document_status = models.CharField(
         max_length=20,
-        choices=DocumentStatus.choices,
-        default=DocumentStatus.NOT_UPLOADED,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.NOT_STARTED,
         db_index=True,
     )
+    
+    # Rejection/change request reasons
+    profile_rejection_reason = models.TextField(blank=True, default='')
+    photo_rejection_reason = models.TextField(blank=True, default='')
+    document_rejection_reason = models.TextField(blank=True, default='')
+    
+    # Timestamps for tracking
+    profile_submitted_at = models.DateTimeField(null=True, blank=True)
+    profile_reviewed_at = models.DateTimeField(null=True, blank=True)
+    photo_submitted_at = models.DateTimeField(null=True, blank=True)
+    photo_reviewed_at = models.DateTimeField(null=True, blank=True)
+    document_submitted_at = models.DateTimeField(null=True, blank=True)
+    document_reviewed_at = models.DateTimeField(null=True, blank=True)
 
     country = models.ForeignKey('Country', on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
     state = models.ForeignKey('State', on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
@@ -360,21 +366,23 @@ class Member(BaseAccount):
 
     @property
     def are_verification_checks_passed(self):
+        """Check if all verification requirements are met"""
         # 1. Profile approved
-        profile_ok = self.profile_status == 'APPROVED'
+        profile_ok = self.profile_status == self.VerificationStatus.APPROVED
         # 2. Contact (email and mobile) verified
         contact_ok = self.is_email_verified and self.is_mobile_verified
-        # 3. Primary photo approved.  The photo BLOBs live in the dedicated
-        # profiles.ProfilePhoto table, never in this account table.
+        # 3. Primary photo approved
         from apps.profiles.models import ProfilePhoto
-
         primary_photo_ok = ProfilePhoto.objects.filter(
             user_id=self.pk,
             is_primary=True,
             status=ProfilePhoto.Status.APPROVED,
         ).exists()
         # 4. Documents approved
-        documents_ok = self.document_status == 'APPROVED' or self.documents.filter(status='APPROVED').exists()
+        documents_ok = (
+            self.document_status == self.VerificationStatus.APPROVED 
+            or self.documents.filter(status='APPROVED').exists()
+        )
         
         return profile_ok and contact_ok and primary_photo_ok and documents_ok
 

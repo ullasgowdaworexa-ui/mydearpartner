@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import {
@@ -140,6 +140,13 @@ export default function AdminDashboardPage() {
   }, [dateFrom, dateTo, range, updateUser]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live-reload when a WebSocket verification event fires
+  useEffect(() => {
+    const handler = () => load(true);
+    window.addEventListener('admin-update', handler);
+    return () => window.removeEventListener('admin-update', handler);
+  }, [load]);
 
   const role = dashboard?.role || initialRole;
   const copy = roleCopy[role];

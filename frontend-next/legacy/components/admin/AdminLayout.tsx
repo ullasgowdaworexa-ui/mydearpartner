@@ -12,6 +12,9 @@ import {
   adminNavigation, adminNavSections, canAccessAdminItem, findAdminNavItem, normalizeAdminPath,
 } from '../../admin/navigation';
 import { useAuth, type AdminRole } from '../../contexts/AuthContext';
+import { publicEnv } from '@/config/env';
+import { getFreshAccessToken } from '../../services/apiClient';
+import { AdminToast } from '../../components/admin/AdminUI';
 
 const roleLabels: Record<AdminRole, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -20,8 +23,86 @@ const roleLabels: Record<AdminRole, string> = {
   CUSTOMER_SUPPORT: 'Customer Support',
 };
 
+function websocketOrigin(baseUrl: string) {
+  return baseUrl.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:').replace(/\/$/, '');
+}
+
 export default function AdminLayout({ children }: { children?: ReactNode } = {}) {
   const { user, logout, hasAdminPermission } = useAuth();
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const userType = user.account_type;
+    if (userType !== 'SUPER_ADMIN' && userType !== 'ADMIN' && userType !== 'STAFF') return;
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+
+    const connect = async () => {
+      try {
+        const accessToken = await getFreshAccessToken();
+        if (disposed) return;
+
+        const url = `${websocketOrigin(publicEnv.wsBaseUrl)}/ws/verification/`;
+        socket = new WebSocket(url, ['access_token', accessToken]);
+
+        socket.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            const { type, data } = payload;
+            
+            let message = '';
+            let tone: 'success' | 'error' = 'success';
+            
+            if (type === 'verification.submitted') {
+              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
+              message = `New: ${data.member_name} submitted ${friendlyType} for review.`;
+            } else if (type === 'verification.approved') {
+              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
+              message = `${data.member_name}'s ${friendlyType} was approved.`;
+            } else if (type === 'verification.rejected') {
+              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
+              message = `${data.member_name}'s ${friendlyType} was rejected.`;
+              tone = 'error';
+            } else if (type === 'verification.changes_requested') {
+              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
+              message = `Changes requested for ${data.member_name}'s ${friendlyType}.`;
+              tone = 'error';
+            }
+
+            if (message && !disposed) {
+              setToast({ message, tone });
+              window.dispatchEvent(new CustomEvent('admin-update', { detail: payload }));
+            }
+          } catch (err) {
+            console.error('Error handling admin WebSocket message:', err);
+          }
+        };
+
+        socket.onclose = () => {
+          if (!disposed) {
+            // Auto reconnect after 5 seconds
+            setTimeout(connect, 5000);
+          }
+        };
+      } catch (err) {
+        console.error('Error connecting admin WebSocket:', err);
+        if (!disposed) {
+          setTimeout(connect, 5000);
+        }
+      }
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (socket && socket.readyState < WebSocket.CLOSING) {
+        socket.close();
+      }
+    };
+  }, [user]);
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -242,6 +323,7 @@ export default function AdminLayout({ children }: { children?: ReactNode } = {})
         </header>
         <main className="admin-main-content">{children || <Outlet />}</main>
       </div>
+      {toast && <AdminToast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />}
     </div>
   );
 }

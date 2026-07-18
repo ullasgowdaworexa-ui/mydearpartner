@@ -2,85 +2,78 @@
 Centralized Account Verification Service
 
 Single source of truth for all account verification logic.
-- Profile verification status
-- Photo verification status
-- Document verification status
-- Complete account verification
-- Verification state machine
+NO AUTO-APPROVAL. All verification items requiring admin approval must go through admin queue.
 """
 
-from typing import NamedTuple, List
+from typing import NamedTuple, Optional
 from django.db import transaction
+from django.utils import timezone
 from .models import Member
-from apps.core.models import ProfileVerificationHistory
 
 
-class VerificationStatus(NamedTuple):
-    """Centralized verification status structure"""
-    account_status: str  # pending | complete | verified | rejected | suspended
-    is_verified: bool
-    contact: dict
-    profile: dict
-    primary_photo: dict
-    documents: dict
-    next_action: str
-
-
-class DocumentRequirement(NamedTuple):
-    """Document requirement specification"""
-    document_type: str
+class VerificationItemStatus(NamedTuple):
+    """Status of a single verification item"""
+    status: str
     name: str
-    is_required: bool
+    submitted_at: Optional[str]
+    reviewed_at: Optional[str]
+    reason: Optional[str]
+
+
+class VerificationSummary(NamedTuple):
+    """Complete verification status structure"""
+    overall_status: str
+    is_verified: bool
+    completed_steps: int
+    total_steps: int
+    email_verified: bool
+    mobile_verified: bool
+    profile_information_status: str
+    profile_photo_status: str
+    government_id_status: str
+    profile: VerificationItemStatus
+    photo: VerificationItemStatus
+    document: VerificationItemStatus
+    next_action: str
+    membership_pending: bool
 
 
 class AccountVerificationService:
-    """
-    Centralized service for all account verification logic.
+    """Centralized service for all account verification logic"""
     
-    Statuses:
-    - incomplete: Missing profile, photo, or documents
-    - pending: Awaiting admin review
-    - in_review: Admin is reviewing
-    - correction_required: Admin requested changes
-    - verified: All requirements met
-    - rejected: Admin rejected account
-    - suspended: Account suspended
-    
-    Requirements (ALL must be met for verification):
-    1. Profile is APPROVED
-    2. Primary photo is APPROVED
-    3. At least one required identity document is APPROVED
-    4. Account is ACTIVE (not suspended/deleted)
-    """
-
-    # Document types that require approval
-    REQUIRED_DOCUMENT_TYPES = ['Government ID']
-    
-    # Status machine
-    STATUS_COMPLETE = 'complete'
-    STATUS_INCOMPLETE = 'incomplete'
-    STATUS_PENDING = 'pending'
-    STATUS_IN_REVIEW = 'in_review'
-    STATUS_CORRECTION_REQUIRED = 'correction_required'
-    STATUS_VERIFIED = 'verified'
+    # Standardized status values
+    STATUS_NOT_STARTED = 'not_started'
+    STATUS_DRAFT = 'draft'
+    STATUS_PENDING_REVIEW = 'pending_review'
+    STATUS_APPROVED = 'approved'
     STATUS_REJECTED = 'rejected'
-    STATUS_SUSPENDED = 'suspended'
+    STATUS_CHANGES_REQUESTED = 'changes_requested'
+    
+    # Overall account status
+    OVERALL_INCOMPLETE = 'incomplete'
+    OVERALL_PENDING = 'pending'
+    OVERALL_VERIFIED = 'verified'
+    OVERALL_REJECTED = 'rejected'
+    OVERALL_CHANGES_REQUESTED = 'changes_requested'
+    @staticmethod
+    def get_profile_info_status(member: Member) -> VerificationItemStatus:
+        """Get profile information verification status"""
+        status = member.profile_status or AccountVerificationService.STATUS_NOT_STARTED
+        
+        return VerificationItemStatus(
+            status=status,
+            name='Profile Information',
+            submitted_at=member.profile_submitted_at.isoformat() if member.profile_submitted_at else None,
+            reviewed_at=member.profile_reviewed_at.isoformat() if member.profile_reviewed_at else None,
+            reason=member.profile_rejection_reason if status in [
+                AccountVerificationService.STATUS_REJECTED,
+                AccountVerificationService.STATUS_CHANGES_REQUESTED
+            ] else None
+        )
 
     @staticmethod
-    def get_profile_status(member: Member) -> dict:
-        """Get profile verification status"""
-        if member.profile_status == 'APPROVED':
-            return {'status': 'approved', 'name': 'Profile Approved', 'approved_at': member.updated_at}
-        elif member.profile_status == 'PENDING':
-            return {'status': 'pending', 'name': 'Profile Under Review', 'submitted_at': member.updated_at}
-        elif member.profile_status == 'REJECTED':
-            return {'status': 'rejected', 'name': 'Profile Rejected', 'reason': getattr(member, 'rejection_reason', 'No reason provided')}
-        else:
-            return {'status': 'incomplete', 'name': 'Profile Not Submitted', 'submitted_at': None}
-
-    @staticmethod
-    def get_primary_photo_status(member: Member) -> dict:
-        """Get primary photo verification status"""
+    def get_photo_status(member: Member) -> VerificationItemStatus:
+        """Get profile photo verification status"""
         from apps.profiles.models import ProfilePhoto
 
         primary_photo = (
@@ -90,281 +83,315 @@ class AccountVerificationService:
         )
         
         if not primary_photo:
-            return {'status': 'incomplete', 'name': 'No Primary Photo', 'count': 0}
+            return VerificationItemStatus(
+                status=AccountVerificationService.STATUS_NOT_STARTED,
+                name='Profile Photo',
+                submitted_at=None,
+                reviewed_at=None,
+                reason=None
+            )
         
-        if primary_photo.status == 'APPROVED':
-            return {
-                'status': 'approved',
-                'name': 'Primary Photo Approved',
-                'photo_id': str(primary_photo.id),
-                'approved_at': primary_photo.verified_at
-            }
-        elif primary_photo.status == 'PENDING':
-            return {'status': 'pending', 'name': 'Primary Photo Under Review', 'photo_id': str(primary_photo.id)}
-        elif primary_photo.status == 'REJECTED':
-            return {
-                'status': 'rejected',
-                'name': 'Primary Photo Rejected',
-                'photo_id': str(primary_photo.id),
-                'reason': getattr(primary_photo, 'rejection_reason', 'No reason provided')
-            }
-        else:
-            return {'status': 'incomplete', 'name': 'Primary Photo Status Unknown'}
-
-    @staticmethod
-    def get_required_document_status(member: Member) -> dict:
-        """Get required document verification status"""
-        # The back-office member action stores its approval on the member
-        # status. Treat that explicit KYC approval as canonical even when a
-        # legacy uploaded document used a more specific type label than
-        # "Government ID" (for example Aadhaar or Passport).
-        if member.document_status == Member.DocumentStatus.APPROVED:
-            return {
-                'status': 'approved',
-                'name': 'KYC Document Verified',
-                'approved': 1,
-                'pending': 0,
-                'rejected': 0,
-                'approved_at': member.updated_at,
-            }
-        required_docs = member.documents.filter(
-            document_type__in=AccountVerificationService.REQUIRED_DOCUMENT_TYPES
+        # Map ProfilePhoto status to standardized status
+        photo_status_map = {
+            ProfilePhoto.Status.PENDING: AccountVerificationService.STATUS_PENDING_REVIEW,
+            ProfilePhoto.Status.APPROVED: AccountVerificationService.STATUS_APPROVED,
+            ProfilePhoto.Status.REJECTED: AccountVerificationService.STATUS_REJECTED,
+        }
+        
+        status = photo_status_map.get(
+            primary_photo.status, 
+            AccountVerificationService.STATUS_NOT_STARTED
         )
         
-        approved_count = required_docs.filter(status='APPROVED').count()
-        pending_count = required_docs.filter(status='PENDING').count()
-        rejected_count = required_docs.filter(status='REJECTED').count()
+        return VerificationItemStatus(
+            status=status,
+            name='Profile Photo',
+            submitted_at=primary_photo.created_at.isoformat() if primary_photo.created_at else None,
+            reviewed_at=primary_photo.verified_at.isoformat() if primary_photo.verified_at else None,
+            reason=getattr(primary_photo, 'rejection_reason', None) if status == AccountVerificationService.STATUS_REJECTED else None
+        )
+    @staticmethod
+    def get_document_status(member: Member) -> VerificationItemStatus:
+        """Get government ID verification status"""
+        status = member.document_status or AccountVerificationService.STATUS_NOT_STARTED
         
-        total_required = len(AccountVerificationService.REQUIRED_DOCUMENT_TYPES)
-        
-        if approved_count > 0:
-            approved_doc = required_docs.filter(status='APPROVED').first()
-            return {
-                'status': 'approved',
-                'name': f'{approved_doc.document_type} Verified',
-                'approved': approved_count,
-                'pending': pending_count,
-                'rejected': rejected_count,
-                'approved_at': approved_doc.reviewed_at
-            }
-        elif pending_count > 0:
-            return {
-                'status': 'pending',
-                'name': 'Document Under Review',
-                'approved': approved_count,
-                'pending': pending_count,
-                'rejected': rejected_count
-            }
-        elif rejected_count > 0:
-            rejected_doc = required_docs.filter(status='REJECTED').first()
-            return {
-                'status': 'rejected',
-                'name': f'{rejected_doc.document_type} Rejected',
-                'approved': approved_count,
-                'pending': pending_count,
-                'rejected': rejected_count,
-                'reason': getattr(rejected_doc, 'rejection_reason', 'No reason provided')
-            }
-        else:
-            return {
-                'status': 'incomplete',
-                'name': f'{total_required} Document(s) Required',
-                'approved': 0,
-                'pending': 0,
-                'rejected': 0
-            }
+        return VerificationItemStatus(
+            status=status,
+            name='Government ID',
+            submitted_at=member.document_submitted_at.isoformat() if member.document_submitted_at else None,
+            reviewed_at=member.document_reviewed_at.isoformat() if member.document_reviewed_at else None,
+            reason=member.document_rejection_reason if status in [
+                AccountVerificationService.STATUS_REJECTED,
+                AccountVerificationService.STATUS_CHANGES_REQUESTED
+            ] else None
+        )
 
     @staticmethod
-    def get_contact_status(member: Member) -> dict:
-        """Email and mobile must both be verified before membership checkout."""
-        if member.is_email_verified and member.is_mobile_verified:
-            return {'status': 'approved', 'name': 'Email and mobile verified'}
-        missing = []
-        if not member.is_email_verified:
-            missing.append('email')
-        if not member.is_mobile_verified:
-            missing.append('mobile number')
-        return {
-            'status': 'incomplete',
-            'name': 'Contact verification required',
-            'reason': f"Verify your {' and '.join(missing)} to purchase a membership.",
-        }
+    def get_verification_summary(member: Member, check_membership_pending: bool = True) -> VerificationSummary:
+        """Get complete verification status summary - SINGLE SOURCE OF TRUTH"""
+        # Get individual item statuses
+        profile_status = AccountVerificationService.get_profile_info_status(member)
+        photo_status = AccountVerificationService.get_photo_status(member)
+        document_status = AccountVerificationService.get_document_status(member)
 
-    @staticmethod
-    def get_verification_summary(member: Member) -> VerificationStatus:
-        """
-        Get complete verification status summary.
-        This is the centralized method used by all APIs and frontend.
-        """
-        profile_status = AccountVerificationService.get_profile_status(member)
-        photo_status = AccountVerificationService.get_primary_photo_status(member)
-        document_status = AccountVerificationService.get_required_document_status(member)
-        contact_status = AccountVerificationService.get_contact_status(member)
+        # Email and mobile verification (OTP - no admin approval needed)
+        email_verified = member.is_email_verified
+        mobile_verified = member.is_mobile_verified
 
+        # Count completed steps
+        completed_steps = 0
+        if email_verified:
+            completed_steps += 1
+        if mobile_verified:
+            completed_steps += 1
+        if profile_status.status == AccountVerificationService.STATUS_APPROVED:
+            completed_steps += 1
+        if photo_status.status == AccountVerificationService.STATUS_APPROVED:
+            completed_steps += 1
+        if document_status.status == AccountVerificationService.STATUS_APPROVED:
+            completed_steps += 1
+        
+        total_steps = 5
         # Determine overall status
         is_verified = AccountVerificationService.is_account_verified(member)
         
-        if member.account_status == 'SUSPENDED':
-            account_status = AccountVerificationService.STATUS_SUSPENDED
-        elif is_verified:
-            account_status = AccountVerificationService.STATUS_VERIFIED
-        elif profile_status['status'] == 'rejected' or photo_status['status'] == 'rejected' or document_status['status'] == 'rejected':
-            account_status = AccountVerificationService.STATUS_REJECTED
-        elif profile_status['status'] == 'pending' or photo_status['status'] == 'pending' or document_status['status'] == 'pending':
-            account_status = AccountVerificationService.STATUS_IN_REVIEW
-        elif (
-            profile_status['status'] == 'incomplete'
-            or photo_status['status'] == 'incomplete'
-            or document_status['status'] == 'incomplete'
-            or contact_status['status'] != 'approved'
-        ):
-            account_status = AccountVerificationService.STATUS_INCOMPLETE
+        # Check if any item is rejected
+        any_rejected = any([
+            profile_status.status == AccountVerificationService.STATUS_REJECTED,
+            photo_status.status == AccountVerificationService.STATUS_REJECTED,
+            document_status.status == AccountVerificationService.STATUS_REJECTED,
+        ])
+        
+        # Check if any item has changes requested
+        any_changes_requested = any([
+            profile_status.status == AccountVerificationService.STATUS_CHANGES_REQUESTED,
+            photo_status.status == AccountVerificationService.STATUS_CHANGES_REQUESTED,
+            document_status.status == AccountVerificationService.STATUS_CHANGES_REQUESTED,
+        ])
+        
+        # Check if all manual items are pending review
+        all_pending = all([
+            profile_status.status == AccountVerificationService.STATUS_PENDING_REVIEW,
+            photo_status.status == AccountVerificationService.STATUS_PENDING_REVIEW,
+            document_status.status == AccountVerificationService.STATUS_PENDING_REVIEW,
+        ]) and email_verified and mobile_verified
+        
+        # Determine overall status
+        if is_verified:
+            overall_status = AccountVerificationService.OVERALL_VERIFIED
+        elif any_rejected:
+            overall_status = AccountVerificationService.OVERALL_REJECTED
+        elif any_changes_requested:
+            overall_status = AccountVerificationService.OVERALL_CHANGES_REQUESTED
+        elif all_pending:
+            overall_status = AccountVerificationService.OVERALL_PENDING
         else:
-            account_status = AccountVerificationService.STATUS_PENDING
-
+            overall_status = AccountVerificationService.OVERALL_INCOMPLETE
         # Determine next action
-        if account_status == AccountVerificationService.STATUS_VERIFIED:
-            next_action = 'Account is fully verified. You can access all features.'
-        elif contact_status['status'] != 'approved':
-            next_action = contact_status['reason']
-        elif profile_status['status'] != 'approved':
-            next_action = 'Complete and submit your profile for approval'
-        elif photo_status['status'] != 'approved':
-            next_action = 'Upload and get approval for your profile photo'
-        elif document_status['status'] != 'approved':
-            next_action = 'Upload and get approval for your identity document'
-        elif account_status == AccountVerificationService.STATUS_SUSPENDED:
-            next_action = 'Your account has been suspended. Contact support.'
-        else:
-            next_action = 'Waiting for final account verification'
-
-        return VerificationStatus(
-            account_status=account_status,
-            is_verified=is_verified,
-            contact=contact_status,
-            profile=profile_status,
-            primary_photo=photo_status,
-            documents=document_status,
-            next_action=next_action
+        next_action = AccountVerificationService._get_next_action(
+            email_verified, mobile_verified, profile_status, photo_status, document_status, overall_status
         )
 
+        # Check for pending membership
+        membership_pending = False
+        if check_membership_pending:
+            from apps.core.models import MemberMembership
+            membership_pending = MemberMembership.objects.filter(
+                member=member,
+                status='PENDING_VERIFICATION'
+            ).exists()
+
+        return VerificationSummary(
+            overall_status=overall_status,
+            is_verified=is_verified,
+            completed_steps=completed_steps,
+            total_steps=total_steps,
+            email_verified=email_verified,
+            mobile_verified=mobile_verified,
+            profile_information_status=profile_status.status,
+            profile_photo_status=photo_status.status,
+            government_id_status=document_status.status,
+            profile=profile_status,
+            photo=photo_status,
+            document=document_status,
+            next_action=next_action,
+            membership_pending=membership_pending
+        )
+    @staticmethod
+    def _get_next_action(email_verified, mobile_verified, profile_status, photo_status, document_status, overall_status):
+        """Determine the next action message for the user"""
+        if overall_status == AccountVerificationService.OVERALL_VERIFIED:
+            return 'Your account is fully verified! You can access all features.'
+        
+        if not email_verified:
+            return 'Verify your email address to continue.'
+        
+        if not mobile_verified:
+            return 'Verify your mobile number to continue.'
+        
+        # Check for rejected items
+        if profile_status.status == AccountVerificationService.STATUS_REJECTED:
+            return f'Your profile was rejected. Reason: {profile_status.reason}. Please update and resubmit.'
+        if photo_status.status == AccountVerificationService.STATUS_REJECTED:
+            return f'Your photo was rejected. Reason: {photo_status.reason}. Please upload a new photo.'
+        if document_status.status == AccountVerificationService.STATUS_REJECTED:
+            return f'Your document was rejected. Reason: {document_status.reason}. Please upload a valid government ID.'
+        
+        # Check for changes requested
+        if profile_status.status == AccountVerificationService.STATUS_CHANGES_REQUESTED:
+            return f'Changes requested for your profile. {profile_status.reason}'
+        if photo_status.status == AccountVerificationService.STATUS_CHANGES_REQUESTED:
+            return f'Changes requested for your photo. {photo_status.reason}'
+        if document_status.status == AccountVerificationService.STATUS_CHANGES_REQUESTED:
+            return f'Changes requested for your document. {document_status.reason}'
+        
+        # Check what needs to be submitted
+        if profile_status.status in [AccountVerificationService.STATUS_NOT_STARTED, AccountVerificationService.STATUS_DRAFT]:
+            return 'Complete and submit your profile information for review.'
+        if photo_status.status == AccountVerificationService.STATUS_NOT_STARTED:
+            return 'Upload your profile photo for verification.'
+        if document_status.status == AccountVerificationService.STATUS_NOT_STARTED:
+            return 'Upload your government ID for verification.'
+        
+        # All submitted, waiting for review
+        return 'Your documents are under review. We will notify you once the review is complete.'
     @staticmethod
     def is_account_verified(member: Member) -> bool:
-        """
-        Check if account meets all verification requirements.
-        
-        REQUIREMENTS (ALL must be true):
-        1. Profile is APPROVED
-        2. Email and mobile are verified
-        3. Primary photo is APPROVED
-        4. At least one required document is APPROVED
-        5. Account status is ACTIVE
-        """
-        # Check profile approval
-        if member.profile_status != 'APPROVED':
+        """Check if account meets ALL verification requirements"""
+        # Check email and mobile verification
+        if not (member.is_email_verified and member.is_mobile_verified):
             return False
 
-        if not member.is_email_verified or not member.is_mobile_verified:
+        # Check profile approval
+        if member.profile_status != AccountVerificationService.STATUS_APPROVED:
             return False
 
         # Check primary photo approval
         from apps.profiles.models import ProfilePhoto
-
-        primary_photo = ProfilePhoto.objects.filter(
+        primary_photo_approved = ProfilePhoto.objects.filter(
             user=member,
             is_primary=True,
             status=ProfilePhoto.Status.APPROVED,
         ).exists()
-        if not primary_photo:
+        if not primary_photo_approved:
             return False
 
-        # Check required documents approval
-        required_doc_approved = (
-            member.document_status == Member.DocumentStatus.APPROVED
-            or member.documents.filter(status='APPROVED').exists()
-        )
-        if not required_doc_approved:
+        # Check document approval
+        if member.document_status != AccountVerificationService.STATUS_APPROVED:
             return False
 
         # Check account is active
-        if member.account_status != 'ACTIVE' or member.deleted_at is not None:
+        if member.account_status != Member.AccountStatus.ACTIVE or member.deleted_at is not None:
             return False
 
         return True
-
     @staticmethod
     @transaction.atomic
-    def verify_account(member: Member, reviewed_by, reason: str = None) -> bool:
-        """
-        Mark account as verified after all requirements are met.
+    def submit_profile_for_review(member: Member) -> bool:
+        """Submit profile information for admin review - NO AUTO-APPROVAL"""
+        if member.profile_status == AccountVerificationService.STATUS_APPROVED:
+            return True
         
-        Args:
-            member: Member to verify
-            reviewed_by: User performing verification (Admin or Super Admin)
-            reason: Optional reason for verification
-            
-        Returns:
-            bool: True if verification successful, False otherwise
-        """
-        # Check if all requirements are met
-        if not AccountVerificationService.is_account_verified(member):
-            return False
-
-        # Update member verification flag (if you have one)
-        member.account_status = 'ACTIVE'
-        member.save(update_fields=['account_status', 'updated_at'])
-
-        # Record in audit/history
-        ProfileVerificationHistory.objects.create(
+        member.profile_status = AccountVerificationService.STATUS_PENDING_REVIEW
+        member.profile_submitted_at = timezone.now()
+        member.profile_rejection_reason = ''
+        member.save(update_fields=['profile_status', 'profile_submitted_at', 'profile_rejection_reason', 'updated_at'])
+        
+        # Create verification request for admin queue
+        from apps.core.models import ProfileVerificationRequest
+        ProfileVerificationRequest.objects.get_or_create(
             member=member,
-            old_status='IN_REVIEW',
-            new_status='VERIFIED',
-            changed_by_admin=reviewed_by if hasattr(reviewed_by, 'admin') else None,
-            changed_by_super_admin=reviewed_by if hasattr(reviewed_by, 'super_admin') else None,
-            reason=reason or 'Account verification completed'
+            verification_type=ProfileVerificationRequest.VerificationType.FULL_PROFILE,
+            status=ProfileVerificationRequest.Status.PENDING_REVIEW,
+            defaults={'submitted_at': timezone.now()}
         )
-
+        
         return True
 
     @staticmethod
     @transaction.atomic
-    def revoke_verification(member: Member, reason: str, reviewed_by) -> bool:
-        """
-        Revoke account verification status.
+    def approve_profile(member: Member, reviewed_by, reason: str = '') -> bool:
+        """Admin approves profile information"""
+        member.profile_status = AccountVerificationService.STATUS_APPROVED
+        member.profile_reviewed_at = timezone.now()
+        member.profile_rejection_reason = ''
+        member.save(update_fields=['profile_status', 'profile_reviewed_at', 'profile_rejection_reason', 'updated_at'])
         
-        Args:
-            member: Member to revoke verification from
-            reason: Required reason for revocation
-            reviewed_by: User performing revocation
+        # Update verification request
+        from apps.core.models import ProfileVerificationRequest, ProfileVerificationHistory
+        vr = ProfileVerificationRequest.objects.filter(
+            member=member,
+            verification_type=ProfileVerificationRequest.VerificationType.FULL_PROFILE
+        ).first()
+        
+        if vr:
+            old_status = vr.status
+            vr.status = ProfileVerificationRequest.Status.APPROVED
+            vr.approved_at = timezone.now()
+            vr.reviewed_at = timezone.now()
+            AccountVerificationService._set_reviewer(vr, reviewed_by)
+            vr.save()
             
-        Returns:
-            bool: True if revocation successful
-        """
+            # Create history entry
+            ProfileVerificationHistory.objects.create(
+                verification_request=vr,
+                old_status=old_status,
+                new_status=vr.status,
+                changed_by_admin=getattr(vr, 'reviewed_by_admin', None),
+                changed_by_super_admin=getattr(vr, 'reviewed_by_super_admin', None),
+                changed_by_staff=getattr(vr, 'reviewed_by_staff', None),
+                reason=reason or 'Profile approved'
+            )
+        
+        return True
+    @staticmethod
+    @transaction.atomic
+    def reject_profile(member: Member, reviewed_by, reason: str) -> bool:
+        """Admin rejects profile information"""
         if not reason:
             return False
-
-        member.account_status = 'ACTIVE'
-        member.profile_status = 'PENDING'
-        member.save(update_fields=['account_status', 'profile_status', 'updated_at'])
-
-        ProfileVerificationHistory.objects.create(
+        
+        member.profile_status = AccountVerificationService.STATUS_REJECTED
+        member.profile_reviewed_at = timezone.now()
+        member.profile_rejection_reason = reason
+        member.save(update_fields=['profile_status', 'profile_reviewed_at', 'profile_rejection_reason', 'updated_at'])
+        
+        # Update verification request
+        from apps.core.models import ProfileVerificationRequest, ProfileVerificationHistory
+        vr = ProfileVerificationRequest.objects.filter(
             member=member,
-            old_status='VERIFIED',
-            new_status='PENDING',
-            changed_by_admin=reviewed_by if hasattr(reviewed_by, 'admin') else None,
-            changed_by_super_admin=reviewed_by if hasattr(reviewed_by, 'super_admin') else None,
-            reason=reason
-        )
-
+            verification_type=ProfileVerificationRequest.VerificationType.FULL_PROFILE
+        ).first()
+        
+        if vr:
+            old_status = vr.status
+            vr.status = ProfileVerificationRequest.Status.REJECTED
+            vr.rejected_at = timezone.now()
+            vr.reviewed_at = timezone.now()
+            vr.rejection_reason = reason
+            AccountVerificationService._set_reviewer(vr, reviewed_by)
+            vr.save()
+            
+            # Create history entry
+            ProfileVerificationHistory.objects.create(
+                verification_request=vr,
+                old_status=old_status,
+                new_status=vr.status,
+                changed_by_admin=getattr(vr, 'reviewed_by_admin', None),
+                changed_by_super_admin=getattr(vr, 'reviewed_by_super_admin', None),
+                changed_by_staff=getattr(vr, 'reviewed_by_staff', None),
+                reason=reason
+            )
+        
         return True
 
     @staticmethod
-    def get_verification_requirements() -> List[DocumentRequirement]:
-        """Get list of required documents for verification"""
-        return [
-            DocumentRequirement(
-                document_type='Government ID',
-                name='Government-Issued ID (Aadhaar, Passport, etc.)',
-                is_required=True
-            )
-        ]
+    def _set_reviewer(vr, reviewed_by):
+        """Set the appropriate reviewer field based on reviewer type"""
+        from apps.accounts.models import Admin, SuperAdmin, Staff
+        if isinstance(reviewed_by, Admin):
+            vr.reviewed_by_admin = reviewed_by
+        elif isinstance(reviewed_by, SuperAdmin):
+            vr.reviewed_by_super_admin = reviewed_by
+        elif isinstance(reviewed_by, Staff):
+            vr.reviewed_by_staff = reviewed_by

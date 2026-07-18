@@ -832,13 +832,12 @@ class ProfileVerificationRequest(models.Model):
         EMPLOYMENT = 'EMPLOYMENT', 'Employment'
 
     class Status(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        ASSIGNED = 'ASSIGNED', 'Assigned'
-        IN_REVIEW = 'IN_REVIEW', 'In review'
-        APPROVED = 'APPROVED', 'Approved'
-        REJECTED = 'REJECTED', 'Rejected'
-        RESUBMITTED = 'RESUBMITTED', 'Resubmitted'
-        ESCALATED = 'ESCALATED', 'Escalated'
+        """Standardized status for verification requests"""
+        PENDING_REVIEW = 'pending_review', 'Pending Review'
+        IN_REVIEW = 'in_review', 'In Review'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+        CHANGES_REQUESTED = 'changes_requested', 'Changes Requested'
 
     class Priority(models.TextChoices):
         LOW = 'LOW', 'Low'
@@ -853,7 +852,12 @@ class ProfileVerificationRequest(models.Model):
         related_name='verification_requests',
     )
     verification_type = models.CharField(max_length=30, choices=VerificationType.choices)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    status = models.CharField(
+        max_length=20, 
+        choices=Status.choices, 
+        default=Status.PENDING_REVIEW, 
+        db_index=True
+    )
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL)
     submitted_at = models.DateTimeField(default=timezone.now)
     reviewed_at = models.DateTimeField(null=True, blank=True)
@@ -861,6 +865,30 @@ class ProfileVerificationRequest(models.Model):
     rejected_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(blank=True)
     escalation_reason = models.TextField(blank=True)
+    
+    # Track who reviewed (for audit trail)
+    reviewed_by_admin = models.ForeignKey(
+        'accounts.Admin',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_verifications',
+    )
+    reviewed_by_super_admin = models.ForeignKey(
+        'accounts.SuperAdmin',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_verifications',
+    )
+    reviewed_by_staff = models.ForeignKey(
+        'accounts.Staff',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_verifications',
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

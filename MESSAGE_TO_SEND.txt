@@ -1,0 +1,41 @@
+Hi! I've pushed all the latest code to GitHub. Here's what you need to do:
+
+1️⃣ PULL THE LATEST CODE:
+   git pull
+
+2️⃣ RUN THE SETUP SCRIPT (IMPORTANT!):
+   
+   Windows:
+   cd backend
+   .\setup-database.ps1
+   
+   Mac/Linux:
+   cd backend
+   chmod +x setup-database.sh
+   ./setup-database.sh
+
+3️⃣ START THE SERVERS:
+   
+   Terminal 1 (Backend):
+   cd backend
+   python manage.py runserver
+   
+   Terminal 2 (Frontend):
+   cd frontend-next
+   npm run dev
+
+4️⃣ CHECK IT WORKS:
+   Visit: http://localhost:3000/membership
+   You should see Free, Gold, Platinum, and Elite plans
+
+📚 If you need help, check these files in the repo:
+   - INSTRUCTIONS_FOR_TEAM.md (quick start)
+   - TEAM_SETUP_GUIDE.md (detailed guide)
+   - TROUBLESHOOTING_FREE_PLAN.md (if problems)
+
+The setup script will:
+✅ Run database migrations
+✅ Create the Free plan (and other plans)
+✅ Verify everything is working
+
+Let me know if you have any issues!

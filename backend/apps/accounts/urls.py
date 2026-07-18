@@ -4,7 +4,7 @@ The legacy ``/api/v1/auth/`` mount also points here during the frontend
 transition, but it can authenticate members only.
 """
 
-from django.urls import path
+from django.urls import path, include
 
 from .views import (
     MemberChangePasswordView,
@@ -21,6 +21,19 @@ from .views import (
     MemberRegisterView,
     MemberResetPasswordView,
     MemberVerificationStatusView,
+)
+from .verification_views import (
+    MemberEmailOtpSendView,
+    MemberEmailOtpVerifyView,
+    MemberMobileOtpSendView,
+    MemberMobileOtpVerifyView,
+    MemberPhotoSubmitView,
+    MemberDocumentSubmitView,
+    AdminVerificationListView,
+    AdminVerificationDetailView,
+    AdminVerificationApproveView,
+    AdminVerificationRejectView,
+    AdminVerificationRequestChangesView,
 )
 from apps.profiles.views import (
     ProfilePhotoDeleteView as MemberPhotoDeleteView,
@@ -59,6 +72,20 @@ urlpatterns = [
     path('membership/summary/', MembershipSummaryView.as_view(), name='membership_summary'),
     path('membership/deactivate/', MembershipDeactivateView.as_view(), name='membership_deactivate'),
     
-    # Verification endpoints
+    # Verification endpoints - Member
     path('verification/status/', MemberVerificationStatusView.as_view(), name='verification_status'),
+    path('verification/email/send-otp/', MemberEmailOtpSendView.as_view(), name='verification_email_send_otp'),
+    path('verification/email/verify-otp/', MemberEmailOtpVerifyView.as_view(), name='verification_email_verify_otp'),
+    path('verification/mobile/send-otp/', MemberMobileOtpSendView.as_view(), name='verification_mobile_send_otp'),
+    path('verification/mobile/verify-otp/', MemberMobileOtpVerifyView.as_view(), name='verification_mobile_verify_otp'),
+    path('verification/profile/', MemberProfileSubmitView.as_view(), name='verification_profile_submit'),
+    path('verification/photo/', MemberPhotoSubmitView.as_view(), name='verification_photo_submit'),
+    path('verification/government-id/', MemberDocumentSubmitView.as_view(), name='verification_document_submit'),
+    
+    # Verification endpoints - Admin
+    path('verification/admin/', AdminVerificationListView.as_view(), name='verification_admin_list'),
+    path('verification/admin/<uuid:verification_id>/', AdminVerificationDetailView.as_view(), name='verification_admin_detail'),
+    path('verification/admin/<uuid:verification_id>/approve/', AdminVerificationApproveView.as_view(), name='verification_admin_approve'),
+    path('verification/admin/<uuid:verification_id>/reject/', AdminVerificationRejectView.as_view(), name='verification_admin_reject'),
+    path('verification/admin/<uuid:verification_id>/request-changes/', AdminVerificationRequestChangesView.as_view(), name='verification_admin_request_changes'),
 ]

@@ -142,6 +142,10 @@ urlpatterns = [
     # Keep legacy endpoint for backward compatibility
     # path('membership-plans/', MembershipPlanListView.as_view(), name='membership_plans'),
     path('success-stories/', SuccessStoryListView.as_view(), name='success_stories'),
+    
+    # Verification endpoints are handled in apps.accounts.urls
+    # Do not include verification_urls here to avoid namespace conflicts
+    
     path('testimonials/', TestimonialListView.as_view(), name='testimonials'),
     path('blogposts/', BlogPostListView.as_view(), name='blog_posts'),
     path('faqs/', FAQListView.as_view(), name='faqs'),
