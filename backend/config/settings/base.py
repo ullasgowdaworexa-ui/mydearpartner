@@ -83,6 +83,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'apps.core.middleware.RequestIDMiddleware',
     'config.middleware.AdminPortalDisabledMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -255,7 +256,7 @@ REST_FRAMEWORK = {
         'apps.accounts.authentication.AccountJWTAuthentication',
     ),
     'DEFAULT_RENDERER_CLASSES': (
-        'rest_framework.renderers.JSONRenderer',
+        'apps.core.renderers.StandardizedJSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ),
     'EXCEPTION_HANDLER': 'apps.core.exceptions.custom_exception_handler',

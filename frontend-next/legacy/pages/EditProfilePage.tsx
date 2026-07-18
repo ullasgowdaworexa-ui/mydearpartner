@@ -450,17 +450,15 @@ export default function EditProfilePage() {
                           className="absolute inset-0"
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          {photoItem.status !== 'approved' && (
-                            <button
-                              type="button"
-                              onClick={() => deletePhoto(photoItem.id)}
-                              disabled={busy}
-                              className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => deletePhoto(photoItem.id)}
+                            disabled={busy}
+                            className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                           {!photoItem.is_primary && photoItem.status === 'approved' && (
                             <button
                               type="button"

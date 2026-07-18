@@ -20,6 +20,19 @@ class ProfilePhotoQuerySet(models.QuerySet):
     def without_binary(self):
         return self.defer("image_data", "thumbnail_data")
 
+    def active(self):
+        return self.filter(is_deleted=False)
+
+
+class ProfilePhotoManager(models.Manager):
+    """Default manager. Use .active() to exclude soft-deleted photos."""
+
+    def get_queryset(self):
+        return ProfilePhotoQuerySet(self.model, using=self._db)
+
+    def without_binary(self):
+        return self.get_queryset().defer("image_data", "thumbnail_data")
+
 
 class ProfilePhoto(models.Model):
     """A compressed profile photo and its thumbnail, stored in PostgreSQL."""
@@ -93,10 +106,15 @@ class ProfilePhoto(models.Model):
     )
     verified_at = models.DateTimeField(null=True, blank=True)
 
+    # Soft-delete support.  Member-initiated deletes are hard (bytes freed);
+    # admin-initiated deletes soft-delete to preserve audit metadata.
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = ProfilePhotoQuerySet.as_manager()
+    objects = ProfilePhotoManager()
 
     class Meta:
         db_table = "profile_photos"

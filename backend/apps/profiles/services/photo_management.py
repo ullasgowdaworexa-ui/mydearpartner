@@ -11,8 +11,6 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-from rest_framework.exceptions import PermissionDenied
-
 from apps.accounts.models import AccountType, Member
 from apps.profiles.models import ProfilePhoto, ProfilePhotoAuditLog
 
@@ -140,7 +138,7 @@ def _resolve_completed_photo_verification_requests(*, member: Member, reviewer, 
         WorkAssignment,
     )
 
-    if ProfilePhoto.objects.filter(user=member, status=ProfilePhoto.Status.PENDING).exists():
+    if ProfilePhoto.objects.active().filter(user=member, status=ProfilePhoto.Status.PENDING).exists():
         return
 
     active_statuses = (
@@ -152,7 +150,7 @@ def _resolve_completed_photo_verification_requests(*, member: Member, reviewer, 
         verification_type=ProfileVerificationRequest.VerificationType.PROFILE_PHOTO,
         status__in=active_statuses,
     )
-    approved = ProfilePhoto.objects.filter(
+    approved = ProfilePhoto.objects.active().filter(
         user=member, status=ProfilePhoto.Status.APPROVED
     ).exists()
     new_status = (
@@ -204,7 +202,7 @@ def _resolve_completed_photo_verification_requests(*, member: Member, reviewer, 
 def _sync_member_photo_status(member: Member) -> None:
     """Keep the lightweight member status aligned with the primary photo."""
     photo_statuses = list(
-        ProfilePhoto.objects.filter(user=member)
+        ProfilePhoto.objects.active().filter(user=member)
         .without_binary()
         .values_list("status", "is_primary")
     )
@@ -229,7 +227,7 @@ def _sync_member_photo_status(member: Member) -> None:
 
 def _choose_primary_photo(member: Member, *, exclude_photo_id=None) -> ProfilePhoto | None:
     """Select approved, then pending, then rejected for owner-only continuity."""
-    base = ProfilePhoto.objects.select_for_update().without_binary().filter(user=member)
+    base = ProfilePhoto.objects.active().select_for_update().without_binary().filter(user=member)
     if exclude_photo_id:
         base = base.exclude(pk=exclude_photo_id)
     candidate = (
@@ -257,7 +255,7 @@ def _choose_primary_photo(member: Member, *, exclude_photo_id=None) -> ProfilePh
 
 
 def _primary_is_approved(member: Member) -> bool:
-    return ProfilePhoto.objects.filter(
+    return ProfilePhoto.objects.active().filter(
         user=member,
         is_primary=True,
         status=ProfilePhoto.Status.APPROVED,
@@ -298,7 +296,7 @@ def _create_processed_profile_photo(*, member: Member, processed, uploaded_file,
     # Locking the owner row serializes concurrent uploads, primary selection,
     # and the per-user six-photo limit without loading BLOB data.
     member = Member.objects.select_for_update().get(pk=member.pk)
-    existing_count = ProfilePhoto.objects.filter(user=member).count()
+    existing_count = ProfilePhoto.objects.active().filter(user=member).count()
     from apps.core.entitlements import get_active_entitlements
     max_photos = get_active_entitlements(member).max_photos
     if existing_count >= max_photos:
@@ -396,11 +394,9 @@ def _replace_processed_profile_photo(*, photo_id, member, processed, uploaded_fi
 
 @transaction.atomic
 def delete_profile_photo(*, photo_id, member: Member, actor=None) -> ProfilePhoto | None:
-    """Delete the row (and both BYTEA values) and promote a valid primary."""
+    """Hard-delete a member-owned photo regardless of status, then promote a valid primary."""
     member = Member.objects.select_for_update().get(pk=member.pk)
     photo = ProfilePhoto.objects.select_for_update().without_binary().get(pk=photo_id, user=member)
-    if photo.status == ProfilePhoto.Status.APPROVED:
-        raise PermissionDenied("Cannot delete a photo that has been approved.")
     was_primary = photo.is_primary
     was_status = photo.status
     deleted_id = photo.pk
@@ -412,7 +408,12 @@ def delete_profile_photo(*, photo_id, member: Member, actor=None) -> ProfilePhot
         member_id=member.pk,
         actor=actor or member,
         action=ProfilePhotoAuditLog.Action.DELETED,
-        details={"was_primary": was_primary, "replacement_id": str(replacement.pk) if replacement else None},
+        details={
+            "deleted_by": "member",
+            "was_primary": was_primary,
+            "was_status": was_status,
+            "replacement_id": str(replacement.pk) if replacement else None,
+        },
     )
     _invalidate_profile_caches(member.pk)
     from apps.notifications.services import send_event_after_commit

@@ -120,7 +120,7 @@ class MemberSerializer(serializers.ModelSerializer):
         return ProfilePhotoSerializer(photo, context=self.context).data['image_url'] if photo else None
 
     def _visible_photos(self, obj):
-        photos = ProfilePhoto.objects.without_binary().filter(user=obj)
+        photos = ProfilePhoto.objects.without_binary().filter(user=obj, is_deleted=False)
         request = self.context.get('request')
         viewer = getattr(request, 'user', None)
         is_owner = bool(viewer and str(getattr(viewer, 'account_type', '')) == 'MEMBER' and viewer.pk == obj.pk)

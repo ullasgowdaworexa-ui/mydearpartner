@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.http import Http404, HttpResponse
+from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -391,7 +392,13 @@ class AdminProfilePhotoDeleteView(APIView):
         try:
             was_primary = metadata.is_primary
             was_status = metadata.status
-            metadata.delete()
+            # Soft-delete: keep metadata, null out binary blobs to free space
+            ProfilePhoto.objects.filter(pk=metadata.pk).update(
+                is_deleted=True,
+                deleted_at=timezone.now(),
+                image_data=None,
+                thumbnail_data=None,
+            )
             if was_primary:
                 from .services.photo_management import _choose_primary_photo
                 _choose_primary_photo(member, exclude_photo_id=metadata.pk)
@@ -403,7 +410,12 @@ class AdminProfilePhotoDeleteView(APIView):
                 member_id=member.pk,
                 actor=reviewer,
                 action="DELETED",
-                details={"deleted_by_admin": True, "was_primary": was_primary, "was_status": was_status},
+                details={
+                    "deleted_by": "admin",
+                    "soft_delete": True,
+                    "was_primary": was_primary,
+                    "was_status": was_status,
+                },
             )
             from .services.photo_management import _invalidate_profile_caches
             _invalidate_profile_caches(member.pk)
@@ -420,7 +432,8 @@ class AdminProfilePhotoDeleteView(APIView):
                     "photo_id": str(metadata.pk),
                     "was_primary": was_primary,
                     "was_status": was_status,
-                    "deleted_by_admin": True,
+                    "deleted_by": "admin",
+                    "soft_delete": True,
                 },
             )
             from apps.core.api_utils import notify

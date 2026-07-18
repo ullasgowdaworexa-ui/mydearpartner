@@ -12,11 +12,7 @@ import ProfileImage from '@/components/profile/ProfileImage';
 
 const settingsNav = [
   { group: 'Profile', items: [
-    { href: '/settings/profile', label: 'Basic & Lifestyle', icon: User },
-    { href: '/settings/profile/personal', label: 'Personal & Religion', icon: Heart },
-    { href: '/settings/profile/family', label: 'Family', icon: Users },
-    { href: '/settings/profile/career', label: 'Career & Education', icon: Briefcase },
-    { href: '/settings/profile/preferences', label: 'Partner Preferences', icon: Star },
+    { href: '/settings/profile', label: 'Edit Profile', icon: User },
   ]},
   { group: 'Account', items: [
     { href: '/settings/security', label: 'Security', icon: Shield },

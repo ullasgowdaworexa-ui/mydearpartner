@@ -13,6 +13,9 @@ import {
   Clock,
   Image as ImageIcon,
   RefreshCw,
+  MoreVertical,
+  Eye,
+  RotateCcw,
 } from 'lucide-react';
 
 import ProfileImage from '@/components/profile/ProfileImage';
@@ -62,6 +65,8 @@ export default function PhotosPage() {
   const [error, setError] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [previewPhotoId, setPreviewPhotoId] = useState<string | null>(null);
 
   const { data: photosData, isLoading, refetch } = useGetMyPhotosQuery();
   const [uploadPhoto] = useUploadPhotoMutation();
@@ -80,6 +85,12 @@ export default function PhotosPage() {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const clearSelectedFile = () => {
     setSelectedFile(null);
@@ -107,6 +118,7 @@ export default function PhotosPage() {
   const beginReplace = (photoId: string) => {
     setReplaceTargetId(photoId);
     setError('');
+    setOpenMenuId(null);
     if (replaceInputRef.current) {
       replaceInputRef.current.value = '';
       replaceInputRef.current.click();
@@ -164,7 +176,7 @@ export default function PhotosPage() {
 
   const handleDelete = async (photoId: string) => {
     if (!window.confirm('Are you sure you want to delete this photo?')) return;
-
+    setOpenMenuId(null);
     try {
       await deletePhoto(photoId).unwrap();
       await refetch();
@@ -178,7 +190,7 @@ export default function PhotosPage() {
       setError('Only approved photos can be set as primary.');
       return;
     }
-
+    setOpenMenuId(null);
     try {
       await setPrimary(photo.id).unwrap();
       await refetch();
@@ -211,6 +223,11 @@ export default function PhotosPage() {
           </span>
         );
     }
+  };
+
+  const toggleMenu = (e: React.MouseEvent, photoId: string) => {
+    e.stopPropagation();
+    setOpenMenuId(openMenuId === photoId ? null : photoId);
   };
 
   if (isLoading) {
@@ -384,46 +401,123 @@ export default function PhotosPage() {
 
                     <div className="absolute right-3 top-3">{getStatusBadge(photo.status)}</div>
 
-                    <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    {/* Quick delete button — always visible */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(photo.id);
+                      }}
+                      disabled={replacingPhotoId !== null}
+                      className="absolute left-3 bottom-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition-colors hover:bg-red-700 focus:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label="Delete photo"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+
+                    {/* Three-dot menu */}
+                    <div className="absolute right-3 bottom-3" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => beginReplace(photo.id)}
-                        disabled={replacingPhotoId !== null}
-                        className="rounded-full bg-blue-500 p-3 text-white shadow-lg transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
-                        aria-label={`Replace profile photo ${index + 1}`}
+                        onClick={(e) => toggleMenu(e, photo.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 focus:opacity-100"
+                        aria-label="Photo actions"
                       >
-                        {replacingPhotoId === photo.id ? (
-                          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                        )}
+                        <MoreVertical className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      {!photo.is_primary && photo.status === 'approved' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSetPrimary(photo)}
-                          className="rounded-full bg-amber-500 p-3 text-white shadow-lg transition-colors hover:bg-amber-600"
-                          aria-label={`Set profile photo ${index + 1} as primary`}
-                        >
-                          <Star className="h-5 w-5" aria-hidden="true" />
-                        </button>
-                      ) : null}
-                      {photo.status !== 'approved' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(photo.id)}
-                          className="rounded-full bg-red-500 p-3 text-white shadow-lg transition-colors hover:bg-red-600"
-                          aria-label={`Delete profile photo ${index + 1}`}
-                        >
-                          <Trash2 className="h-5 w-5" aria-hidden="true" />
-                        </button>
+                      {openMenuId === photo.id ? (
+                        <div className="absolute bottom-full right-0 mb-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-xl z-10">
+                          {/* Preview */}
+                          <button
+                            type="button"
+                            onClick={() => { setPreviewPhotoId(previewPhotoId === photo.id ? null : photo.id); setOpenMenuId(null); }}
+                            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            <Eye className="h-4 w-4 text-gray-400" />
+                            Preview
+                          </button>
+
+                          {/* Set as primary — only for approved non-primary photos */}
+                          {!photo.is_primary && photo.status === 'approved' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimary(photo)}
+                              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-amber-600 hover:bg-amber-50"
+                            >
+                              <Star className="h-4 w-4" />
+                              Set as primary
+                            </button>
+                          ) : null}
+
+                          {/* Replace — always available, useful for rejected photos */}
+                          <button
+                            type="button"
+                            onClick={() => beginReplace(photo.id)}
+                            disabled={replacingPhotoId !== null}
+                            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                            {replacingPhotoId === photo.id ? 'Replacing…' : 'Replace photo'}
+                          </button>
+
+                          {/* Delete — always available */}
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(photo.id)}
+                            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50 border-t border-gray-100"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete photo
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                   </div>
 
+                  {/* Rejection reason */}
                   {photo.status === 'rejected' && photo.rejection_reason ? (
-                    <div className="mt-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"><strong>Reason:</strong> {photo.rejection_reason}</div>
+                    <div className="mt-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      <strong>Reason:</strong> {photo.rejection_reason}
+                    </div>
                   ) : null}
+
+                  {/* Full-size preview overlay */}
+                  <AnimatePresence>
+                    {previewPhotoId === photo.id ? (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+                        onClick={() => setPreviewPhotoId(null)}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPhotoId(null)}
+                          className="absolute right-6 top-6 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+                        >
+                          <X className="h-6 w-6" />
+                        </button>
+                        <motion.div
+                          initial={{ scale: 0.9 }}
+                          animate={{ scale: 1 }}
+                          className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ProfileImage
+                            photoId={photo.id}
+                            src={photo.image_url || photo.thumbnail_url}
+                            variant="full"
+                            version={photo.updated_at}
+                            alt="Profile photo preview"
+                            size="full"
+                            gender={userGender}
+                            className="max-h-[85vh] w-auto rounded-xl shadow-2xl"
+                          />
+                        </motion.div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                 </motion.div>
               ))}
             </div>

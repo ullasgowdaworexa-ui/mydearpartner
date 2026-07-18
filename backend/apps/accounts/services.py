@@ -87,9 +87,8 @@ def create_member(email, password, **data):
         for key in list(data)
         if key in {
             'mobile_number', 'first_name', 'last_name', 'gender', 'date_of_birth',
-            'profile_created_by', 'is_email_verified', 'is_mobile_verified',
-            'is_active', 'is_premium', 'profile_status', 'photo_status',
-            'document_status',
+            'profile_created_by', 'is_active', 'is_premium', 'is_seed_data',
+            'profile_status', 'photo_status', 'document_status',
         }
     }
     member = Member.objects.create_user(email=email, password=password, **member_fields)

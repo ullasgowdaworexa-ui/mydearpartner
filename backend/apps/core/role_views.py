@@ -1327,8 +1327,26 @@ class AdminUserActionView(ScopedAPIView):
                 member.profile.save(update_fields=('rejection_reason', 'updated_at'))
         elif action == 'approve_photo':
             member.photo_status = Member.VerificationStatus.APPROVED
+            from apps.profiles.models import ProfilePhoto
+            ProfilePhoto.objects.filter(user=member, is_primary=True).exclude(
+                status=ProfilePhoto.Status.APPROVED
+            ).update(
+                status=ProfilePhoto.Status.APPROVED,
+                verified_at=timezone.now(),
+            )
         elif action == 'reject_photo':
+            if not reason:
+                return bad_request('A rejection reason is required.')
             member.photo_status = Member.VerificationStatus.REJECTED
+            member.photo_rejection_reason = reason
+            from apps.profiles.models import ProfilePhoto
+            ProfilePhoto.objects.filter(user=member, is_primary=True).exclude(
+                status=ProfilePhoto.Status.REJECTED
+            ).update(
+                status=ProfilePhoto.Status.REJECTED,
+                verified_at=timezone.now(),
+                rejection_reason=reason,
+            )
         elif action == 'verify_document':
             document_id = request.data.get('document_id')
             documents = member.documents.filter(status=MemberDocument.Status.PENDING)

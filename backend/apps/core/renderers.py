@@ -1,60 +1,86 @@
 from rest_framework.renderers import JSONRenderer
 
+
+def _extract_request_id(renderer_context):
+    response = renderer_context.get('response') if renderer_context else None
+    if response and hasattr(response, '_request') and hasattr(response._request, 'request_id'):
+        return response._request.request_id
+    request = renderer_context.get('request') if renderer_context else None
+    if request and hasattr(request, 'request_id'):
+        return request.request_id
+    return None
+
+
 class StandardizedJSONRenderer(JSONRenderer):
     """
     Standardized API response format for all JSON responses:
     {
       "success": boolean,
       "message": string,
-      "data": object or list or null,
-      "errors": object or null
+      "data": object | null,
+      "code": string | null,
+      "errors": object | null,
+      "meta": { "request_id": "uuid" } | null
     }
     """
     def render(self, data, accepted_media_type=None, renderer_context=None):
-        status_code = 200
-        exception = False
-        
-        if renderer_context:
-            response = renderer_context.get('response')
-            if response:
-                status_code = response.status_code
-                exception = response.exception
+        request_id = _extract_request_id(renderer_context)
+        meta = {'request_id': request_id} if request_id else None
 
-        # Initialize default payload values
-        success = 200 <= status_code < 300
-        message = "Request completed successfully."
-        errors = None
-        payload_data = data
+        response = renderer_context.get('response') if renderer_context else None
+        status_code = response.status_code if response else 200
+        exception = response.exception if response else False
 
-        if exception:
+        if exception or status_code >= 400:
             success = False
-            message = "An error occurred while processing the request."
-            payload_data = None
-            
-            # Format validation or application errors
             if isinstance(data, dict):
-                if 'detail' in data:
-                    message = data.pop('detail')
-                errors = data
-            elif isinstance(data, list):
-                errors = {'non_field_errors': data}
+                payload = {
+                    'success': data.get('success', False),
+                    'message': data.get('message', 'An error occurred.'),
+                    'code': data.get('code', None),
+                    'errors': data.get('errors', None),
+                    'data': data.get('data', None),
+                    'meta': data.get('meta', meta),
+                }
             else:
-                errors = {'error': str(data)}
+                payload = {
+                    'success': False,
+                    'message': str(data) if data else 'An error occurred.',
+                    'code': None,
+                    'errors': None,
+                    'data': None,
+                    'meta': meta,
+                }
+            return super().render(payload, accepted_media_type, renderer_context)
+
+        if isinstance(data, dict):
+            payload = {
+                'success': data.get('success', True) if 'success' in data else True,
+                'message': data.get('message', 'Request completed successfully.'),
+                'code': data.get('code', None),
+                'errors': data.get('errors', None),
+                'data': data.get('data', None),
+                'meta': data.get('meta', meta),
+            }
+            if payload['data'] is None and 'data' not in data:
+                payload['data'] = data
+        elif data is None:
+            payload = {
+                'success': True,
+                'message': 'Request completed successfully.',
+                'code': None,
+                'errors': None,
+                'data': None,
+                'meta': meta,
+            }
         else:
-            # Custom status code message adjustment if data has a custom message keys
-            if isinstance(data, dict):
-                if 'message' in data and len(data) <= 3:
-                    message = data.pop('message')
-                if 'success' in data and len(data) <= 2:
-                    success = data.pop('success')
-                if 'data' in data and len(data) <= 1:
-                    payload_data = data.get('data')
+            payload = {
+                'success': True,
+                'message': 'Request completed successfully.',
+                'code': None,
+                'errors': None,
+                'data': data,
+                'meta': meta,
+            }
 
-        response_dict = {
-            'success': success,
-            'message': message,
-            'data': payload_data,
-            'errors': errors
-        }
-
-        return super().render(response_dict, accepted_media_type, renderer_context)
+        return super().render(payload, accepted_media_type, renderer_context)

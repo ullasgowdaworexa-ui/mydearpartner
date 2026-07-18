@@ -606,7 +606,12 @@ class AccountChangePasswordView(APIView):
         serializer = PasswordChangeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         if not request.user.check_password(serializer.validated_data['old_password']):
-            return Response({'old_password': ['Wrong password.']}, status=status.HTTP_400_BAD_REQUEST)
+            return ApiResponse(
+                success=False,
+                message='The current password is incorrect.',
+                status=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.password_changed_at = timezone.now()
         request.user.save(update_fields=('password', 'password_changed_at', 'updated_at'))
@@ -711,53 +716,39 @@ class MemberDocumentListCreateView(APIView):
         if len(document_type) > 80:
             raise ValidationError({'document_type': ['Document type must be 80 characters or fewer.']})
         upload = _validate_member_document(request.FILES.get('file') or request.FILES.get('document'))
-        verification_required = getattr(settings, 'REQUIRE_MEMBER_VERIFICATION', False)
         document = MemberDocument.objects.create(
             member=request.user,
             document_type=document_type,
             file_path=upload,
-            status=(
-                MemberDocument.Status.PENDING
-                if verification_required
-                else MemberDocument.Status.APPROVED
-            ),
-            reviewed_at=None if verification_required else timezone.now(),
+            status=MemberDocument.Status.PENDING,
+            reviewed_at=None,
         )
-        request.user.document_status = (
-            Member.VerificationStatus.PENDING_REVIEW
-            if verification_required
-            else Member.VerificationStatus.APPROVED
-        )
+        request.user.document_status = Member.VerificationStatus.PENDING_REVIEW
         request.user.save(update_fields=('document_status', 'updated_at'))
 
-        if verification_required:
-            from apps.core.models import ProfileVerificationDocument, ProfileVerificationRequest
+        from apps.core.models import ProfileVerificationDocument, ProfileVerificationRequest
 
-            active_statuses = (
-                ProfileVerificationRequest.Status.PENDING_REVIEW,
-                ProfileVerificationRequest.Status.IN_REVIEW,
-            )
-            verification = ProfileVerificationRequest.objects.filter(
+        active_statuses = (
+            ProfileVerificationRequest.Status.PENDING_REVIEW,
+            ProfileVerificationRequest.Status.IN_REVIEW,
+        )
+        verification = ProfileVerificationRequest.objects.filter(
+            member=request.user,
+            verification_type=ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT,
+            status__in=active_statuses,
+        ).first()
+        if verification is None:
+            verification = ProfileVerificationRequest.objects.create(
                 member=request.user,
                 verification_type=ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT,
-                status__in=active_statuses,
-            ).first()
-            if verification is None:
-                verification = ProfileVerificationRequest.objects.create(
-                    member=request.user,
-                    verification_type=ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT,
-                )
-            ProfileVerificationDocument.objects.create(
-                verification_request=verification,
-                member_document=document,
             )
+        ProfileVerificationDocument.objects.create(
+            verification_request=verification,
+            member_document=document,
+        )
         return ApiResponse(
             data=MemberDocumentSerializer(document, context={'request': request}).data,
-            message=(
-                'Document uploaded for private verification.'
-                if verification_required
-                else 'Document uploaded successfully.'
-            ),
+            message='Document uploaded for verification.',
             status=status.HTTP_201_CREATED,
         )
 
@@ -793,21 +784,11 @@ class MemberProfileSubmitView(APIView):
                 errors={'missing_fields': missing},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        verification_required = getattr(settings, 'REQUIRE_MEMBER_VERIFICATION', False)
-        request.user.profile_status = (
-            Member.VerificationStatus.PENDING_REVIEW
-            if verification_required
-            else Member.VerificationStatus.APPROVED
-        )
+        request.user.profile_status = Member.VerificationStatus.PENDING_REVIEW
         request.user.save(update_fields=('profile_status', 'updated_at'))
         profile.submitted_at = timezone.now()
         profile.rejection_reason = ''
         profile.save(update_fields=('submitted_at', 'rejection_reason', 'updated_at'))
-        if not verification_required:
-            return ApiResponse(
-                data=_account_payload(request.user, request),
-                message='Profile is live.',
-            )
 
         from apps.core.models import ProfileVerificationRequest
 

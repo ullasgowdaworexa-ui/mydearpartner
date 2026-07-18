@@ -5,13 +5,13 @@ import { motion } from 'framer-motion';
 import {
   Shield, Crown, MapPin, GraduationCap, Briefcase,
   Calendar, Ruler, Heart, Users, Star, ChevronRight,
-  Edit, Camera, Loader2, CheckCircle, XCircle, AlertTriangle,
+  Edit, Camera, Loader2, CheckCircle, XCircle, AlertTriangle, Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import ProfileImage from '@/components/profile/ProfileImage';
 import { useAuth } from '@/legacy/contexts/AuthContext';
 import { fetchApi } from '@/legacy/services/apiClient';
-import type { MemberPhoto } from '@/legacy/services/photoApi';
+import { useDeletePhotoMutation, type MemberPhoto } from '@/legacy/services/photoApi';
 
 function statusBadge(status: string) {
   const styles: Record<string, string> = {
@@ -48,6 +48,24 @@ export default function MyProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletePhoto] = useDeletePhotoMutation();
+
+  const handleDelete = async (photoId: string) => {
+    if (!window.confirm('Are you sure you want to delete this photo?')) return;
+    setDeletingId(photoId);
+    try {
+      await deletePhoto(photoId).unwrap();
+      setProfile((prev: any) => ({
+        ...prev,
+        photos: (prev.photos || []).filter((ph: any) => ph.id !== photoId),
+      }));
+    } catch {
+      setError('Failed to delete photo. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -146,6 +164,9 @@ export default function MyProfilePage() {
                 <Link href="/settings/profile" className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                   <Edit className="w-3.5 h-3.5" /> Edit Profile
                 </Link>
+                <Link href="/profile/photos" className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-rose-200 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors">
+                  <Camera className="w-3.5 h-3.5" /> Manage Photos
+                </Link>
               </div>
             </div>
           </div>
@@ -216,9 +237,18 @@ export default function MyProfilePage() {
                 </h2>
                 <div className="flex gap-2 flex-wrap">
                   {pendingPhotos.map((ph) => (
-                    <div key={ph.id} className="relative">
+                    <div key={ph.id} className="relative group">
                       <ProfileImage photoId={ph.id} src={ph.thumbnail_url} variant="thumbnail" alt="" size="sm" shape="square" className="w-16 h-16 rounded-lg" />
                       <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white" />
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(ph.id)}
+                        disabled={deletingId === ph.id}
+                        className="absolute -top-2 -left-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-50"
+                        aria-label="Delete photo"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -282,7 +312,18 @@ export default function MyProfilePage() {
                 <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider mb-3">Photos ({approvedPhotos.length})</h2>
                 <div className="flex gap-3 flex-wrap">
                   {approvedPhotos.map((ph) => (
-                    <ProfileImage key={ph.id} photoId={ph.id} src={ph.thumbnail_url} variant="thumbnail" version={(ph as any).updated_at} alt="" size="md" shape="square" className="w-24 h-24 rounded-xl" />
+                    <div key={ph.id} className="relative group">
+                      <ProfileImage photoId={ph.id} src={ph.thumbnail_url} variant="thumbnail" version={(ph as any).updated_at} alt="" size="md" shape="square" className="w-24 h-24 rounded-xl" />
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(ph.id)}
+                        disabled={deletingId === ph.id}
+                        className="absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow disabled:opacity-50"
+                        aria-label="Delete photo"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </motion.div>
@@ -296,8 +337,17 @@ export default function MyProfilePage() {
                 </h2>
                 <div className="flex gap-3 flex-wrap">
                   {rejectedPhotos.map((ph) => (
-                    <div key={ph.id} className="relative">
+                    <div key={ph.id} className="relative group">
                       <ProfileImage photoId={ph.id} src={ph.thumbnail_url} variant="thumbnail" alt="" size="sm" shape="square" className="w-16 h-16 rounded-lg opacity-60" />
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(ph.id)}
+                        disabled={deletingId === ph.id}
+                        className="absolute -top-2 -left-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-50"
+                        aria-label="Delete photo"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
                       {(ph as any).rejection_reason && <p className="text-[10px] text-red-500 mt-1 max-w-16">{ph.rejection_reason}</p>}
                     </div>
                   ))}

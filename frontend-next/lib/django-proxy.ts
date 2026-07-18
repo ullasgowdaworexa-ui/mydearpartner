@@ -49,6 +49,8 @@ function targetUrl(path: string, search: string) {
   if (finalPath && !finalPath.endsWith("/") && !finalPath.includes(".")) {
     finalPath += "/";
   }
+  // INTERNAL_API_BASE_URL already includes the /api/v1/ prefix
+  // (e.g. http://localhost:8000/api/v1), so forward the path as-is.
   return `${base}/${finalPath}${search}`;
 }
 
@@ -98,9 +100,12 @@ async function inlineRefreshForPhoto(request: NextRequest): Promise<string | nul
 function extractRefresh(payload: unknown): { refresh: string | null; account: AccountType | null } {
   if (!payload || typeof payload !== "object") return { refresh: null, account: null };
   const envelope = payload as Record<string, unknown>;
-  const data = envelope.data && typeof envelope.data === "object"
+  const rootData = envelope.data && typeof envelope.data === "object"
     ? envelope.data as Record<string, unknown>
     : envelope;
+  const data = rootData.data && typeof rootData.data === "object"
+    ? rootData.data as Record<string, unknown>
+    : rootData;
   const user = data.user && typeof data.user === "object" ? data.user as Record<string, unknown> : null;
   return {
     refresh: typeof data.refresh === "string" ? data.refresh : null,
@@ -111,19 +116,37 @@ function extractRefresh(payload: unknown): { refresh: string | null; account: Ac
 function extractAccess(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const envelope = payload as Record<string, unknown>;
-  const data = envelope.data && typeof envelope.data === "object"
+  const rootData = envelope.data && typeof envelope.data === "object"
     ? envelope.data as Record<string, unknown>
     : envelope;
+  const data = rootData.data && typeof rootData.data === "object"
+    ? rootData.data as Record<string, unknown>
+    : rootData;
   return typeof data.access === "string" ? data.access : null;
 }
 
 function stripRefresh(payload: unknown) {
   if (!payload || typeof payload !== "object") return payload;
   const envelope = payload as Record<string, unknown>;
-  if (envelope.data && typeof envelope.data === "object") {
-    const data = { ...(envelope.data as Record<string, unknown>) };
-    delete data.refresh;
-    return { ...envelope, data };
+  const rootData = envelope.data && typeof envelope.data === "object"
+    ? envelope.data as Record<string, unknown>
+    : envelope;
+  const isNested = rootData !== envelope;
+  const innerData = rootData.data && typeof rootData.data === "object"
+    ? rootData.data as Record<string, unknown>
+    : rootData;
+  if (innerData !== rootData && typeof innerData === "object") {
+    const cleaned = { ...innerData };
+    delete cleaned.refresh;
+    return {
+      ...envelope,
+      data: { ...rootData, data: cleaned },
+    };
+  }
+  if (rootData !== envelope && typeof rootData === "object") {
+    const cleaned = { ...rootData };
+    delete cleaned.refresh;
+    return { ...envelope, data: cleaned };
   }
   const clone = { ...envelope };
   delete clone.refresh;
@@ -180,8 +203,12 @@ export async function forwardToDjango(request: NextRequest, segments: string[]) 
   headers.set("x-forwarded-proto", request.nextUrl.protocol.replace(":", ""));
 
   let upstream: Response;
+  let timedOut = false;
   const abortController = new AbortController();
-  const timeout = setTimeout(() => abortController.abort(), UPSTREAM_TIMEOUT_MS);
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    abortController.abort();
+  }, UPSTREAM_TIMEOUT_MS);
   try {
     upstream = await fetch(targetUrl(path, request.nextUrl.search), {
       method: request.method,
@@ -191,9 +218,23 @@ export async function forwardToDjango(request: NextRequest, segments: string[]) 
       signal: abortController.signal,
       redirect: "manual",
     });
-  } catch {
+  } catch (error) {
+    clearTimeout(timeout);
+    if (timedOut) {
+      return NextResponse.json(
+        { success: false, message: "The request took too long. Please try again.", code: "GATEWAY_TIMEOUT" },
+        { status: 504, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const isNetworkError = error instanceof TypeError && error.message?.includes("fetch");
+    if (isNetworkError) {
+      return NextResponse.json(
+        { success: false, message: "The backend service is unavailable. Please try again.", code: "SERVICE_UNAVAILABLE" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     return NextResponse.json(
-      { success: false, message: "The Django API is currently unavailable." },
+      { success: false, message: "The Django API is currently unavailable.", code: "BAD_GATEWAY" },
       { status: 502, headers: { "Cache-Control": "no-store" } },
     );
   } finally {
