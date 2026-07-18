@@ -275,7 +275,7 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
+        'anon': config.get('ANON_RATE_LIMIT', '100/day'),
         'user': '1000/day',
         'login': config['LOGIN_RATE_LIMIT'],
         'reset-password': config['OTP_RATE_LIMIT'],

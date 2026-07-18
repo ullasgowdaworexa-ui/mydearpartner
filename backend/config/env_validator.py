@@ -200,6 +200,7 @@ config = {
     'LOGIN_RATE_LIMIT': optional_env('LOGIN_RATE_LIMIT', '5/minute'),
     'OTP_RATE_LIMIT': optional_env('OTP_RATE_LIMIT', '3/minute'),
     'API_RATE_LIMIT': optional_env('API_RATE_LIMIT', '1000/day'),
+    'ANON_RATE_LIMIT': optional_env('ANON_RATE_LIMIT', '100/day'),
     
     # Feature Flags
     'ENABLE_SIGNUP': get_bool('ENABLE_SIGNUP', default=True),
