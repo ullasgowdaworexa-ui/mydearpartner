@@ -270,12 +270,19 @@ class _ProfilePhotoBinaryView(APIView):
             check_object_scope(request.user, metadata.user, branch_path="branch")
         return metadata
 
-    def _apply_private_headers(self, response, etag: str):
+    def _apply_cache_headers(self, response, etag: str, *, status: str):
         response["ETag"] = etag
-        response["Cache-Control"] = "private, max-age=86400"
-        response["Vary"] = "Authorization"
+        if status == ProfilePhoto.Status.APPROVED:
+            response["Cache-Control"] = "private, max-age=86400, must-revalidate"
+        else:
+            response["Cache-Control"] = "private, no-cache, must-revalidate"
+        response["Vary"] = "Authorization, Cookie"
         response["X-Content-Type-Options"] = "nosniff"
         return response
+
+    def _apply_private_headers(self, response, etag: str):
+        """Legacy wrapper for callers that do not pass status."""
+        return self._apply_cache_headers(response, etag, status=ProfilePhoto.Status.APPROVED)
 
     def head(self, request, photo_id):
         """Return validators and stored length without fetching either BYTEA."""
@@ -291,7 +298,7 @@ class _ProfilePhotoBinaryView(APIView):
                 else "compressed_size_bytes"
             )
             response["Content-Length"] = str(getattr(metadata, size_field))
-        return self._apply_private_headers(response, etag)
+        return self._apply_cache_headers(response, etag, status=metadata.status)
 
     def get(self, request, photo_id):
         # Do not fetch a 600 KB BYTEA payload merely to deny a UUID probe.
@@ -316,7 +323,7 @@ class _ProfilePhotoBinaryView(APIView):
             image_bytes = bytes(getattr(photo, self.binary_field))
             response = HttpResponse(image_bytes, content_type=photo.mime_type)
             response["Content-Length"] = str(len(image_bytes))
-        return self._apply_private_headers(response, etag)
+        return self._apply_cache_headers(response, etag, status=metadata.status)
 
 
 class ProfilePhotoImageView(_ProfilePhotoBinaryView):
@@ -367,6 +374,67 @@ class AdminProfilePhotoRejectView(APIView):
             data=ProfilePhotoSerializer(photo, context={"request": request}).data,
             message="Profile photo rejected successfully.",
         )
+
+
+class AdminProfilePhotoDeleteView(APIView):
+    """Allow admins to delete any profile photo (including approved ones)."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def delete(self, request, photo_id):
+        from apps.core.role_views import check_object_scope
+
+        reviewer = _require_photo_reviewer(request, photo_id, action="approve")
+        metadata = _photo_metadata_or_404(photo_id)
+        check_object_scope(request.user, metadata.user, branch_path="branch")
+        member = metadata.user
+        try:
+            was_primary = metadata.is_primary
+            was_status = metadata.status
+            metadata.delete()
+            if was_primary:
+                from .services.photo_management import _choose_primary_photo
+                _choose_primary_photo(member, exclude_photo_id=metadata.pk)
+            from .services.photo_management import _sync_member_photo_status
+            _sync_member_photo_status(member)
+            from .services.photo_management import _record_audit
+            _record_audit(
+                photo_id=metadata.pk,
+                member_id=member.pk,
+                actor=reviewer,
+                action="DELETED",
+                details={"deleted_by_admin": True, "was_primary": was_primary, "was_status": was_status},
+            )
+            from .services.photo_management import _invalidate_profile_caches
+            _invalidate_profile_caches(member.pk)
+            from apps.notifications.services import send_event_after_commit
+            send_event_after_commit(
+                groups=("role_super_admin", "role_admin", "role_staff"),
+                event_type="photo.deleted",
+                entity="member_photo",
+                entity_id=metadata.pk,
+                message=f"Photo deleted by admin for {member.get_full_name()}",
+                data={
+                    "member_id": str(member.pk),
+                    "member_name": member.get_full_name(),
+                    "photo_id": str(metadata.pk),
+                    "was_primary": was_primary,
+                    "was_status": was_status,
+                    "deleted_by_admin": True,
+                },
+            )
+            from apps.core.api_utils import notify
+            notify(
+                member,
+                notification_type="PROFILE_PHOTO_DELETED",
+                title="Photo removed",
+                message="An administrator has removed one of your profile photos.",
+                related_object_id=str(metadata.pk),
+                priority="HIGH",
+            )
+        except ProfilePhoto.DoesNotExist as exc:
+            raise Http404("Profile photo not found.") from exc
+        return ApiResponse(message="Profile photo deleted successfully by admin.")
 
 
 # Backwards-compatible class names and paths used while the Next app migrates.

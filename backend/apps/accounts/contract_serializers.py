@@ -67,11 +67,12 @@ class ContractRegistrationSerializer(serializers.Serializer):
 
 
 class ContractLoginSerializer(serializers.Serializer):
-    email_or_mobile = serializers.CharField(max_length=254)
+    email_or_mobile = serializers.CharField(max_length=254, required=False)
+    identifier = serializers.CharField(max_length=254, write_only=True, required=False)
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate(self, attrs):
-        identifier = attrs["email_or_mobile"].strip()
+        identifier = (attrs.get("email_or_mobile") or attrs.get("identifier") or "").strip()
         user = Member.objects.filter(
             Q(email__iexact=identifier) | Q(mobile_number=identifier),
             is_active=True,

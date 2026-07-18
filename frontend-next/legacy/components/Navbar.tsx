@@ -86,7 +86,7 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/');
+    navigate('/login', { replace: true });
   };
 
   const portalHome = user?.account_type === 'SUPER_ADMIN' ? '/super-admin/dashboard'
@@ -212,14 +212,14 @@ export default function Navbar() {
                     <p className="text-sm font-semibold text-gray-800 truncate">{user?.full_name}</p>
                   </div>
                   <Link
-                    to={isMember && user?.id ? `/profile/${user.id}` : portalHome}
+                    to="/profile/me"
                     className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-rose-50 hover:text-[var(--theme-primary-700)] transition-colors"
                   >
                     <User className="w-4 h-4 text-gray-400" />
-                    {isMember ? 'My Profile' : 'Open portal'}
+                    My Profile
                   </Link>
                   {isMember && <><Link
-                    to="/settings"
+                    to="/settings/profile"
                     className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-rose-50 hover:text-[var(--theme-primary-700)] transition-colors"
                   >
                     <Settings className="w-4 h-4 text-gray-400" />

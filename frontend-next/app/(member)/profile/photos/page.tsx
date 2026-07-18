@@ -408,14 +408,16 @@ export default function PhotosPage() {
                           <Star className="h-5 w-5" aria-hidden="true" />
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(photo.id)}
-                        className="rounded-full bg-red-500 p-3 text-white shadow-lg transition-colors hover:bg-red-600"
-                        aria-label={`Delete profile photo ${index + 1}`}
-                      >
-                        <Trash2 className="h-5 w-5" aria-hidden="true" />
-                      </button>
+                      {photo.status !== 'approved' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(photo.id)}
+                          className="rounded-full bg-red-500 p-3 text-white shadow-lg transition-colors hover:bg-red-600"
+                          aria-label={`Delete profile photo ${index + 1}`}
+                        >
+                          <Trash2 className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 

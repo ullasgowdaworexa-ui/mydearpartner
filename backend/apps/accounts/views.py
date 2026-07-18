@@ -773,15 +773,23 @@ class MemberProfileSubmitView(APIView):
             'mobile_number': request.user.mobile_number,
             'gender': request.user.gender,
             'date_of_birth': request.user.date_of_birth,
+            'marital_status': profile.marital_status,
+            'height': profile.height,
             'religion': profile.religion,
             'mother_tongue': profile.mother_tongue,
+            'highest_education': profile.highest_education,
+            'occupation': profile.occupation,
+            'work_location': profile.work_location,
             'about': profile.about,
         }
         missing = [name for name, value in required.items() if not value]
+        from apps.profiles.models import ProfilePhoto
+        if not ProfilePhoto.objects.filter(user=request.user).exists():
+            missing.append('photo')
         if missing:
             return ApiResponse(
                 success=False,
-                message='Complete required profile fields before submitting.',
+                message='Please complete all required fields before submitting.',
                 errors={'missing_fields': missing},
                 status=status.HTTP_400_BAD_REQUEST,
             )

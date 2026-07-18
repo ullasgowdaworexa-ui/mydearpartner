@@ -11,6 +11,8 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
+from rest_framework.exceptions import PermissionDenied
+
 from apps.accounts.models import AccountType, Member
 from apps.profiles.models import ProfilePhoto, ProfilePhotoAuditLog
 
@@ -397,7 +399,10 @@ def delete_profile_photo(*, photo_id, member: Member, actor=None) -> ProfilePhot
     """Delete the row (and both BYTEA values) and promote a valid primary."""
     member = Member.objects.select_for_update().get(pk=member.pk)
     photo = ProfilePhoto.objects.select_for_update().without_binary().get(pk=photo_id, user=member)
+    if photo.status == ProfilePhoto.Status.APPROVED:
+        raise PermissionDenied("Cannot delete a photo that has been approved.")
     was_primary = photo.is_primary
+    was_status = photo.status
     deleted_id = photo.pk
     photo.delete()
     replacement = _choose_primary_photo(member) if was_primary else None
@@ -410,6 +415,36 @@ def delete_profile_photo(*, photo_id, member: Member, actor=None) -> ProfilePhot
         details={"was_primary": was_primary, "replacement_id": str(replacement.pk) if replacement else None},
     )
     _invalidate_profile_caches(member.pk)
+    from apps.notifications.services import send_event_after_commit
+    send_event_after_commit(
+        groups=("role_super_admin", "role_admin", "role_staff"),
+        event_type="photo.deleted",
+        entity="member_photo",
+        entity_id=deleted_id,
+        message=f"Photo deleted for {member.get_full_name()}",
+        data={
+            "member_id": str(member.pk),
+            "member_name": member.get_full_name(),
+            "photo_id": str(deleted_id),
+            "was_primary": was_primary,
+            "was_status": was_status,
+            "replacement_id": str(replacement.pk) if replacement else None,
+        },
+    )
+    if replacement and replacement.pk != deleted_id:
+        send_event_after_commit(
+            groups=("role_super_admin", "role_admin", "role_staff", f"user_{member.pk}"),
+            event_type="photo.primary_changed",
+            entity="member_photo",
+            entity_id=replacement.pk,
+            message=f"Primary photo changed for {member.get_full_name()}",
+            data={
+                "member_id": str(member.pk),
+                "member_name": member.get_full_name(),
+                "photo_id": str(replacement.pk),
+                "status": replacement.status,
+            },
+        )
     return replacement
 
 
@@ -433,6 +468,20 @@ def set_primary_profile_photo(*, photo_id, member: Member, actor=None) -> Profil
         action=ProfilePhotoAuditLog.Action.SET_PRIMARY,
     )
     _invalidate_profile_caches(member.pk)
+    from apps.notifications.services import send_event_after_commit
+    send_event_after_commit(
+        groups=("role_super_admin", "role_admin", "role_staff", f"user_{member.pk}"),
+        event_type="photo.primary_changed",
+        entity="member_photo",
+        entity_id=photo.pk,
+        message=f"Primary photo changed for {member.get_full_name()}",
+        data={
+            "member_id": str(member.pk),
+            "member_name": member.get_full_name(),
+            "photo_id": str(photo.pk),
+            "status": photo.status,
+        },
+    )
     return photo
 
 

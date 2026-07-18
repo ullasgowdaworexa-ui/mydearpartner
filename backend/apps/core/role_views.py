@@ -1004,6 +1004,18 @@ class AdminDashboardView(ScopedAPIView):
     allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
     required_permission = 'dashboard.view'
 
+    def _date_range(self, range_param, now):
+        from datetime import timedelta
+        if range_param == '7d':
+            return now - timedelta(days=7)
+        if range_param == '30d':
+            return now - timedelta(days=30)
+        if range_param == '90d':
+            return now - timedelta(days=90)
+        if range_param == '1y':
+            return now - timedelta(days=365)
+        return None  # all time
+
     def get(self, request):
         from django.db.models import Sum, Count
         from django.utils import timezone
@@ -1015,6 +1027,7 @@ class AdminDashboardView(ScopedAPIView):
         now = timezone.now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        range_start = self._date_range(request.query_params.get('range', '30d'), now)
 
         # Member counts
         members_qs = Member.objects.filter(deleted_at__isnull=True)
@@ -1023,6 +1036,8 @@ class AdminDashboardView(ScopedAPIView):
         suspended_users = members_qs.filter(is_active=False).count()
         new_today = members_qs.filter(created_at__gte=today_start).count()
         new_this_month = members_qs.filter(created_at__gte=month_start).count()
+        if range_start:
+            members_qs = members_qs.filter(created_at__gte=range_start)
         verified_users = members_qs.filter(profile_status=Member.ProfileStatus.APPROVED).count()
         male_profiles = members_qs.filter(gender='Male').count()
         female_profiles = members_qs.filter(gender='Female').count()
@@ -1112,7 +1127,23 @@ class AdminDashboardView(ScopedAPIView):
             'escalated_complaints': Complaint.objects.filter(status='ESCALATED').count() if hasattr(Complaint, 'objects') else 0,
         }
 
-        recent_members = Member.objects.filter(deleted_at__isnull=True).order_by('-created_at')[:5]
+        recent_member_qs = Member.objects.filter(deleted_at__isnull=True)
+        if range_start:
+            recent_member_qs = recent_member_qs.filter(created_at__gte=range_start)
+        from django.db.models import Prefetch
+        from apps.core.models import MemberMembership, MembershipRequest
+        recent_member_qs = recent_member_qs.prefetch_related(
+            Prefetch('memberships',
+                queryset=MemberMembership.objects.filter(is_active=True).select_related('plan'),
+                to_attr='_prefetched_active_memberships'),
+            Prefetch('memberships',
+                queryset=MemberMembership.objects.filter(status='PENDING_VERIFICATION').select_related('plan'),
+                to_attr='_prefetched_pending_memberships'),
+            Prefetch('membership_requests',
+                queryset=MembershipRequest.objects.filter(status='pending').select_related('selected_plan'),
+                to_attr='_prefetched_pending_requests'),
+        )
+        recent_members = recent_member_qs.order_by('-created_at')[:5]
         recent_tickets = SupportTicket.objects.select_related('category', 'current_assignee').order_by('-created_at')[:5]
         recent_payments = Payment.objects.select_related('plan').order_by('-created_at')[:5]
 
@@ -1141,8 +1172,42 @@ class AdminUserListView(ScopedAPIView):
     allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
     required_permission = 'members.view'
 
+    ORDERING_FIELDS = {
+        'date_joined': 'created_at',
+        '-date_joined': '-created_at',
+        'first_name': 'first_name',
+        '-first_name': '-first_name',
+        'created_at': 'created_at',
+        '-created_at': '-created_at',
+    }
+
     def get(self, request):
+        from django.db.models import Prefetch
+        from apps.core.models import MemberMembership, MembershipRequest, Interest, ProfileUnlock
+        from django.utils import timezone
+        import zoneinfo
+
+        kolkata_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+        today = timezone.now().astimezone(kolkata_tz).date()
+
         queryset = Member.objects.filter(deleted_at__isnull=True).select_related('profile', 'preferences')
+        queryset = queryset.prefetch_related(
+            Prefetch('memberships',
+                queryset=MemberMembership.objects.filter(is_active=True).select_related('plan'),
+                to_attr='_prefetched_active_memberships'),
+            Prefetch('memberships',
+                queryset=MemberMembership.objects.filter(status='PENDING_VERIFICATION').select_related('plan'),
+                to_attr='_prefetched_pending_memberships'),
+            Prefetch('membership_requests',
+                queryset=MembershipRequest.objects.filter(status='pending').select_related('selected_plan'),
+                to_attr='_prefetched_pending_requests'),
+            Prefetch('profile_unlocks_made',
+                queryset=ProfileUnlock.objects.filter(usage_date=today),
+                to_attr='_prefetched_today_unlocks'),
+            Prefetch('sent_interests',
+                queryset=Interest.objects.filter(created_at__date=today),
+                to_attr='_prefetched_today_interests'),
+        )
         queryset = apply_scope_filter(request.user, queryset, branch_path='branch')
         search = request.query_params.get('search', '').strip()
         if search:
@@ -1157,7 +1222,13 @@ class AdminUserListView(ScopedAPIView):
         requested_status = request.query_params.get('status')
         if requested_status:
             queryset = queryset.filter(profile_status=requested_status)
-        return paginated_response(request, queryset, MemberSerializer)
+        ordering = request.query_params.get('ordering', '-date_joined')
+        order_field = self.ORDERING_FIELDS.get(ordering)
+        if order_field:
+            queryset = queryset.order_by(order_field)
+        else:
+            queryset = queryset.order_by('-created_at')
+        return paginated_response(request, queryset, MemberSerializer, context={'today': today})
 
 
 class AdminUserActionView(ScopedAPIView):

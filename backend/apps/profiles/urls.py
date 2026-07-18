@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views import (
     AdminProfilePhotoApproveView,
+    AdminProfilePhotoDeleteView,
     AdminProfilePhotoRejectView,
     ProfilePhotoCollectionView,
     ProfilePhotoDeleteView,
@@ -55,6 +56,11 @@ urlpatterns = [
         "admin/profile-photos/<uuid:photo_id>/reject/",
         AdminProfilePhotoRejectView.as_view(),
         name="admin-photo-reject",
+    ),
+    path(
+        "admin/profile-photos/<uuid:photo_id>/",
+        AdminProfilePhotoDeleteView.as_view(),
+        name="admin-photo-delete",
     ),
 
     # Legacy aliases.  They point to the same BYTEA-only implementation and

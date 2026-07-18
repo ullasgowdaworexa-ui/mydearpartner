@@ -1,7 +1,7 @@
 import re
 
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -38,6 +38,7 @@ class MemberSerializer(serializers.ModelSerializer):
     admin_permissions = serializers.SerializerMethodField()
     completion_percentage = serializers.SerializerMethodField()
     missing_fields = serializers.SerializerMethodField()
+    can_submit = serializers.SerializerMethodField()
     photo = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
     documents = serializers.SerializerMethodField()
@@ -49,9 +50,9 @@ class MemberSerializer(serializers.ModelSerializer):
             'gender', 'date_of_birth', 'profile_created_by', 'is_email_verified',
             'is_mobile_verified', 'is_verified', 'is_fully_verified', 'is_active', 'is_premium',
             'profile_status', 'photo_status', 'document_status', 'last_login',
-            'password_changed_at', 'created_at', 'updated_at', 'account_type',
+            'password_changed_at', 'created_at', 'updated_at', 'date_joined', 'account_type',
             'admin_role', 'admin_role_display', 'admin_permissions', 'photo',
-            'photos', 'documents', 'completion_percentage', 'missing_fields',
+            'photos', 'documents', 'completion_percentage', 'missing_fields', 'can_submit',
             'chat_public_key',
         )
 
@@ -68,10 +69,17 @@ class MemberSerializer(serializers.ModelSerializer):
         return obj.are_verification_checks_passed
 
     def _required_values(self, obj):
+        cached = getattr(obj, '_required_values_cache', None)
+        if cached is not None:
+            return cached
         try:
             profile = obj.profile
-        except MemberProfile.DoesNotExist:
+        except ObjectDoesNotExist:
             profile = None
+        try:
+            preference = obj.preferences
+        except ObjectDoesNotExist:
+            preference = None
         values = {
             'mobile_number': obj.mobile_number,
             'gender': obj.gender,
@@ -84,15 +92,27 @@ class MemberSerializer(serializers.ModelSerializer):
             'work_location': getattr(profile, 'work_location', ''),
             'about': getattr(profile, 'about', ''),
             'photo': self.get_photo(obj),
+            'marital_status': getattr(profile, 'marital_status', ''),
+            'height': getattr(profile, 'height', ''),
+            'family_type': getattr(profile, 'family_type', ''),
+            'employed_in': getattr(profile, 'employed_in', ''),
+            'pref_age_min': getattr(preference, 'preferred_age_min', None),
+            'pref_age_max': getattr(preference, 'preferred_age_max', None),
         }
+        obj._required_values_cache = values
         return values
 
     def get_completion_percentage(self, obj):
         values = self._required_values(obj)
-        return int(sum(bool(value) for value in values.values()) / len(values) * 100)
+        filled = sum(1 for v in values.values() if v is not None and v != '' and v != 0 and v != 0.0)
+        total = len(values)
+        return int(filled / total * 100) if total else 0
 
     def get_missing_fields(self, obj):
         return [name for name, value in self._required_values(obj).items() if not value]
+
+    def get_can_submit(self, obj):
+        return len(self.get_missing_fields(obj)) == 0
 
     def get_photo(self, obj):
         photos = self._visible_photos(obj)
@@ -134,11 +154,11 @@ class MemberSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         try:
             profile = instance.profile
-        except MemberProfile.DoesNotExist:
+        except ObjectDoesNotExist:
             profile = None
         try:
             preference = instance.preferences
-        except MemberPreference.DoesNotExist:
+        except ObjectDoesNotExist:
             preference = None
         if profile:
             for field in (
@@ -169,12 +189,19 @@ class MemberSerializer(serializers.ModelSerializer):
             for output_name, model_name in aliases.items():
                 data[output_name] = getattr(preference, model_name)
 
-        # Get active membership
+        # Get active membership — use prefetched data when available
         from apps.core.models import MemberMembership, MembershipRequest, ProfileUnlock, Interest
         from django.utils import timezone
         import zoneinfo
         kolkata_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-        active_membership = MemberMembership.objects.filter(member=instance, is_active=True).first()
+        context_today = (self.context or {}).get('today')
+        today = context_today or timezone.now().astimezone(kolkata_tz).date()
+
+        active_memberships = getattr(instance, '_prefetched_active_memberships', None)
+        if active_memberships is not None:
+            active_membership = active_memberships[0] if active_memberships else None
+        else:
+            active_membership = MemberMembership.objects.filter(member=instance, is_active=True).first()
         if active_membership:
             plan = active_membership.plan
             days_remaining = None
@@ -183,9 +210,16 @@ class MemberSerializer(serializers.ModelSerializer):
                 days_remaining = max(0, delta.days)
             
             # calculate limits used today
-            today = timezone.now().astimezone(kolkata_tz).date()
-            views_today = ProfileUnlock.objects.filter(viewer=instance, usage_date=today).count()
-            interests_today = Interest.objects.filter(sender=instance, created_at__date=today).count()
+            today_unlocks = getattr(instance, '_prefetched_today_unlocks', None)
+            if today_unlocks is not None:
+                views_today = len(today_unlocks)
+            else:
+                views_today = ProfileUnlock.objects.filter(viewer=instance, usage_date=today).count()
+            today_interests = getattr(instance, '_prefetched_today_interests', None)
+            if today_interests is not None:
+                interests_today = len(today_interests)
+            else:
+                interests_today = Interest.objects.filter(sender=instance, created_at__date=today).count()
             
             data['active_membership'] = {
                 'plan_name': plan.name if plan else 'Free',
@@ -204,9 +238,16 @@ class MemberSerializer(serializers.ModelSerializer):
             }
         else:
             # Fallback to default Free plan
-            today = timezone.now().astimezone(kolkata_tz).date()
-            views_today = ProfileUnlock.objects.filter(viewer=instance, usage_date=today).count()
-            interests_today = Interest.objects.filter(sender=instance, created_at__date=today).count()
+            today_unlocks = getattr(instance, '_prefetched_today_unlocks', None)
+            if today_unlocks is not None:
+                views_today = len(today_unlocks)
+            else:
+                views_today = ProfileUnlock.objects.filter(viewer=instance, usage_date=today).count()
+            today_interests = getattr(instance, '_prefetched_today_interests', None)
+            if today_interests is not None:
+                interests_today = len(today_interests)
+            else:
+                interests_today = Interest.objects.filter(sender=instance, created_at__date=today).count()
             data['active_membership'] = {
                 'plan_name': 'Free',
                 'plan_slug': 'free',
@@ -230,7 +271,11 @@ class MemberSerializer(serializers.ModelSerializer):
             }
 
         # Get pending verification membership
-        pending_membership = MemberMembership.objects.filter(member=instance, status='PENDING_VERIFICATION').first()
+        pending_memberships = getattr(instance, '_prefetched_pending_memberships', None)
+        if pending_memberships is not None:
+            pending_membership = pending_memberships[0] if pending_memberships else None
+        else:
+            pending_membership = MemberMembership.objects.filter(member=instance, status='PENDING_VERIFICATION').first()
         if pending_membership:
             plan = pending_membership.plan
             data['pending_membership'] = {
@@ -242,7 +287,11 @@ class MemberSerializer(serializers.ModelSerializer):
             data['pending_membership'] = None
 
         # Get pending request
-        pending_req = MembershipRequest.objects.filter(user=instance, status='pending').first()
+        pending_requests = getattr(instance, '_prefetched_pending_requests', None)
+        if pending_requests is not None:
+            pending_req = pending_requests[0] if pending_requests else None
+        else:
+            pending_req = MembershipRequest.objects.filter(user=instance, status='pending').first()
         if pending_req:
             data['pending_request'] = {
                 'plan_name': pending_req.selected_plan.name,
