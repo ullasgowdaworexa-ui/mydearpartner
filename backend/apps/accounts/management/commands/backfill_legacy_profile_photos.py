@@ -616,13 +616,13 @@ class Command(BaseCommand):
             None,
         )
         if primary_status == ProfilePhoto.Status.APPROVED:
-            target_status = Member.PhotoStatus.APPROVED
+            target_status = Member.VerificationStatus.APPROVED
         elif primary_status == ProfilePhoto.Status.PENDING or any(
             status == ProfilePhoto.Status.PENDING for status, _ in photo_statuses
         ):
-            target_status = Member.PhotoStatus.PENDING
+            target_status = Member.VerificationStatus.PENDING_REVIEW
         else:
-            target_status = Member.PhotoStatus.REJECTED
+            target_status = Member.VerificationStatus.REJECTED
         if member.photo_status != target_status:
             member.photo_status = target_status
             member.save(using=database, update_fields=("photo_status", "updated_at"))

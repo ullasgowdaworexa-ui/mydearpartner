@@ -171,7 +171,7 @@ def test_legacy_registration_image_endpoint_uses_moderated_photo_pipeline(
     assert ProfileVerificationRequest.objects.filter(
         member=member,
         verification_type=ProfileVerificationRequest.VerificationType.PROFILE_PHOTO,
-        status=ProfileVerificationRequest.Status.PENDING,
+        status=ProfileVerificationRequest.Status.PENDING_REVIEW,
     ).exists()
     assert (photo.thumbnail_width, photo.thumbnail_height) == (240, 300)
     assert photo.compressed_size_bytes <= 600 * 1024
@@ -407,7 +407,7 @@ def test_staff_photo_moderation_is_action_and_assignment_scoped(
     verification = ProfileVerificationRequest.objects.create(
         member=member,
         verification_type=ProfileVerificationRequest.VerificationType.PROFILE_PHOTO,
-        status=ProfileVerificationRequest.Status.ASSIGNED,
+        status=ProfileVerificationRequest.Status.PENDING_REVIEW,
     )
     ProfileVerificationAssignment.objects.create(
         verification_request=verification,
@@ -557,7 +557,7 @@ def test_direct_photo_moderation_completes_the_member_photo_queue(
         member=member,
         verification_type=ProfileVerificationRequest.VerificationType.PROFILE_PHOTO,
     )
-    verification.status = ProfileVerificationRequest.Status.ASSIGNED
+    verification.status = ProfileVerificationRequest.Status.PENDING_REVIEW
     verification.save(update_fields=("status", "updated_at"))
     ProfileVerificationAssignment.objects.create(
         verification_request=verification,

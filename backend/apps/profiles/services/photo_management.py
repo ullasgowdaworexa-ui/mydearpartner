@@ -97,10 +97,8 @@ def _create_photo_verification_request(member: Member) -> None:
     from apps.core.models import ProfileVerificationRequest
 
     active_statuses = (
-        ProfileVerificationRequest.Status.PENDING,
-        ProfileVerificationRequest.Status.ASSIGNED,
+        ProfileVerificationRequest.Status.PENDING_REVIEW,
         ProfileVerificationRequest.Status.IN_REVIEW,
-        ProfileVerificationRequest.Status.RESUBMITTED,
     )
     if not ProfileVerificationRequest.objects.filter(
         member=member,
@@ -144,10 +142,8 @@ def _resolve_completed_photo_verification_requests(*, member: Member, reviewer, 
         return
 
     active_statuses = (
-        ProfileVerificationRequest.Status.PENDING,
-        ProfileVerificationRequest.Status.ASSIGNED,
+        ProfileVerificationRequest.Status.PENDING_REVIEW,
         ProfileVerificationRequest.Status.IN_REVIEW,
-        ProfileVerificationRequest.Status.RESUBMITTED,
     )
     requests = ProfileVerificationRequest.objects.select_for_update().filter(
         member=member,
@@ -213,17 +209,17 @@ def _sync_member_photo_status(member: Member) -> None:
     if not photo_statuses:
         # ``photo_status`` predates the new photo table and its enum has no
         # NOT_SUBMITTED value.  PENDING is its established empty-gallery state.
-        target = Member.PhotoStatus.PENDING
+        target = Member.VerificationStatus.PENDING_REVIEW
     else:
         primary_status = next((status for status, primary in photo_statuses if primary), None)
         if primary_status == ProfilePhoto.Status.APPROVED:
-            target = Member.PhotoStatus.APPROVED
+            target = Member.VerificationStatus.APPROVED
         elif primary_status == ProfilePhoto.Status.PENDING or any(
             status == ProfilePhoto.Status.PENDING for status, _ in photo_statuses
         ):
-            target = Member.PhotoStatus.PENDING
+            target = Member.VerificationStatus.PENDING_REVIEW
         else:
-            target = Member.PhotoStatus.REJECTED
+            target = Member.VerificationStatus.REJECTED
     if member.photo_status != target:
         member.photo_status = target
         member.save(update_fields=("photo_status", "updated_at"))
@@ -305,12 +301,6 @@ def _create_processed_profile_photo(*, member: Member, processed, uploaded_file,
     max_photos = get_active_entitlements(member).max_photos
     if existing_count >= max_photos:
         raise ProfilePhotoProcessingError(f"Your {get_active_entitlements(member).plan_name} plan allows a maximum of {max_photos} profile photos.")
-    if existing_count and not ProfilePhoto.objects.filter(
-        user=member, status=ProfilePhoto.Status.APPROVED
-    ).exists():
-        raise PrimaryPhotoNotVerifiedError(
-            "Your first photo must be approved before you can add more photos."
-        )
     if ImageProcessingService.check_duplicate(processed.checksum, member.pk):
         raise ProfilePhotoProcessingError("This photo has already been uploaded.")
 
@@ -339,6 +329,21 @@ def _create_processed_profile_photo(*, member: Member, processed, uploaded_file,
         details={"status": photo.status, "is_primary": photo.is_primary},
     )
     _invalidate_profile_caches(member.pk)
+    from apps.notifications.services import send_event_after_commit
+    send_event_after_commit(
+        groups=("role_super_admin", "role_admin", "role_staff"),
+        event_type="photo.uploaded",
+        entity="member_photo",
+        entity_id=photo.pk,
+        message="A member uploaded a new photo",
+        data={
+            "member_id": str(member.pk),
+            "member_name": member.get_full_name(),
+            "photo_id": str(photo.pk),
+            "status": photo.status,
+            "is_primary": photo.is_primary,
+        },
+    )
     return photo
 
 
@@ -537,6 +542,22 @@ def review_profile_photo(
             reason=photo.rejection_reason,
         )
     _invalidate_profile_caches(member.pk)
+    from apps.notifications.services import send_event_after_commit
+    event_type = "photo.approved" if approve else "photo.rejected"
+    send_event_after_commit(
+        groups=("role_super_admin", "role_admin", "role_staff", f"user_{member.pk}"),
+        event_type=event_type,
+        entity="member_photo",
+        entity_id=photo.pk,
+        message=f"Photo {'approved' if approve else 'rejected'} for {member.get_full_name()}",
+        data={
+            "member_id": str(member.pk),
+            "member_name": member.get_full_name(),
+            "photo_id": str(photo.pk),
+            "status": photo.status,
+            "rejection_reason": photo.rejection_reason if not approve else "",
+        },
+    )
     photo.refresh_from_db(fields=("is_primary", "status", "updated_at"))
     return photo
 

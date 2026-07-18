@@ -8,12 +8,32 @@ import {
 import {
   AdminPageHeader, AdminPanel, AdminEmptyState, AdminLoading, AdminErrorState, formatAdminDate, AdminStatusBadge, AdminSkeleton
 } from '../../components/admin/AdminUI';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function CustomerSupportDashboardPage() {
   const { data, error, isLoading, refetch, isFetching } = useGetSupportDashboardQuery(undefined, {
     pollingInterval: 60000,
   });
   const [syncTime, setSyncTime] = useState<string>('');
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'support.ticket_created',
+      'support.ticket_assigned',
+      'support.ticket_claimed',
+      'support.ticket_replied',
+      'support.ticket_status_changed',
+      'support.ticket_priority_changed',
+      'support.ticket_resolved',
+      'support.ticket_reopened',
+      'complaint.created',
+      'complaint.resolved',
+      'contact.created',
+      'contact.replied',
+    ],
+    refresh: refetch,
+    debounceMs: 400,
+  });
 
   useEffect(() => {
     setSyncTime(new Date().toLocaleTimeString());

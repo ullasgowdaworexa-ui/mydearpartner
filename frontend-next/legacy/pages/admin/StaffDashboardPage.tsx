@@ -8,12 +8,31 @@ import {
 import {
   AdminPageHeader, AdminPanel, AdminEmptyState, AdminLoading, AdminErrorState, AdminSkeleton
 } from '../../components/admin/AdminUI';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function StaffDashboardPage() {
   const { data, error, isLoading, refetch, isFetching } = useGetStaffDashboardQuery(undefined, {
-    pollingInterval: 60000, // auto poll every 60s
+    pollingInterval: 60000,
   });
   const [syncTime, setSyncTime] = useState<string>('');
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'verification.submitted',
+      'verification.approved',
+      'verification.rejected',
+      'photo.uploaded',
+      'photo.approved',
+      'photo.rejected',
+      'document.uploaded',
+      'document.approved',
+      'document.rejected',
+      'support.ticket_created',
+      'support.ticket_assigned',
+    ],
+    refresh: refetch,
+    debounceMs: 400,
+  });
 
   useEffect(() => {
     setSyncTime(new Date().toLocaleTimeString());

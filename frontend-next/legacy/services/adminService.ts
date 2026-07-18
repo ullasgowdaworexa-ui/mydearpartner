@@ -62,8 +62,29 @@ export interface AdminUser {
   document_status?: string;
   suspension_reason?: string;
   date_joined: string;
+  created_at?: string;
   updated_at?: string;
   about?: string;
+  age?: number;
+  city?: string;
+  country?: string;
+  state?: string;
+  completion_percentage?: number;
+  missing_fields?: string[];
+  marital_status?: string;
+  height?: string;
+  religion?: string;
+  mother_tongue?: string;
+  caste?: string;
+  highest_education?: string;
+  occupation?: string;
+  annual_income?: string;
+  active_membership?: {
+    plan_name: string;
+    is_active: boolean;
+    start_date?: string;
+    end_date?: string;
+  };
 }
 
 export type AdminUserAction =

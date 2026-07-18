@@ -42,7 +42,7 @@ def trigger_ticket_auto_assignment(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender=ProfileVerificationRequest)
 def trigger_verification_auto_assignment(sender, instance, created, **kwargs):
-    if (created or instance.status == ProfileVerificationRequest.Status.PENDING) and not getattr(instance, '_auto_assigning', False):
+    if (created or instance.status == ProfileVerificationRequest.Status.PENDING_REVIEW) and not getattr(instance, '_auto_assigning', False):
         instance._auto_assigning = True
         from apps.core.assignment_engine import auto_assign_verification
         auto_assign_verification(instance)

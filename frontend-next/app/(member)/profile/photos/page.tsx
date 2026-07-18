@@ -71,8 +71,7 @@ export default function PhotosPage() {
 
   const displayPhotos = photosData?.photos ?? [];
   const maxPhotos = photosData?.max_photos ?? 6;
-  const hasApprovedPhoto = displayPhotos.some((photo) => photo.status === 'approved');
-  const canUploadMore = displayPhotos.length < maxPhotos && (displayPhotos.length === 0 || hasApprovedPhoto);
+  const canUploadMore = displayPhotos.length < maxPhotos;
   const pendingCount = displayPhotos.filter((photo) => photo.status === 'pending').length;
   const userGender = typeof user?.gender === 'string' ? user.gender : undefined;
 
@@ -263,12 +262,6 @@ export default function PhotosPage() {
             </motion.div>
           ) : null}
         </AnimatePresence>
-
-        {!canUploadMore && displayPhotos.length > 0 && !hasApprovedPhoto ? (
-          <div className="mb-8 rounded-lg border border-slate-200 bg-slate-100 p-4 text-sm text-slate-700">
-            Your first photo must be approved before you can add more photos.
-          </div>
-        ) : null}
 
         {canUploadMore ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">

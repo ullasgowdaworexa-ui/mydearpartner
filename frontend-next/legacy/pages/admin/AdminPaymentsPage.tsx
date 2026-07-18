@@ -8,6 +8,7 @@ import {
   AdminEmptyState, AdminErrorState, AdminLoading, AdminPageHeader, AdminPagination,
   AdminPanel, AdminStatusBadge, formatAdminDate, formatAdminMoney,
 } from '../../components/admin/AdminUI';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function AdminPaymentsPage() {
   const location = useLocation();
@@ -39,6 +40,20 @@ export default function AdminPaymentsPage() {
     return () => window.clearTimeout(timer);
   }, [load]);
   useEffect(() => { setPage(1); }, [search, status]);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'payment.created',
+      'payment.success',
+      'payment.failed',
+      'payment.refunded',
+      'membership.purchased',
+      'membership.activated',
+      'membership.cancelled',
+    ],
+    refresh: load,
+    debounceMs: 300,
+  });
 
   const summary = useMemo(() => ({
     value: transactions.reduce((total, item) => total + Number(item.amount || 0), 0),

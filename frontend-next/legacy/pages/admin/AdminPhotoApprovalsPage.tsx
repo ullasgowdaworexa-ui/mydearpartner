@@ -16,6 +16,7 @@ import {
   AdminPagination, AdminPanel, AdminStatusBadge, formatAdminDate
 } from '../../components/admin/AdminUI';
 import AdminAssignModal from '../../components/admin/AdminAssignModal';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 import PhotoModerationGallery from '../../components/admin/PhotoModerationGallery';
 
 interface PhotoVerification {
@@ -102,6 +103,17 @@ export default function AdminPhotoApprovalsPage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPage(1); }, [status]);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'photo.uploaded',
+      'photo.approved',
+      'photo.rejected',
+      'photo.deleted',
+    ],
+    refresh: load,
+    debounceMs: 300,
+  });
 
   useEffect(() => {
     const next = new URLSearchParams();

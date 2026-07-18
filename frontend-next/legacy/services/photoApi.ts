@@ -112,8 +112,8 @@ export function normalizeMemberPhoto(value: unknown): MemberPhoto {
     if (m) id = m[1];
   }
 
-  const defaultImageUrl = id ? `/api/profile-photos/${encodeURIComponent(id)}/image/` : null;
-  const defaultThumbnailUrl = id ? `/api/profile-photos/${encodeURIComponent(id)}/thumbnail/` : null;
+  const defaultImageUrl = id ? `/api/proxy/profile-photos/${encodeURIComponent(id)}/image/` : null;
+  const defaultThumbnailUrl = id ? `/api/proxy/profile-photos/${encodeURIComponent(id)}/thumbnail/` : null;
 
   return {
     id,

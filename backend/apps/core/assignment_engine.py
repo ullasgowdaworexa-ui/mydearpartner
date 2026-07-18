@@ -212,7 +212,7 @@ def auto_assign_verification(verification: ProfileVerificationRequest) -> bool:
             return False
 
         with transaction.atomic():
-            verification.status = ProfileVerificationRequest.Status.ASSIGNED
+            verification.status = ProfileVerificationRequest.Status.PENDING_REVIEW
             verification.save()
 
             ProfileVerificationAssignment.objects.filter(verification_request=verification, is_current=True).update(is_current=False)

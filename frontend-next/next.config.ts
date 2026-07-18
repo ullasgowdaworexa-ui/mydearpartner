@@ -61,6 +61,14 @@ const nextConfig: NextConfig = {
     contentDispositionType: "attachment",
     dangerouslyAllowSVG: false,
   },
+  async rewrites() {
+    return [
+      {
+        source: "/api/profile-photos/:path*",
+        destination: "/api/proxy/profile-photos/:path*",
+      },
+    ];
+  },
   async redirects() {
     return [
       { source: "/membership-plans", destination: "/membership", permanent: true },

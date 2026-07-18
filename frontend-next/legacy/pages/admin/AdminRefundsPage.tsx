@@ -10,6 +10,7 @@ import {
   AdminToast, formatAdminDate, formatAdminMoney,
 } from '../../components/admin/AdminUI';
 import { fetchApi } from '../../services/apiClient';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 interface RefundForm { amount: string; reason: string; }
 const emptyRefundForm: RefundForm = { amount: '', reason: '' };
@@ -45,6 +46,18 @@ export default function AdminRefundsPage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPage(1); }, [search, statusFilter]);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'refund.requested',
+      'refund.approved',
+      'refund.rejected',
+      'refund.completed',
+      'payment.refunded',
+    ],
+    refresh: load,
+    debounceMs: 300,
+  });
 
   const openRefund = (item: AdminTransaction) => {
     setRefundTarget(item);

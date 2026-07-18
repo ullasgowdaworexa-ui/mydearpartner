@@ -724,9 +724,9 @@ class MemberDocumentListCreateView(APIView):
             reviewed_at=None if verification_required else timezone.now(),
         )
         request.user.document_status = (
-            Member.ReviewStatus.PENDING
+            Member.VerificationStatus.PENDING_REVIEW
             if verification_required
-            else Member.ReviewStatus.APPROVED
+            else Member.VerificationStatus.APPROVED
         )
         request.user.save(update_fields=('document_status', 'updated_at'))
 
@@ -734,8 +734,7 @@ class MemberDocumentListCreateView(APIView):
             from apps.core.models import ProfileVerificationDocument, ProfileVerificationRequest
 
             active_statuses = (
-                ProfileVerificationRequest.Status.PENDING,
-                ProfileVerificationRequest.Status.ASSIGNED,
+                ProfileVerificationRequest.Status.PENDING_REVIEW,
                 ProfileVerificationRequest.Status.IN_REVIEW,
             )
             verification = ProfileVerificationRequest.objects.filter(
@@ -788,9 +787,9 @@ class MemberProfileSubmitView(APIView):
             )
         verification_required = getattr(settings, 'REQUIRE_MEMBER_VERIFICATION', False)
         request.user.profile_status = (
-            Member.ProfileStatus.PENDING
+            Member.VerificationStatus.PENDING_REVIEW
             if verification_required
-            else Member.ProfileStatus.APPROVED
+            else Member.VerificationStatus.APPROVED
         )
         request.user.save(update_fields=('profile_status', 'updated_at'))
         profile.submitted_at = timezone.now()

@@ -1032,11 +1032,10 @@ class AdminDashboardView(ScopedAPIView):
         pending_profile_approvals = ProfileVerificationRequest.objects.filter(
             verification_type=ProfileVerificationRequest.VerificationType.FULL_PROFILE,
             status__in=(
-                ProfileVerificationRequest.Status.PENDING,
-                ProfileVerificationRequest.Status.ASSIGNED,
+                ProfileVerificationRequest.Status.PENDING_REVIEW,
             )
         ).count()
-        pending_photo_approvals = members_qs.filter(photo_status='PENDING').count()
+        pending_photo_approvals = members_qs.filter(photo_status=Member.VerificationStatus.PENDING_REVIEW).count()
 
         # Document verification
         try:
@@ -1194,7 +1193,7 @@ class AdminUserActionView(ScopedAPIView):
 
     def get(self, request, user_id):
         self._require_permission(request, 'members.view')
-        queryset = Member.objects.select_related('profile', 'preferences').prefetch_related('documents')
+        queryset = Member.objects.select_related('profile', 'preferences')
         member = get_object_or_404(queryset, pk=user_id, deleted_at__isnull=True)
         check_object_scope(request.user, member, branch_path='branch')
         activity_model = SuperAdminActivityLog if str(request.user.account_type) == AccountType.SUPER_ADMIN else AdminActivityLog
@@ -1207,9 +1206,15 @@ class AdminUserActionView(ScopedAPIView):
         memberships = MemberMembership.objects.filter(member=member).select_related('plan').values(
             'id', 'status', 'is_active', 'start_date', 'end_date', 'plan__name', 'plan__slug'
         )
-        documents = member.documents.values('id', 'document_type', 'status', 'uploaded_at', 'rejection_reason')
+        documents = member.documents.values('id', 'document_type', 'status', 'uploaded_at', 'rejection_reason', 'reviewed_at')
+        from apps.profiles.models import ProfilePhoto
+        photos = ProfilePhoto.objects.without_binary().filter(user=member).values(
+            'id', 'status', 'is_primary', 'display_order', 'original_filename',
+            'created_at', 'verified_at', 'rejection_reason'
+        )
         return ApiResponse(data={
             'member': MemberSerializer(member, context={'request': request}).data,
+            'photos': list(photos),
             'verifications': list(verifications),
             'documents': list(documents),
             'memberships': list(memberships),
@@ -1250,9 +1255,9 @@ class AdminUserActionView(ScopedAPIView):
                 member.profile.rejection_reason = reason
                 member.profile.save(update_fields=('rejection_reason', 'updated_at'))
         elif action == 'approve_photo':
-            member.photo_status = Member.ReviewStatus.APPROVED
+            member.photo_status = Member.VerificationStatus.APPROVED
         elif action == 'reject_photo':
-            member.photo_status = Member.ReviewStatus.REJECTED
+            member.photo_status = Member.VerificationStatus.REJECTED
         elif action == 'verify_document':
             document_id = request.data.get('document_id')
             documents = member.documents.filter(status=MemberDocument.Status.PENDING)
@@ -1266,7 +1271,7 @@ class AdminUserActionView(ScopedAPIView):
             document.reviewed_at = timezone.now()
             document.reviewed_by_id = request.user.pk
             document.save(update_fields=('status', 'rejection_reason', 'reviewed_at', 'reviewed_by_id'))
-            member.document_status = Member.ReviewStatus.APPROVED
+            member.document_status = Member.VerificationStatus.APPROVED
         elif action == 'reject_document':
             if not reason:
                 return bad_request('A rejection reason is required.')
@@ -1282,12 +1287,12 @@ class AdminUserActionView(ScopedAPIView):
             document.reviewed_at = timezone.now()
             document.reviewed_by_id = request.user.pk
             document.save(update_fields=('status', 'rejection_reason', 'reviewed_at', 'reviewed_by_id'))
-            member.document_status = Member.ReviewStatus.REJECTED
+            member.document_status = Member.VerificationStatus.REJECTED
         elif action in {'activate', 'reactivate'}:
             member.is_active = True
         elif action in {'deactivate', 'suspend'}:
             member.is_active = False
-            member.profile_status = Member.ProfileStatus.SUSPENDED
+            member.profile_status = 'SUSPENDED'
             member.token_version += 1
         elif action == 'soft_delete':
             member.is_active = False
@@ -1316,6 +1321,42 @@ class AdminUserActionView(ScopedAPIView):
             target_type='MEMBER', target_id=member.pk, old_data=before, new_data=after,
         )
         return ApiResponse(data=MemberSerializer(member, context={'request': request}).data)
+
+    @transaction.atomic
+    def put(self, request, user_id):
+        self._require_permission(request, 'members.manage')
+        member = get_object_or_404(Member.objects.select_for_update(), pk=user_id)
+        check_object_scope(request.user, member, branch_path='branch')
+        before = MemberSerializer(member, context={'request': request}).data
+
+        allowed_fields = {
+            'first_name', 'last_name', 'gender', 'date_of_birth',
+            'is_active', 'is_premium', 'is_email_verified', 'is_mobile_verified',
+        }
+        profile_fields = {
+            'marital_status', 'height', 'weight', 'religion', 'mother_tongue',
+            'caste', 'sub_caste', 'gothra', 'manglik_status', 'highest_education',
+            'education_detail', 'occupation', 'employed_in', 'company',
+            'annual_income', 'work_location', 'about', 'hobbies',
+        }
+        for field in allowed_fields:
+            if field in request.data:
+                setattr(member, field, request.data[field])
+        member.save()
+
+        if any(f in request.data for f in profile_fields):
+            profile, _ = MemberProfile.objects.get_or_create(member=member)
+            for field in profile_fields:
+                if field in request.data:
+                    setattr(profile, field, request.data[field])
+            profile.save()
+
+        after = MemberSerializer(member, context={'request': request}).data
+        audit(
+            request, request.user, action='MEMBER_EDITED', module='members',
+            target_type='MEMBER', target_id=member.pk, old_data=before, new_data=after,
+        )
+        return ApiResponse(data=after)
 
 
 class AdminTicketListView(ScopedAPIView):
@@ -1893,7 +1934,7 @@ class AdminVerificationDetailView(ScopedAPIView):
                 assignment_values['assigned_by_admin'] = request.user
             ProfileVerificationAssignment.objects.create(**assignment_values)
             old_status = verification.status
-            verification.status = ProfileVerificationRequest.Status.ASSIGNED
+            verification.status = ProfileVerificationRequest.Status.PENDING_REVIEW
             verification.save(update_fields=('status', 'updated_at'))
             ProfileVerificationHistory.objects.create(
                 verification_request=verification, old_status=old_status,
@@ -1916,11 +1957,9 @@ class AdminVerificationDetailView(ScopedAPIView):
             if not request.user.has_admin_permission(permission):
                 raise PermissionDenied(f'{permission} permission is required.')
             reviewable_statuses = {
-                ProfileVerificationRequest.Status.PENDING,
-                ProfileVerificationRequest.Status.ASSIGNED,
+                ProfileVerificationRequest.Status.PENDING_REVIEW,
                 ProfileVerificationRequest.Status.IN_REVIEW,
-                ProfileVerificationRequest.Status.RESUBMITTED,
-                ProfileVerificationRequest.Status.ESCALATED,
+                ProfileVerificationRequest.Status.CHANGES_REQUESTED,
             }
             if verification.status not in reviewable_statuses:
                 return bad_request('This verification has already been completed.')

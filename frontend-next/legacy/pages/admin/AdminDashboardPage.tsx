@@ -15,6 +15,7 @@ import {
   AdminEmptyState, AdminErrorState, AdminLoading, AdminPageHeader, AdminPanel,
   AdminStatusBadge, formatAdminDate, formatAdminMoney, AdminSkeleton,
 } from '../../components/admin/AdminUI';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 interface StatDefinition {
   key: keyof AdminDashboardStats;
@@ -147,6 +148,43 @@ export default function AdminDashboardPage() {
     window.addEventListener('admin-update', handler);
     return () => window.removeEventListener('admin-update', handler);
   }, [load]);
+
+  // Realtime refresh via the centralised RealtimeProvider
+  useRealtimeRefresh({
+    eventTypes: [
+      'verification.submitted',
+      'verification.approved',
+      'verification.rejected',
+      'verification.changes_requested',
+      'profile.submitted',
+      'profile.approved',
+      'profile.rejected',
+      'photo.uploaded',
+      'photo.approved',
+      'photo.rejected',
+      'document.uploaded',
+      'document.approved',
+      'document.rejected',
+      'membership.purchased',
+      'membership.activated',
+      'membership.cancelled',
+      'membership.expired',
+      'payment.success',
+      'payment.failed',
+      'payment.refunded',
+      'support.ticket_created',
+      'support.ticket_assigned',
+      'support.ticket_resolved',
+      'complaint.created',
+      'complaint.resolved',
+      'report.created',
+      'refund.requested',
+      'refund.completed',
+      'contact.created',
+    ],
+    refresh: useCallback(() => load(true), [load]),
+    debounceMs: 400,
+  });
 
   const role = dashboard?.role || initialRole;
   const copy = roleCopy[role];

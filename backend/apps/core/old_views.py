@@ -1092,7 +1092,7 @@ class MemberComplaintListCreateView(APIView):
     def post(self, request):
         serializer = MemberComplaintSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        complaint = serializer.save(member=request.user, status=Complaint.Status.PENDING)
+        complaint = serializer.save(member=request.user, status=Complaint.Status.OPEN)
         return ApiResponse(data=MemberComplaintSerializer(complaint).data, message='Complaint submitted.', status=status.HTTP_201_CREATED)
 
 
@@ -1108,7 +1108,7 @@ class MemberProfileReportCreateView(APIView):
     def post(self, request):
         serializer = MemberProfileReportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        report = serializer.save(reported_by_member=request.user, status=ProfileReport.Status.PENDING)
+        report = serializer.save(reported_by_member=request.user, status=ProfileReport.Status.OPEN)
         return ApiResponse(data=MemberProfileReportSerializer(report).data, message='Profile report submitted.', status=status.HTTP_201_CREATED)
 
 

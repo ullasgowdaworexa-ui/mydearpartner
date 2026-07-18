@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'apps.matching',
     'apps.messaging',
     'apps.memberships',
+    'apps.notifications',
 ]
 
 MIDDLEWARE = [

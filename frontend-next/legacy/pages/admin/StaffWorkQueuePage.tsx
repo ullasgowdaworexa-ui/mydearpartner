@@ -21,6 +21,7 @@ import {
   AdminStatusBadge, AdminPagination, formatAdminDate, AdminConfirmDialog
 } from '../../components/admin/AdminUI';
 import PhotoModerationGallery from '../../components/admin/PhotoModerationGallery';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 function actionErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -81,6 +82,20 @@ export default function StaffWorkQueuePage() {
   if (dueDate) queryParams.due_date = dueDate;
 
   const { data, error, isLoading, refetch, isFetching } = useGetMyWorkQuery(queryParams);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'verification.submitted',
+      'verification.updated',
+      'photo.uploaded',
+      'document.uploaded',
+      'support.ticket_created',
+      'support.ticket_assigned',
+      'support.ticket_claimed',
+    ],
+    refresh: refetch,
+    debounceMs: 350,
+  });
 
   // Sync URL search params
   useEffect(() => {

@@ -40,7 +40,7 @@ def test_admin_assigns_profile_review_to_staff_only(
     )
     assert assignment.assigned_to_staff == staff_account
     assert assignment.assigned_by_admin == admin_account
-    assert verification.status == ProfileVerificationRequest.Status.ASSIGNED
+    assert verification.status == ProfileVerificationRequest.Status.PENDING_REVIEW
     assert Notification.objects.filter(
         staff_recipient=staff_account,
         notification_type='PROFILE_ASSIGNED',

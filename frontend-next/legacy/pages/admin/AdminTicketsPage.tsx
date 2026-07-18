@@ -20,6 +20,7 @@ import {
   AdminToast, formatAdminDate,
 } from '../../components/admin/AdminUI';
 import AdminAssignModal from '../../components/admin/AdminAssignModal';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function AdminTicketsPage() {
   const location = useLocation();
@@ -164,6 +165,21 @@ export default function AdminTicketsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'support.ticket_created',
+      'support.ticket_assigned',
+      'support.ticket_claimed',
+      'support.ticket_replied',
+      'support.ticket_status_changed',
+      'support.ticket_priority_changed',
+      'support.ticket_resolved',
+      'support.ticket_reopened',
+    ],
+    refresh: useCallback(() => { load(); loadDashboard(); }, [load]),
+    debounceMs: 350,
+  });
 
   useEffect(() => {
     loadDashboard();

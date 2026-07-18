@@ -10,6 +10,7 @@ import {
   AdminModal, AdminPageHeader, AdminPagination, AdminPanel, AdminStatusBadge,
   AdminToast, formatAdminDate, formatAdminMoney,
 } from '../../components/admin/AdminUI';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 interface AdminMembership {
   id: string;
@@ -278,6 +279,25 @@ export default function AdminMembershipsPage() {
       void loadPlans();
     }
   }, [activeTab, loadSubscriptions, loadRequests, loadPlans, canView]);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'membership.purchased',
+      'membership.activated',
+      'membership.expired',
+      'membership.cancelled',
+      'membership.upgraded',
+      'membership.downgraded',
+      'payment.success',
+      'payment.failed',
+      'payment.refunded',
+    ],
+    refresh: useCallback(() => {
+      if (activeTab === 'records') loadSubscriptions();
+      else if (activeTab === 'requests') loadRequests();
+    }, [activeTab, loadSubscriptions, loadRequests]),
+    debounceMs: 400,
+  });
 
   useEffect(() => {
     if (activeTab === 'records') {

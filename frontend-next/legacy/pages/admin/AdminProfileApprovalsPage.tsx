@@ -10,6 +10,7 @@ import {
   AdminPagination, AdminPanel, AdminStatusBadge, formatAdminDate
 } from '../../components/admin/AdminUI';
 import AdminAssignModal from '../../components/admin/AdminAssignModal';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function AdminProfileApprovalsPage() {
   const { hasAdminPermission } = useAuth();
@@ -46,6 +47,20 @@ export default function AdminProfileApprovalsPage() {
   }, [page, status]);
 
   useEffect(() => { load(); }, [load]);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'verification.submitted',
+      'verification.approved',
+      'verification.rejected',
+      'verification.changes_requested',
+      'profile.submitted',
+      'profile.approved',
+      'profile.rejected',
+    ],
+    refresh: load,
+    debounceMs: 300,
+  });
   useEffect(() => { setPage(1); }, [status]);
 
   useEffect(() => {

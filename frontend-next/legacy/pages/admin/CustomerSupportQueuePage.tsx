@@ -11,6 +11,7 @@ import {
   AdminPageHeader, AdminPanel, AdminEmptyState, AdminErrorState, AdminLoading,
   AdminStatusBadge, AdminPagination, formatAdminDate
 } from '../../components/admin/AdminUI';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function CustomerSupportQueuePage() {
   const navigate = useNavigate();
@@ -66,6 +67,24 @@ export default function CustomerSupportQueuePage() {
   const { data, error, isLoading, refetch, isFetching } = useGetAssignedTicketsQuery(queryParams);
   const { data: ticketDetails, refetch: refetchDetails } = useGetTicketDetailsQuery(selectedTicketId || '', {
     skip: !selectedTicketId,
+  });
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'support.ticket_created',
+      'support.ticket_assigned',
+      'support.ticket_claimed',
+      'support.ticket_replied',
+      'support.ticket_status_changed',
+      'support.ticket_priority_changed',
+      'support.ticket_resolved',
+      'support.ticket_reopened',
+    ],
+    refresh: useCallback(() => {
+      refetch();
+      if (selectedTicketId) refetchDetails();
+    }, [refetch, refetchDetails, selectedTicketId]),
+    debounceMs: 350,
   });
 
   // Sync URL search params

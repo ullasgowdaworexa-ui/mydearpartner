@@ -10,6 +10,7 @@ import {
   AdminPagination, AdminPanel, AdminStatusBadge, formatAdminDate
 } from '../../components/admin/AdminUI';
 import AdminAssignModal from '../../components/admin/AdminAssignModal';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function AdminDocumentVerificationPage() {
   const { hasAdminPermission } = useAuth();
@@ -48,6 +49,17 @@ export default function AdminDocumentVerificationPage() {
   }, [page, status]);
 
   useEffect(() => { load(); }, [load]);
+
+  useRealtimeRefresh({
+    eventTypes: [
+      'document.uploaded',
+      'document.approved',
+      'document.rejected',
+      'document.changes_requested',
+    ],
+    refresh: load,
+    debounceMs: 300,
+  });
   useEffect(() => { setPage(1); }, [status]);
 
   useEffect(() => {

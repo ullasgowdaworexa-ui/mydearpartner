@@ -12,9 +12,8 @@ import {
   adminNavigation, adminNavSections, canAccessAdminItem, findAdminNavItem, normalizeAdminPath,
 } from '../../admin/navigation';
 import { useAuth, type AdminRole } from '../../contexts/AuthContext';
-import { publicEnv } from '@/config/env';
-import { getFreshAccessToken } from '../../services/apiClient';
 import { AdminToast } from '../../components/admin/AdminUI';
+import { RealtimeProvider, useRealtime, type RealtimeEvent } from '@/providers/RealtimeProvider';
 
 const roleLabels: Record<AdminRole, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -23,86 +22,61 @@ const roleLabels: Record<AdminRole, string> = {
   CUSTOMER_SUPPORT: 'Customer Support',
 };
 
-function websocketOrigin(baseUrl: string) {
-  return baseUrl.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:').replace(/\/$/, '');
-}
-
-export default function AdminLayout({ children }: { children?: ReactNode } = {}) {
+function AdminLayoutInner({ children }: { children?: ReactNode }) {
   const { user, logout, hasAdminPermission } = useAuth();
+  const { status, lastEvent } = useRealtime();
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    if (!user) return;
-    const userType = user.account_type;
-    if (userType !== 'SUPER_ADMIN' && userType !== 'ADMIN' && userType !== 'STAFF') return;
+    if (!lastEvent) return;
+    const { type, data } = lastEvent;
 
-    let disposed = false;
-    let socket: WebSocket | null = null;
+    let message = '';
+    let tone: 'success' | 'error' = 'success';
 
-    const connect = async () => {
-      try {
-        const accessToken = await getFreshAccessToken();
-        if (disposed) return;
+    if (type === 'verification.submitted') {
+      const friendlyType = (data.verification_type as string || '').replace(/_/g, ' ').toLowerCase();
+      message = `New: ${(data.member_name as string) || 'A member'} submitted ${friendlyType} for review.`;
+    } else if (type === 'verification.approved') {
+      const friendlyType = (data.verification_type as string || '').replace(/_/g, ' ').toLowerCase();
+      message = `${(data.member_name as string) || 'A member'}'s ${friendlyType} was approved.`;
+    } else if (type === 'verification.rejected') {
+      const friendlyType = (data.verification_type as string || '').replace(/_/g, ' ').toLowerCase();
+      message = `${(data.member_name as string) || 'A member'}'s ${friendlyType} was rejected.`;
+      tone = 'error';
+    } else if (type === 'verification.changes_requested') {
+      const friendlyType = (data.verification_type as string || '').replace(/_/g, ' ').toLowerCase();
+      message = `Changes requested for ${(data.member_name as string) || 'a member'}'s ${friendlyType}.`;
+      tone = 'error';
+    } else if (type === 'support.ticket_created') {
+      message = `New support ticket: ${(data.subject as string) || 'No subject'}`;
+    } else if (type === 'support.ticket_assigned') {
+      message = `Ticket assigned to ${(data.assigned_to as string) || 'an agent'}`;
+    } else if (type === 'photo.uploaded') {
+      message = `New photo uploaded for review by ${(data.member_name as string) || 'a member'}`;
+    } else if (type === 'document.uploaded') {
+      message = `New document uploaded for verification by ${(data.member_name as string) || 'a member'}`;
+    } else if (type === 'membership.purchased') {
+      message = `Membership purchased by ${(data.member_name as string) || 'a member'}`;
+    } else if (type === 'payment.success') {
+      message = `Payment completed: ${(data.amount as string) || ''}`;
+    } else if (type === 'payment.failed') {
+      message = `Payment failed: ${(data.amount as string) || ''}`;
+      tone = 'error';
+    } else if (type === 'complaint.created') {
+      message = `New complaint filed by ${(data.member_name as string) || 'a member'}`;
+      tone = 'error';
+    } else if (type === 'contact.created') {
+      message = `New contact enquiry from ${(data.name as string) || 'someone'}`;
+    }
 
-        const url = `${websocketOrigin(publicEnv.wsBaseUrl)}/ws/verification/`;
-        socket = new WebSocket(url, ['access_token', accessToken]);
+    if (message) {
+      setToast({ message, tone });
+    }
 
-        socket.onmessage = (event) => {
-          try {
-            const payload = JSON.parse(event.data);
-            const { type, data } = payload;
-            
-            let message = '';
-            let tone: 'success' | 'error' = 'success';
-            
-            if (type === 'verification.submitted') {
-              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
-              message = `New: ${data.member_name} submitted ${friendlyType} for review.`;
-            } else if (type === 'verification.approved') {
-              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
-              message = `${data.member_name}'s ${friendlyType} was approved.`;
-            } else if (type === 'verification.rejected') {
-              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
-              message = `${data.member_name}'s ${friendlyType} was rejected.`;
-              tone = 'error';
-            } else if (type === 'verification.changes_requested') {
-              const friendlyType = data.verification_type.replace(/_/g, ' ').toLowerCase();
-              message = `Changes requested for ${data.member_name}'s ${friendlyType}.`;
-              tone = 'error';
-            }
+    window.dispatchEvent(new CustomEvent('admin-update', { detail: lastEvent }));
+  }, [lastEvent]);
 
-            if (message && !disposed) {
-              setToast({ message, tone });
-              window.dispatchEvent(new CustomEvent('admin-update', { detail: payload }));
-            }
-          } catch (err) {
-            console.error('Error handling admin WebSocket message:', err);
-          }
-        };
-
-        socket.onclose = () => {
-          if (!disposed) {
-            // Auto reconnect after 5 seconds
-            setTimeout(connect, 5000);
-          }
-        };
-      } catch (err) {
-        console.error('Error connecting admin WebSocket:', err);
-        if (!disposed) {
-          setTimeout(connect, 5000);
-        }
-      }
-    };
-
-    connect();
-
-    return () => {
-      disposed = true;
-      if (socket && socket.readyState < WebSocket.CLOSING) {
-        socket.close();
-      }
-    };
-  }, [user]);
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -125,11 +99,8 @@ export default function AdminLayout({ children }: { children?: ReactNode } = {})
   
   const getSidebarPath = useCallback((itemPath: string) => {
     if (user?.account_type === 'SUPER_ADMIN') {
-      // Remap /admin/admin-management â†’ /super-admin/accounts (SA-specific page name)
       if (itemPath === '/admin/admin-management') return '/super-admin/accounts';
-      // All other /admin/* paths map uniformly to /super-admin/*
       if (itemPath.startsWith('/admin/')) return itemPath.replace('/admin/', '/super-admin/');
-      // Already a /super-admin/* path (e.g. departments, designations injected dynamically)
       return itemPath;
     }
     if (user?.account_type === 'CUSTOMER_SUPPORT' && itemPath.startsWith('/customer-support/')) {
@@ -147,10 +118,7 @@ export default function AdminLayout({ children }: { children?: ReactNode } = {})
       return list.filter((item) => item.path.startsWith('/customer-support/') || item.path.startsWith('/support/'));
     }
     if (user?.account_type === 'SUPER_ADMIN') {
-      // Filter out redundant staff and customer support items for Super Admin
       list = list.filter((item) => item.path !== '/admin/staff' && item.path !== '/admin/customer-support');
-      
-      // Inject Departments and Designations dynamically for Super Admin
       const hasDept = list.some(item => item.path === '/super-admin/departments');
       if (!hasDept) {
         list.push({
@@ -180,7 +148,6 @@ export default function AdminLayout({ children }: { children?: ReactNode } = {})
 
   const activeItem = findAdminNavItem(location.pathname);
 
-  // Restore scroll position of the sidebar nav on location or navigation changes
   useEffect(() => {
     const restoreScroll = () => {
       const savedScroll = sessionStorage.getItem('mdp.admin.sidebar_scroll');
@@ -299,7 +266,7 @@ export default function AdminLayout({ children }: { children?: ReactNode } = {})
 
           <form className="admin-global-search" onSubmit={handleSearch}>
             <Search />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={role === 'STAFF' ? 'Search assigned workâ€¦' : 'Search usersâ€¦'} aria-label="Search admin workspace" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={role === 'STAFF' ? 'Search assigned work…' : 'Search users…'} aria-label="Search admin workspace" />
             <kbd>Enter</kbd>
           </form>
 
@@ -325,5 +292,14 @@ export default function AdminLayout({ children }: { children?: ReactNode } = {})
       </div>
       {toast && <AdminToast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />}
     </div>
+  );
+}
+
+export default function AdminLayout({ children }: { children?: ReactNode } = {}) {
+  const { user } = useAuth();
+  return (
+    <RealtimeProvider>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </RealtimeProvider>
   );
 }

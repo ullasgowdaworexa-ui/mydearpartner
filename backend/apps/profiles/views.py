@@ -418,14 +418,6 @@ class UserProfileImageUploadView(APIView):
                 {"error": "ENTITLEMENT_DENIED", "entitlement": "max_photos", "current_plan": get_active_entitlements(member).plan_name, "upgrade_url": "/membership"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if incoming_count > 1 and not ProfilePhoto.objects.filter(
-            user=member, status=ProfilePhoto.Status.APPROVED
-        ).exists():
-            return Response(
-                {"detail": "Upload one first photo and wait for approval before adding more photos."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         saved_photos = []
         try:
             for file in files:
