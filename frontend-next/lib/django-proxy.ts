@@ -62,12 +62,20 @@ function isProtectedPhotoPath(path: string) {
   return /(?:^|\/)profile-photos\/[^/]+\/(?:image|thumbnail)\/?$/.test(path);
 }
 
+function isProtectedDocumentPath(path: string) {
+  return /verification\/documents\/[^/]+\/download\/?$/.test(path);
+}
+
+function isProtectedResourcePath(path: string) {
+  return isProtectedPhotoPath(path) || isProtectedDocumentPath(path);
+}
+
 /**
  * Perform a server-side token refresh using the HttpOnly refresh cookie so
  * users who were logged in before mdp_photo_access was introduced don't need
  * to sign in again.  Returns the new access token, or null on failure.
  */
-async function inlineRefreshForPhoto(request: NextRequest): Promise<string | null> {
+async function inlineRefreshForProtectedResource(request: NextRequest): Promise<string | null> {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;
   const portalHint = request.cookies.get(PORTAL_COOKIE)?.value;
@@ -190,15 +198,13 @@ export async function forwardToDjango(request: NextRequest, segments: string[]) 
   }
   const requestId = headers.get("x-request-id") || crypto.randomUUID();
   headers.set("x-request-id", requestId);
-  if (isProtectedPhotoPath(path) && !headers.has("authorization")) {
-    let photoAccessToken = request.cookies.get(PHOTO_ACCESS_COOKIE)?.value;
-    // If the cookie is missing (user logged in before this feature was deployed),
-    // perform an inline server-side refresh to obtain a fresh access token.
-    if (!photoAccessToken) {
-      photoAccessToken = (await inlineRefreshForPhoto(request)) ?? undefined;
+  if (isProtectedResourcePath(path) && !headers.has("authorization")) {
+    let accessToken = request.cookies.get(PHOTO_ACCESS_COOKIE)?.value;
+    if (!accessToken) {
+      accessToken = (await inlineRefreshForProtectedResource(request)) ?? undefined;
     }
-    if (photoAccessToken) {
-      headers.set("authorization", `Bearer ${photoAccessToken}`);
+    if (accessToken) {
+      headers.set("authorization", `Bearer ${accessToken}`);
     }
   }
   headers.set("x-forwarded-host", request.headers.get("host") ?? request.nextUrl.host);

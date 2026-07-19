@@ -283,11 +283,13 @@ class MembershipCreateOrderView(APIView):
     def post(self, request):
         missing = missing_verification_checks(request.user)
         if missing:
-            return JsonResponse({
-                'error': 'ACCOUNT_NOT_VERIFIED',
-                'message': 'Your account must be fully verified before purchasing a membership.',
-                'missing': missing,
-            }, status=403)
+            return ApiResponse(
+                success=False,
+                code='ACCOUNT_NOT_VERIFIED',
+                message='Your account must be fully verified before purchasing a membership.',
+                errors={'missing': missing},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         plan_id = request.data.get('plan_id')
         plan_slug = str(request.data.get('plan_slug') or '').strip().lower()
         queryset = MembershipPlan.objects.filter(is_active=True)

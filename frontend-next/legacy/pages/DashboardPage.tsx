@@ -107,7 +107,11 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadDashboardData();
+    let active = true;
+    loadDashboardData().finally(() => {
+      if (!active) return;
+    });
+    return () => { active = false; };
   }, []);
 
   const handleInterestAction = async (interestId: string, statusVal: 'ACCEPTED' | 'DECLINED') => {

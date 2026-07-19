@@ -8,7 +8,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import connection, transaction
 from django.db.models import OuterRef, Prefetch, Q, Subquery
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiResponse
@@ -265,8 +265,14 @@ class ProfileDetailView(APIView):
                 if 'limit' in payload:
                     payload['views_limit'] = payload['limit']
                 from apps.core.entitlements import entitlement_denial, get_active_entitlements
+                denial = entitlement_denial(get_active_entitlements(request.user), 'daily_profile_view_limit', daily_limit=True)
+                denial.update({
+                    'code': 'daily_profile_unlock_limit_reached',
+                    'used': payload.get('used'),
+                    'remaining': payload.get('remaining'),
+                })
                 return Response(
-                    entitlement_denial(get_active_entitlements(request.user), 'daily_profile_view_limit', daily_limit=True),
+                    denial,
                     status=status.HTTP_403_FORBIDDEN,
                 )
             return ApiResponse(
@@ -468,8 +474,12 @@ class MessageHistoryView(APIView):
         allowed, reason = MembershipEntitlementService.can_message(request.user, partner)
         if not allowed:
             if reason == 'messaging_not_included':
+                denial = entitlement_denial(get_active_entitlements(request.user), 'can_chat')
+                denial.update({
+                    'code': 'messaging_not_included',
+                })
                 return Response(
-                    entitlement_denial(get_active_entitlements(request.user), 'can_chat'),
+                    denial,
                     status=status.HTTP_403_FORBIDDEN,
                 )
             code = reason
@@ -775,10 +785,17 @@ class VerificationDocumentDownloadView(APIView):
                 target_id=document.pk,
                 new_data={'member_id': str(document.member_id)},
             )
-        filename = Path(document.file_path.name).name.replace('"', '')
-        content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-        response = FileResponse(document.file_path.open('rb'), content_type=content_type)
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        if document.file_data:
+            from apps.accounts.services import decompress_document
+            raw = decompress_document(bytes(document.file_data))
+            filename = document.file_name or 'document'
+            content_type = document.file_content_type or 'application/octet-stream'
+            response = HttpResponse(raw, content_type=content_type)
+        else:
+            filename = Path(document.file_path.name).name.replace('"', '')
+            content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+            response = FileResponse(document.file_path.open('rb'), content_type=content_type)
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
         response['X-Content-Type-Options'] = 'nosniff'
         response['Cache-Control'] = 'private, no-store'
         return response

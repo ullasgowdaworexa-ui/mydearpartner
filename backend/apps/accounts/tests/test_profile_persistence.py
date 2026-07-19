@@ -89,20 +89,53 @@ def test_partial_section_update_does_not_erase_other_sections(member):
     assert prefs.preferred_religion == 'Hindu'
 
 
+def test_canonical_field_names_are_accepted_and_persisted(member):
+    client = auth_client(member)
+
+    # The spec's canonical names must be accepted (aliased to model fields).
+    patch = client.patch(
+        '/api/v1/member-auth/me/',
+        {
+            'about_me': 'Canonical about',
+            'current_city': 'Bangalore',
+            'preferred_min_age': 24,
+            'preferred_max_age': 36,
+            'preferred_min_height': '150 cm',
+            'preferred_max_height': '190 cm',
+            'preferred_locations': 'Bangalore, Mumbai',
+            'ideal_partner_description': 'Kind and caring',
+        },
+        format='json',
+    )
+    assert patch.status_code == 200, patch.content
+    data = patch.data['data']
+    assert data['about'] == 'Canonical about'
+    assert data['work_location'] == 'Bangalore'
+    assert data['pref_age_min'] == 24
+    assert data['pref_age_max'] == 36
+    assert data['pref_height_min'] == '150 cm'
+    assert data['pref_height_max'] == '190 cm'
+    assert data['pref_location'] == 'Bangalore, Mumbai'
+    assert data['pref_about'] == 'Kind and caring'
+    # Canonical names also echoed back in the response.
+    assert data['about_me'] == 'Canonical about'
+    assert data['current_city'] == 'Bangalore'
+
+
 def test_unknown_profile_field_is_rejected_with_400(member, super_admin):
     client = auth_client(member)
 
-    # 9 & 10. Send an unknown field -> 400, not a false 200.
+    # 9 & 10. Send a genuinely unknown field -> 400, not a false 200.
     bad = client.patch(
         '/api/v1/member-auth/me/',
-        {'about_me': 'should fail', 'current_city': 'should fail'},
+        {'not_a_real_field': 'should fail', 'bogus_payload': 'x'},
         format='json',
     )
     assert bad.status_code == 400, bad.content
     # DRF may return the field errors directly or wrapped under 'detail'.
-    errors = bad.data.get('errors') or bad.data
+    errors = bad.data
     error_keys = set(errors.keys()) if isinstance(errors, dict) else set()
     if 'detail' in error_keys and isinstance(errors['detail'], dict):
         error_keys = set(errors['detail'].keys())
     # The offending keys must be reported so the client knows they were dropped.
-    assert 'about_me' in error_keys or 'current_city' in error_keys
+    assert 'not_a_real_field' in error_keys or 'bogus_payload' in error_keys

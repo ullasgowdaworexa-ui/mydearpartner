@@ -1,17 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from '@/lib/router-compat';
 import {
   ArrowLeft, BadgeCheck, Ban, Camera, CreditCard, Edit3, FileText,
   Heart, Info, LoaderCircle, Mail, MapPin, Phone, Shield, User,
   CheckCircle2, XCircle, Clock, AlertTriangle, Star, Trash2,
-  Check, X, Save,
+  Check, X, Save, Eye,
 } from 'lucide-react';
 import SmartImage from '@/components/shared/smart-image';
 import { fetchApi } from '../../services/apiClient';
+import ProtectedDocumentViewer from '@/components/documents/ProtectedDocumentViewer';
 import { getAdminUsers, updateAdminUser, type AdminUserAction } from '../../services/adminService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useRealtime, type RealtimeEvent } from '@/providers/RealtimeProvider';
 import {
   AdminConfirmDialog, AdminEmptyState, AdminErrorState, AdminLoading,
   AdminPageHeader, AdminPagination, AdminPanel, AdminStatusBadge, AdminToast,
@@ -64,6 +66,7 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
   const [photoAction, setPhotoAction] = useState<{ photoId: string; approve: boolean } | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
+  const [viewDoc, setViewDoc] = useState<{ id: string; type: string } | null>(null);
 
   // Confirm dialogs
   const [confirmAction, setConfirmAction] = useState<{ user: string; action: string; label: string; description: string; dangerous: boolean } | null>(null);
@@ -83,6 +86,43 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
 
   useEffect(() => { load(); }, [load]);
 
+  // Live refresh when the member (or a moderator) updates the profile. The
+  // event is debounced and request-sequenced so an older response can never
+  // overwrite a newer one. This never touches the member's own edit form.
+  const { subscribe } = useRealtime();
+  const loadSeqRef = useRef(0);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const refresh = () => {
+      const seq = ++loadSeqRef.current;
+      fetchApi<MemberDetail>(`/admin/users/${memberId}/`)
+        .then((data) => {
+          if (seq === loadSeqRef.current) setDetail(data);
+        })
+        .catch(() => {
+          /* Keep the existing detail on a transient refresh failure. */
+        });
+    };
+    const handler = (event: RealtimeEvent) => {
+      const eventMemberId = (event.data?.member_id as string) || event.entity_id;
+      if (eventMemberId !== memberId) return;
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(refresh, 600);
+    };
+    const unsubscribers = [
+      subscribe('profile.updated', handler),
+      subscribe('profile.submitted', handler),
+      subscribe('profile.approved', handler),
+      subscribe('profile.rejected', handler),
+      subscribe('profile.changes_requested', handler),
+    ];
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, [memberId, subscribe]);
+
   const m = detail?.member as Record<string, any> | undefined;
   const photos = detail?.photos || [];
   const verifications = detail?.verifications || [];
@@ -100,11 +140,14 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
       marital_status: m.marital_status || '',
       height: m.height || '',
       weight: m.weight || '',
+      blood_group: m.blood_group || '',
+      complexion: m.complexion || '',
       religion: m.religion || '',
       mother_tongue: m.mother_tongue || '',
       caste: m.caste || '',
       sub_caste: m.sub_caste || '',
       gothra: m.gothra || '',
+      star_nakshatra: m.star_nakshatra || '',
       manglik_status: m.manglik_status || '',
       highest_education: m.highest_education || '',
       education_detail: m.education_detail || '',
@@ -113,6 +156,24 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
       company: m.company || '',
       annual_income: m.annual_income || '',
       work_location: m.work_location || '',
+      father_status: m.father_status || '',
+      mother_status: m.mother_status || '',
+      num_brothers: m.num_brothers ?? 0,
+      num_sisters: m.num_sisters ?? 0,
+      family_type: m.family_type || '',
+      family_status: m.family_status || '',
+      family_location: m.family_location || '',
+      pref_age_min: m.pref_age_min ?? '',
+      pref_age_max: m.pref_age_max ?? '',
+      pref_height_min: m.pref_height_min ?? '',
+      pref_height_max: m.pref_height_max ?? '',
+      pref_religion: m.pref_religion || '',
+      pref_caste: m.pref_caste || '',
+      pref_location: m.pref_location || '',
+      pref_education: m.pref_education || '',
+      pref_occupation: m.pref_occupation || '',
+      pref_marital_status: m.pref_marital_status || '',
+      pref_about: m.pref_about || '',
       about: m.about || '',
       hobbies: m.hobbies || '',
       is_active: m.is_active ?? true,
@@ -128,7 +189,7 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
     try {
       const result = await fetchApi<any>(`/admin/users/${memberId}/`, {
         method: 'PUT',
-        body: editData,
+        body: JSON.stringify(editData),
       });
       setDetail(prev => prev ? { ...prev, member: result.data } : prev);
       setToast({ message: 'Member updated successfully.', tone: 'success' });
@@ -289,10 +350,10 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
                 <InfoField label="Marital Status" value={m.marital_status as string} />
                 <InfoField label="Height" value={m.height as string} />
                 <InfoField label="Weight" value={m.weight as string} />
+                <InfoField label="Blood Group" value={m.blood_group as string} />
+                <InfoField label="Complexion" value={m.complexion as string} />
                 <InfoField label="Mother Tongue" value={m.mother_tongue as string} />
-                <InfoField label="City" value={m.city as string} />
-                <InfoField label="State" value={m.state as string} />
-                <InfoField label="Country" value={m.country as string} />
+                <InfoField label="Work Location" value={m.work_location as string} />
               </div>
               {(m.about as string) && (
                 <div className="mt-4">
@@ -386,11 +447,14 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
                 <EditField label="Marital Status" name="marital_status" value={editData.marital_status as string} onChange={v => setEditData(p => ({ ...p, marital_status: v }))} />
                 <EditField label="Height" name="height" value={editData.height as string} onChange={v => setEditData(p => ({ ...p, height: v }))} />
                 <EditField label="Weight" name="weight" value={editData.weight as string} onChange={v => setEditData(p => ({ ...p, weight: v }))} />
+                <EditField label="Blood Group" name="blood_group" value={editData.blood_group as string} onChange={v => setEditData(p => ({ ...p, blood_group: v }))} />
+                <EditField label="Complexion" name="complexion" value={editData.complexion as string} onChange={v => setEditData(p => ({ ...p, complexion: v }))} />
                 <EditField label="Religion" name="religion" value={editData.religion as string} onChange={v => setEditData(p => ({ ...p, religion: v }))} />
                 <EditField label="Mother Tongue" name="mother_tongue" value={editData.mother_tongue as string} onChange={v => setEditData(p => ({ ...p, mother_tongue: v }))} />
                 <EditField label="Caste" name="caste" value={editData.caste as string} onChange={v => setEditData(p => ({ ...p, caste: v }))} />
                 <EditField label="Sub Caste" name="sub_caste" value={editData.sub_caste as string} onChange={v => setEditData(p => ({ ...p, sub_caste: v }))} />
                 <EditField label="Gothra" name="gothra" value={editData.gothra as string} onChange={v => setEditData(p => ({ ...p, gothra: v }))} />
+                <EditField label="Star Nakshatra" name="star_nakshatra" value={editData.star_nakshatra as string} onChange={v => setEditData(p => ({ ...p, star_nakshatra: v }))} />
                 <EditField label="Manglik Status" name="manglik_status" value={editData.manglik_status as string} onChange={v => setEditData(p => ({ ...p, manglik_status: v }))} />
                 <EditField label="Highest Education" name="highest_education" value={editData.highest_education as string} onChange={v => setEditData(p => ({ ...p, highest_education: v }))} />
                 <EditField label="Education Detail" name="education_detail" value={editData.education_detail as string} onChange={v => setEditData(p => ({ ...p, education_detail: v }))} />
@@ -399,6 +463,37 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
                 <EditField label="Company" name="company" value={editData.company as string} onChange={v => setEditData(p => ({ ...p, company: v }))} />
                 <EditField label="Annual Income" name="annual_income" value={editData.annual_income as string} onChange={v => setEditData(p => ({ ...p, annual_income: v }))} />
                 <EditField label="Work Location" name="work_location" value={editData.work_location as string} onChange={v => setEditData(p => ({ ...p, work_location: v }))} />
+                <EditField label="Father Status" name="father_status" value={editData.father_status as string} onChange={v => setEditData(p => ({ ...p, father_status: v }))} />
+                <EditField label="Mother Status" name="mother_status" value={editData.mother_status as string} onChange={v => setEditData(p => ({ ...p, mother_status: v }))} />
+                <EditField label="No. of Brothers" name="num_brothers" type="number" value={String(editData.num_brothers ?? 0)} onChange={v => setEditData(p => ({ ...p, num_brothers: Number(v) }))} />
+                <EditField label="No. of Sisters" name="num_sisters" type="number" value={String(editData.num_sisters ?? 0)} onChange={v => setEditData(p => ({ ...p, num_sisters: Number(v) }))} />
+                <EditField label="Family Type" name="family_type" value={editData.family_type as string} onChange={v => setEditData(p => ({ ...p, family_type: v }))} />
+                <EditField label="Family Status" name="family_status" value={editData.family_status as string} onChange={v => setEditData(p => ({ ...p, family_status: v }))} />
+                <EditField label="Family Location" name="family_location" value={editData.family_location as string} onChange={v => setEditData(p => ({ ...p, family_location: v }))} />
+              </div>
+              <div className="mt-6 border-t border-slate-200 pt-6">
+                <h3 className="mb-3 text-sm font-semibold text-slate-700">Partner Preferences</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <EditField label="Min Age" name="pref_age_min" type="number" value={String(editData.pref_age_min ?? '')} onChange={v => setEditData(p => ({ ...p, pref_age_min: v }))} />
+                  <EditField label="Max Age" name="pref_age_max" type="number" value={String(editData.pref_age_max ?? '')} onChange={v => setEditData(p => ({ ...p, pref_age_max: v }))} />
+                  <EditField label="Min Height" name="pref_height_min" value={editData.pref_height_min as string} onChange={v => setEditData(p => ({ ...p, pref_height_min: v }))} />
+                  <EditField label="Max Height" name="pref_height_max" value={editData.pref_height_max as string} onChange={v => setEditData(p => ({ ...p, pref_height_max: v }))} />
+                  <EditField label="Religion" name="pref_religion" value={editData.pref_religion as string} onChange={v => setEditData(p => ({ ...p, pref_religion: v }))} />
+                  <EditField label="Caste" name="pref_caste" value={editData.pref_caste as string} onChange={v => setEditData(p => ({ ...p, pref_caste: v }))} />
+                  <EditField label="Location" name="pref_location" value={editData.pref_location as string} onChange={v => setEditData(p => ({ ...p, pref_location: v }))} />
+                  <EditField label="Education" name="pref_education" value={editData.pref_education as string} onChange={v => setEditData(p => ({ ...p, pref_education: v }))} />
+                  <EditField label="Occupation" name="pref_occupation" value={editData.pref_occupation as string} onChange={v => setEditData(p => ({ ...p, pref_occupation: v }))} />
+                  <EditField label="Marital Status" name="pref_marital_status" value={editData.pref_marital_status as string} onChange={v => setEditData(p => ({ ...p, pref_marital_status: v }))} />
+                </div>
+                <div className="mt-4">
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Additional Expectations</label>
+                  <textarea
+                    value={editData.pref_about as string}
+                    onChange={e => setEditData(p => ({ ...p, pref_about: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                    rows={4}
+                  />
+                </div>
               </div>
               <div className="mt-4">
                 <label className="mb-1 block text-xs font-medium text-slate-500">About</label>
@@ -528,6 +623,9 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => setViewDoc({ id: doc.id, type: doc.document_type })} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">
+                        <Eye className="h-3.5 w-3.5" /> View
+                      </button>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                         doc.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
                         doc.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
@@ -693,6 +791,13 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
           busy={actionBusy}
           onConfirm={() => performAction(confirmAction.action)}
           onCancel={() => setConfirmAction(null)}
+        />
+      )}
+      {viewDoc && (
+        <ProtectedDocumentViewer
+          documentId={viewDoc.id}
+          documentType={viewDoc.type}
+          onClose={() => setViewDoc(null)}
         />
       )}
     </div>

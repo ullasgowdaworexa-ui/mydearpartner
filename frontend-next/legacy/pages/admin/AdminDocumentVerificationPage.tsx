@@ -10,6 +10,7 @@ import {
   AdminPagination, AdminPanel, AdminStatusBadge, formatAdminDate
 } from '../../components/admin/AdminUI';
 import AdminAssignModal from '../../components/admin/AdminAssignModal';
+import ProtectedDocumentViewer from '@/components/documents/ProtectedDocumentViewer';
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 export default function AdminDocumentVerificationPage() {
@@ -26,6 +27,7 @@ export default function AdminDocumentVerificationPage() {
   
   // Assign modal state
   const [assignTargetId, setAssignTargetId] = useState<string | null>(null);
+  const [viewDoc, setViewDoc] = useState<{ id: string; type: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,6 +160,9 @@ export default function AdminDocumentVerificationPage() {
                           <div key={document.id}>
                             <strong>{document.document_type}</strong>
                             <small style={{ display: 'block', color: 'var(--admin-text-muted, #9ca3af)' }}>{document.status}</small>
+                            <button type="button" onClick={() => setViewDoc({ id: document.id, type: document.document_type })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontSize: '0.8rem', color: 'var(--color-primary, #6366f1)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                              View document
+                            </button>
                           </div>
                         ))
                         : <span style={{ color: 'var(--admin-text-muted, #9ca3af)' }}>Document details unavailable</span>}
@@ -221,6 +226,13 @@ export default function AdminDocumentVerificationPage() {
         assignmentType="DOCUMENT_VERIFICATION"
         onSuccess={load}
       />
+      {viewDoc && (
+        <ProtectedDocumentViewer
+          documentId={viewDoc.id}
+          documentType={viewDoc.type}
+          onClose={() => setViewDoc(null)}
+        />
+      )}
     </>
   );
 }

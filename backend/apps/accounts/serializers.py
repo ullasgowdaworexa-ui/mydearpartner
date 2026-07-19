@@ -172,6 +172,13 @@ class MemberSerializer(serializers.ModelSerializer):
                 'submitted_at', 'rejection_reason',
             ):
                 data[field] = getattr(profile, field)
+            # Canonical output aliases so consumers can use the spec names too.
+            profile_aliases = {
+                'about_me': 'about',
+                'current_city': 'work_location',
+            }
+            for output_name, model_name in profile_aliases.items():
+                data[output_name] = getattr(profile, model_name)
         if preference:
             aliases = {
                 'pref_age_min': 'preferred_age_min',
@@ -185,6 +192,17 @@ class MemberSerializer(serializers.ModelSerializer):
                 'pref_occupation': 'preferred_occupation',
                 'pref_marital_status': 'preferred_marital_status',
                 'pref_about': 'additional_expectations',
+                'preferred_min_age': 'preferred_age_min',
+                'preferred_max_age': 'preferred_age_max',
+                'preferred_min_height': 'preferred_height_min',
+                'preferred_max_height': 'preferred_height_max',
+                'preferred_religion': 'preferred_religion',
+                'preferred_caste': 'preferred_caste',
+                'preferred_locations': 'preferred_location',
+                'preferred_education': 'preferred_education',
+                'preferred_occupation': 'preferred_occupation',
+                'preferred_marital_status': 'preferred_marital_status',
+                'ideal_partner_description': 'additional_expectations',
             }
             for output_name, model_name in aliases.items():
                 data[output_name] = getattr(preference, model_name)
@@ -617,6 +635,21 @@ class MemberProfileUpdateSerializer(serializers.Serializer):
     annual_income = serializers.CharField(required=False, allow_blank=True)
     work_location = serializers.CharField(required=False, allow_blank=True)
     family_location = serializers.CharField(required=False, allow_blank=True)
+    family_type = serializers.CharField(required=False, allow_blank=True)
+    family_status = serializers.CharField(required=False, allow_blank=True)
+    blood_group = serializers.CharField(required=False, allow_blank=True)
+    complexion = serializers.CharField(required=False, allow_blank=True)
+    sub_caste = serializers.CharField(required=False, allow_blank=True)
+    gothra = serializers.CharField(required=False, allow_blank=True)
+    star_nakshatra = serializers.CharField(required=False, allow_blank=True)
+    manglik_status = serializers.CharField(required=False, allow_blank=True)
+    education_detail = serializers.CharField(required=False, allow_blank=True)
+    employed_in = serializers.CharField(required=False, allow_blank=True)
+    company = serializers.CharField(required=False, allow_blank=True)
+    father_status = serializers.CharField(required=False, allow_blank=True)
+    mother_status = serializers.CharField(required=False, allow_blank=True)
+    num_brothers = serializers.IntegerField(required=False, min_value=0)
+    num_sisters = serializers.IntegerField(required=False, min_value=0)
     about = serializers.CharField(required=False, allow_blank=True)
     hobbies = serializers.ListField(child=serializers.CharField(max_length=80), required=False)
     pref_age_min = serializers.IntegerField(required=False, min_value=18, max_value=100)
@@ -631,6 +664,19 @@ class MemberProfileUpdateSerializer(serializers.Serializer):
     pref_marital_status = serializers.CharField(required=False, allow_blank=True)
     pref_about = serializers.CharField(required=False, allow_blank=True)
     chat_public_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    # Canonical aliases (spec names). Accepted in addition to the existing wire
+    # names so neither spelling is silently dropped, and the API response also
+    # exposes the canonical names. `source` renames the validated_data key so
+    # `update_member` maps it to the correct model field.
+    about_me = serializers.CharField(source='about', required=False, allow_blank=True)
+    current_city = serializers.CharField(source='work_location', required=False, allow_blank=True)
+    preferred_min_age = serializers.IntegerField(source='pref_age_min', required=False, min_value=18, max_value=100)
+    preferred_max_age = serializers.IntegerField(source='pref_age_max', required=False, min_value=18, max_value=100)
+    preferred_min_height = serializers.CharField(source='pref_height_min', required=False, allow_blank=True)
+    preferred_max_height = serializers.CharField(source='pref_height_max', required=False, allow_blank=True)
+    preferred_locations = serializers.CharField(source='pref_location', required=False, allow_blank=True)
+    ideal_partner_description = serializers.CharField(source='pref_about', required=False, allow_blank=True)
 
     def validate_mobile_number(self, value):
         value = validate_mobile_number(value)
@@ -669,9 +715,7 @@ class MemberDocumentSerializer(serializers.ModelSerializer):
         )
 
     def get_download_url(self, obj):
-        request = self.context.get('request')
-        path = f'/api/v1/verification/documents/{obj.pk}/download/'
-        return request.build_absolute_uri(path) if request else path
+        return f'/api/proxy/member-auth/verification/documents/{obj.pk}/download/'
 
 
 # Compatibility aliases for internal imports while all callers move to member terminology.

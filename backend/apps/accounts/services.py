@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import gzip
 import logging
 
 from django.conf import settings
@@ -246,3 +247,11 @@ def permanently_delete_member(*, member: Member, actor=None) -> PermanentMemberD
 # Compatibility names for older internal imports.
 create_user_profile = create_member
 update_user_profile = update_member
+
+
+def compress_document(file_data: bytes) -> bytes:
+    return gzip.compress(file_data)
+
+
+def decompress_document(compressed_data: bytes) -> bytes:
+    return gzip.decompress(compressed_data)

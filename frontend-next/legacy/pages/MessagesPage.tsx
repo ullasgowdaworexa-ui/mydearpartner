@@ -100,6 +100,7 @@ export default function MessagesPage() {
   // Synchronize/Generate E2EE keys for the current user on mount
   useEffect(() => {
     if (!user || user.account_type !== 'MEMBER') return;
+    let active = true;
 
     const syncKeys = async () => {
       let privKey = localStorage.getItem('mdp.e2e.private_key');
@@ -118,6 +119,8 @@ export default function MessagesPage() {
         }
       }
 
+      if (!active) return;
+
       // If backend is missing user's public key, patch it
       if (!user.chat_public_key || user.chat_public_key !== pubKey) {
         try {
@@ -133,6 +136,7 @@ export default function MessagesPage() {
     };
 
     void syncKeys();
+    return () => { active = false; };
   }, [user]);
 
   // Derive shared symmetric key when conversation or user changes

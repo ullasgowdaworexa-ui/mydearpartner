@@ -94,6 +94,8 @@ from .role_views import (
     SuperAdminMembershipPlanActivateView,
     SuperAdminMembershipPlanDeactivateView,
 )
+from .old_views import VerificationDocumentDownloadView
+
 from .views import (
     BlogPostListView,
     CompatibilityCheckView,
@@ -174,6 +176,7 @@ urlpatterns = [
 
     path('support/tickets/', MemberSupportTicketListView.as_view(), name='member_support_tickets'),
     path('support/tickets/<uuid:pk>/', MemberSupportTicketDetailView.as_view(), name='member_support_ticket_detail'),
+    path('verification/documents/<uuid:document_id>/download/', VerificationDocumentDownloadView.as_view(), name='verification_document_download'),
     path('support/attachments/<uuid:attachment_id>/download/', SupportAttachmentDownloadView.as_view(), name='support_attachment_download'),
     path('notifications/', MemberNotificationListView.as_view(), name='member_notifications'),
     path('notifications/unread-count/', MemberNotificationUnreadCountView.as_view(), name='member_notifications_unread_count'),

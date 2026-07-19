@@ -1019,6 +1019,13 @@ class CustomerSupportActivityLog(BaseOperationalActivityLog):
         db_table = 'customer_support_activity_logs'
 
 
+class MemberActivityLog(BaseOperationalActivityLog):
+    """Audit trail for actions a member performs on their own account/profile."""
+
+    class Meta(BaseOperationalActivityLog.Meta):
+        db_table = 'member_activity_logs'
+
+
 class MemberProfile(models.Model):
     member = models.OneToOneField(Member, on_delete=models.CASCADE, related_name='profile')
     marital_status = models.CharField(max_length=30, blank=True)
@@ -1101,6 +1108,11 @@ class MemberPreference(models.Model):
         ]
 
 
+class ActiveDocumentManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+
 class MemberDocument(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
@@ -1110,13 +1122,26 @@ class MemberDocument(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='documents')
+    objects = ActiveDocumentManager()
+    all_objects = models.Manager()
     document_type = models.CharField(max_length=80)
+    file_data = models.BinaryField(null=True, blank=True)
+    file_name = models.CharField(max_length=255, blank=True)
+    file_content_type = models.CharField(max_length=100, blank=True)
+    file_size = models.IntegerField(null=True, blank=True)
+    compressed_size = models.IntegerField(null=True, blank=True)
     file_path = models.FileField(
         upload_to='member_documents/',
         storage=private_media_storage,
+        null=True, blank=True,
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     rejection_reason = models.TextField(blank=True)
+    changes_requested_reason = models.TextField(blank=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by_id = models.UUIDField(null=True, blank=True)
+    deletion_reason = models.TextField(blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     reviewed_by_id = models.UUIDField(null=True, blank=True)

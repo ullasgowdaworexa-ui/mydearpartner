@@ -259,7 +259,7 @@ def test_image_and_thumbnail_endpoints_honor_etag_and_cache_backend_clearing(
 
     assert response.status_code == status.HTTP_200_OK
     assert response["Content-Type"] == "image/webp"
-    assert response["Cache-Control"] == "private, max-age=86400"
+    assert response["Cache-Control"] == "private, max-age=86400, must-revalidate"
     assert int(response["Content-Length"]) == len(photo.image_data)
     assert response.content == bytes(photo.image_data)
 

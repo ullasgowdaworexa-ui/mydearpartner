@@ -16,6 +16,8 @@ from rest_framework.views import APIView
 
 from apps.core.responses import ApiResponse
 
+from .services import compress_document
+
 from .models import (
     AccountType,
     AdminActivityLog,
@@ -25,6 +27,7 @@ from .models import (
     CustomerSupportLoginActivity,
     LoginStatus,
     Member,
+    MemberActivityLog,
     MemberDocument,
     MemberLoginActivity,
     MemberProfile,
@@ -117,6 +120,7 @@ LOGIN_ACTIVITY_CONFIG = {
 }
 
 OPERATIONAL_ACTIVITY_MODELS = {
+    AccountType.MEMBER: MemberActivityLog,
     AccountType.SUPER_ADMIN: SuperAdminActivityLog,
     AccountType.ADMIN: AdminActivityLog,
     AccountType.STAFF: StaffActivityLog,
@@ -206,6 +210,79 @@ def log_operational_activity(
         ip_address=_client_ip(request),
         user_agent=request.META.get('HTTP_USER_AGENT', '')[:1000],
     )
+
+
+# Maps wire/serializer field names to the section they belong to, used for the
+# `profile.updated` real-time event payload.
+_PROFILE_FIELD_SECTIONS = {
+    'first_name': 'account', 'last_name': 'account', 'mobile_number': 'account',
+    'gender': 'account', 'date_of_birth': 'account', 'profile_created_by': 'account',
+    'chat_public_key': 'account',
+    'marital_status': 'profile', 'height': 'profile', 'weight': 'profile',
+    'blood_group': 'profile', 'complexion': 'profile', 'religion': 'profile',
+    'mother_tongue': 'profile', 'caste': 'profile', 'sub_caste': 'profile',
+    'gothra': 'profile', 'star_nakshatra': 'profile', 'manglik_status': 'profile',
+    'highest_education': 'profile', 'education_detail': 'profile',
+    'occupation': 'profile', 'employed_in': 'profile', 'company': 'profile',
+    'annual_income': 'profile', 'work_location': 'profile', 'family_location': 'profile',
+    'about': 'profile', 'about_me': 'profile', 'current_city': 'profile',
+    'hobbies': 'profile',
+    'father_status': 'family', 'mother_status': 'family', 'num_brothers': 'family',
+    'num_sisters': 'family', 'family_type': 'family', 'family_status': 'family',
+    'pref_age_min': 'preferences', 'preferred_min_age': 'preferences',
+    'pref_age_max': 'preferences', 'preferred_max_age': 'preferences',
+    'pref_height_min': 'preferences', 'preferred_min_height': 'preferences',
+    'pref_height_max': 'preferences', 'preferred_max_height': 'preferences',
+    'pref_religion': 'preferences', 'preferred_religion': 'preferences',
+    'pref_caste': 'preferences', 'preferred_caste': 'preferences',
+    'pref_location': 'preferences', 'preferred_locations': 'preferences',
+    'pref_education': 'preferences', 'preferred_education': 'preferences',
+    'pref_occupation': 'preferences', 'preferred_occupation': 'preferences',
+    'pref_marital_status': 'preferences', 'preferred_marital_status': 'preferences',
+    'pref_about': 'preferences', 'ideal_partner_description': 'preferences',
+}
+
+
+def _profile_section_of(field: str) -> str:
+    return _PROFILE_FIELD_SECTIONS.get(field, 'profile')
+
+
+# Canonical (spec) input names -> (record, model_attribute). Mirrors the
+# `source` declarations on MemberProfileUpdateSerializer so audit snapshots
+# can read the right persisted attribute regardless of which spelling the
+# client used.
+_CANONICAL_TO_MODEL = {
+    'about_me': ('profile', 'about'),
+    'current_city': ('profile', 'work_location'),
+    'preferred_min_age': ('preference', 'preferred_age_min'),
+    'preferred_max_age': ('preference', 'preferred_age_max'),
+    'preferred_min_height': ('preference', 'preferred_height_min'),
+    'preferred_max_height': ('preference', 'preferred_height_max'),
+    'preferred_locations': ('preference', 'preferred_location'),
+    'ideal_partner_description': ('preference', 'additional_expectations'),
+}
+
+
+def _snapshot_profile_values(member, keys):
+    """Read the current persisted values for *keys* from the member's profile
+    and preference records. Used to build before/after audit diffs."""
+    from .services import PREFERENCE_ALIASES, PROFILE_FIELDS
+
+    out = {}
+    profile = getattr(member, 'profile', None)
+    preference = getattr(member, 'preferences', None)
+    for key in keys:
+        if key in PROFILE_FIELDS:
+            out[key] = getattr(profile, key, None) if profile else None
+        elif key in PREFERENCE_ALIASES:
+            out[key] = getattr(preference, PREFERENCE_ALIASES[key], None) if preference else None
+        elif key in _CANONICAL_TO_MODEL:
+            record, attr = _CANONICAL_TO_MODEL[key]
+            source = profile if record == 'profile' else preference
+            out[key] = getattr(source, attr, None) if source else None
+        else:
+            out[key] = getattr(member, key, None)
+    return out
 
 
 def _challenge_code():
@@ -643,6 +720,12 @@ class MemberMeView(AccountMeView):
             context={'member': request.user},
         )
         serializer.is_valid(raise_exception=True)
+
+        # Snapshot values before the write so the audit log can record the
+        # exact changed fields and previous/new values.
+        changed_keys = [k for k in profile_data.keys() if k not in ('photo',)]
+        before = _snapshot_profile_values(request.user, changed_keys)
+
         photo_upload = request.FILES.get('photo')
         processed_photo = None
         from apps.profiles.services.image_processing import (
@@ -693,6 +776,38 @@ class MemberMeView(AccountMeView):
                         )
         except ProfilePhotoProcessingError as exc:
             raise ValidationError({'photo': [str(exc)]}) from exc
+
+        after = _snapshot_profile_values(member, changed_keys)
+        changed_fields = [k for k in changed_keys if before.get(k) != after.get(k)]
+        if changed_fields:
+            log_operational_activity(
+                request=request,
+                actor=request.user,
+                action='PROFILE_UPDATED',
+                module='profile',
+                target_type='MEMBER',
+                target_id=member.pk,
+                description=f"Member updated {len(changed_fields)} profile field(s).",
+                old_data={k: before.get(k) for k in changed_fields},
+                new_data={k: after.get(k) for k in changed_fields},
+            )
+            # Notify authorized staff only AFTER the transaction commits, so a
+            # member's own active form is never reset with stale data.
+            from apps.notifications.services import send_event_after_commit
+            send_event_after_commit(
+                groups=['role_super_admin', 'role_admin'],
+                event_type='profile.updated',
+                entity='member_profile',
+                entity_id=member.pk,
+                message='A member updated their profile.',
+                data={
+                    'member_id': str(member.pk),
+                    'changed_sections': sorted({
+                        _profile_section_of(k) for k in changed_fields
+                    }),
+                    'changed_fields': changed_fields,
+                },
+            )
         return ApiResponse(data=_account_payload(member, request), message='Profile updated successfully.')
 
 
@@ -716,10 +831,17 @@ class MemberDocumentListCreateView(APIView):
         if len(document_type) > 80:
             raise ValidationError({'document_type': ['Document type must be 80 characters or fewer.']})
         upload = _validate_member_document(request.FILES.get('file') or request.FILES.get('document'))
+        raw_bytes = upload.read()
+        original_size = len(raw_bytes)
+        compressed = compress_document(raw_bytes)
         document = MemberDocument.objects.create(
             member=request.user,
             document_type=document_type,
-            file_path=upload,
+            file_data=compressed,
+            file_name=upload.name,
+            file_content_type=upload.content_type or 'application/octet-stream',
+            file_size=original_size,
+            compressed_size=len(compressed),
             status=MemberDocument.Status.PENDING,
             reviewed_at=None,
         )
@@ -750,6 +872,36 @@ class MemberDocumentListCreateView(APIView):
             data=MemberDocumentSerializer(document, context={'request': request}).data,
             message='Document uploaded for verification.',
             status=status.HTTP_201_CREATED,
+        )
+
+
+class MemberDocumentDeleteView(APIView):
+    permission_classes = (permissions.IsAuthenticated, IsMember)
+
+    @transaction.atomic
+    def delete(self, request, document_id):
+        document = get_object_or_404(MemberDocument, pk=document_id, member=request.user, is_deleted=False)
+        if document.status in (MemberDocument.Status.APPROVED,):
+            reason = (request.data or {}).get('reason', '').strip()
+            if not reason:
+                return ApiResponse(
+                    success=False,
+                    message='Please provide a reason for deleting this document.',
+                    code='REASON_REQUIRED',
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            document.deletion_reason = reason
+        document.is_deleted = True
+        document.deleted_at = timezone.now()
+        document.deleted_by_id = request.user.pk
+        document.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by_id', 'deletion_reason', 'updated_at'])
+        remaining = MemberDocument.objects.filter(member=request.user, is_deleted=False).count()
+        if remaining == 0:
+            request.user.document_status = Member.VerificationStatus.NOT_STARTED
+            request.user.save(update_fields=('document_status', 'updated_at'))
+        return ApiResponse(
+            message='Document deleted successfully.',
+            status=status.HTTP_200_OK,
         )
 
 
@@ -1034,12 +1186,15 @@ class MemberVerificationStatusView(APIView):
         ).exists()
         
         data = {
-            'account_status': verification_summary.account_status,
+            'account_status': verification_summary.overall_status,
             'is_verified': verification_summary.is_verified,
-            'contact': verification_summary.contact,
+            'contact': {
+                'email_verified': verification_summary.email_verified,
+                'mobile_verified': verification_summary.mobile_verified,
+            },
             'profile': verification_summary.profile,
-            'primary_photo': verification_summary.primary_photo,
-            'documents': verification_summary.documents,
+            'primary_photo': verification_summary.photo,
+            'documents': verification_summary.document,
             'next_action': verification_summary.next_action,
             'membership_pending': pending_membership,
         }

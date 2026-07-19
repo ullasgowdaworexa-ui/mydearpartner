@@ -8,6 +8,7 @@ from django.urls import path, include
 
 from .views import (
     MemberChangePasswordView,
+    MemberDocumentDeleteView,
     MemberDocumentListCreateView,
     MemberForgotPasswordView,
     MemberLoginView,
@@ -23,6 +24,7 @@ from .views import (
     MemberVerificationStatusView,
 )
 from .verification_views import (
+    MemberDocumentDownloadView,
     MemberEmailOtpSendView,
     MemberEmailOtpVerifyView,
     MemberMobileOtpSendView,
@@ -59,6 +61,7 @@ urlpatterns = [
     path('me/', MemberMeView.as_view(), name='me'),
     path('me/submit/', MemberProfileSubmitView.as_view(), name='profile_submit'),
     path('me/documents/', MemberDocumentListCreateView.as_view(), name='member_documents'),
+    path('me/documents/<uuid:document_id>/', MemberDocumentDeleteView.as_view(), name='member_document_delete'),
     path('me/photos/', MemberPhotoUploadView.as_view(), name='member_photos_upload'),
     path('me/photos/<uuid:photo_id>/', MemberPhotoDeleteView.as_view(), name='member_photo_delete'),
     path('me/photos/<uuid:photo_id>/set-primary/', MemberPhotoSetPrimaryView.as_view(), name='member_photo_set_primary'),
@@ -80,6 +83,7 @@ urlpatterns = [
     path('verification/mobile/verify-otp/', MemberMobileOtpVerifyView.as_view(), name='verification_mobile_verify_otp'),
     path('verification/profile/', MemberProfileSubmitView.as_view(), name='verification_profile_submit'),
     path('verification/photo/', MemberPhotoSubmitView.as_view(), name='verification_photo_submit'),
+    path('verification/documents/<uuid:document_id>/download/', MemberDocumentDownloadView.as_view(), name='member_document_download'),
     path('verification/government-id/', MemberDocumentSubmitView.as_view(), name='verification_document_submit'),
     
     # Verification endpoints - Admin

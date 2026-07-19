@@ -23,6 +23,8 @@ from apps.accounts.models import (
     CustomerSupportAgent,
     Member,
     MemberDocument,
+    MemberPreference,
+    MemberProfile,
     RoleCode,
     Staff,
     StaffActivityLog,
@@ -1423,10 +1425,13 @@ class AdminUserActionView(ScopedAPIView):
             'is_active', 'is_premium', 'is_email_verified', 'is_mobile_verified',
         }
         profile_fields = {
-            'marital_status', 'height', 'weight', 'religion', 'mother_tongue',
-            'caste', 'sub_caste', 'gothra', 'manglik_status', 'highest_education',
+            'marital_status', 'height', 'weight', 'blood_group', 'complexion',
+            'religion', 'mother_tongue', 'caste', 'sub_caste', 'gothra',
+            'star_nakshatra', 'manglik_status', 'highest_education',
             'education_detail', 'occupation', 'employed_in', 'company',
-            'annual_income', 'work_location', 'about', 'hobbies',
+            'annual_income', 'work_location', 'father_status', 'mother_status',
+            'num_brothers', 'num_sisters', 'family_type', 'family_status',
+            'family_location', 'about', 'hobbies',
         }
         for field in allowed_fields:
             if field in request.data:
@@ -1439,6 +1444,26 @@ class AdminUserActionView(ScopedAPIView):
                 if field in request.data:
                     setattr(profile, field, request.data[field])
             profile.save()
+
+        preference_fields = {
+            'pref_age_min', 'pref_age_max', 'pref_height_min', 'pref_height_max',
+            'pref_religion', 'pref_caste', 'pref_location', 'pref_education',
+            'pref_occupation', 'pref_marital_status', 'pref_about',
+        }
+        preference_model_map = {
+            'pref_age_min': 'preferred_age_min', 'pref_age_max': 'preferred_age_max',
+            'pref_height_min': 'preferred_height_min', 'pref_height_max': 'preferred_height_max',
+            'pref_religion': 'preferred_religion', 'pref_caste': 'preferred_caste',
+            'pref_location': 'preferred_location', 'pref_education': 'preferred_education',
+            'pref_occupation': 'preferred_occupation', 'pref_marital_status': 'preferred_marital_status',
+            'pref_about': 'additional_expectations',
+        }
+        if any(f in request.data for f in preference_fields):
+            preference, _ = MemberPreference.objects.get_or_create(member=member)
+            for wire_name, model_name in preference_model_map.items():
+                if wire_name in request.data:
+                    setattr(preference, model_name, request.data[wire_name])
+            preference.save()
 
         after = MemberSerializer(member, context={'request': request}).data
         audit(

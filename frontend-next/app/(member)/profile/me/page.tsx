@@ -74,12 +74,16 @@ export default function MyProfilePage() {
       setLoading(false);
       return;
     }
+    let active = true;
     fetchApi<any>('/member-auth/me/')
-      .then((data) => { setProfile(data); setLoading(false); })
+      .then((data) => { if (active) { setProfile(data); setLoading(false); } })
       .catch((err: any) => {
-        setError(friendlyMessage({ message: err?.message, status: err?.status, code: err?.code, errors: err?.errors }) || 'Failed to load profile');
-        setLoading(false);
+        if (active) {
+          setError(friendlyMessage({ message: err?.message, status: err?.status, code: err?.code, errors: err?.errors }) || 'Failed to load profile');
+          setLoading(false);
+        }
       });
+    return () => { active = false; };
   }, [user, authLoading]);
 
   if (authLoading || loading) {

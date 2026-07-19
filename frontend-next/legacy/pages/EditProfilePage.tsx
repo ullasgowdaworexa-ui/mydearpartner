@@ -6,10 +6,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Camera, CheckCircle, ChevronRight, Save, Send, Shield, FileText, Upload,
-  AlertCircle, Star, Trash2, RefreshCw, Loader2, XCircle,
+  AlertCircle, Star, Trash2, RefreshCw, Loader2, XCircle, Mail, Smartphone,
 } from 'lucide-react';
 import { useAuth, type UserType } from '../contexts/AuthContext';
 import { ApiError, fetchApi } from '../services/apiClient';
+import ProtectedDocumentViewer from '@/components/documents/ProtectedDocumentViewer';
 import {
   MAX_PROFILE_PHOTO_BYTES,
   useDeletePhotoMutation,
@@ -66,7 +67,9 @@ const sections: Record<string, FieldConfig[]> = {
     { key: 'pref_age_min', label: 'Minimum age', type: 'number' }, { key: 'pref_age_max', label: 'Maximum age', type: 'number' },
     { key: 'pref_height_min', label: 'Minimum height', type: 'select', options: heightOptions },
     { key: 'pref_height_max', label: 'Maximum height', type: 'select', options: heightOptions },
-    { key: 'pref_religion', label: 'Preferred religion' }, { key: 'pref_location', label: 'Preferred locations' },
+    { key: 'pref_religion', label: 'Preferred religion' }, { key: 'pref_caste', label: 'Preferred caste' },
+    { key: 'pref_location', label: 'Preferred locations' }, { key: 'pref_education', label: 'Preferred education' },
+    { key: 'pref_occupation', label: 'Preferred occupation' }, { key: 'pref_marital_status', label: 'Preferred marital status' },
     { key: 'pref_about', label: 'About my ideal partner', type: 'textarea' },
   ],
 };
@@ -78,6 +81,7 @@ const tabs = [
   ['family', 'Family'],
   ['career', 'Career & education'],
   ['preferences', 'Partner preferences'],
+  ['verification', 'Verification & Documents'],
 ];
 
 const numberFields = new Set(['num_brothers', 'num_sisters', 'pref_age_min', 'pref_age_max']);
@@ -206,7 +210,11 @@ export default function EditProfilePage() {
       setInitialForm(saved);
       setNotice({ text: 'Profile changes saved successfully.' });
     } catch (error) {
-      setNotice({ text: messageFrom(error), error: true });
+      const friendly =
+        error instanceof ApiError && error.errors
+          ? 'Please correct the highlighted fields.'
+          : "We couldn't save your profile changes. Please try again.";
+      setNotice({ text: friendly, error: true });
     } finally {
       setBusy(false);
     }
@@ -310,6 +318,69 @@ export default function EditProfilePage() {
       setNotice({ text: messageFrom(error), error: true });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const deleteDocument = async (docId: string) => {
+    if (!confirm('Delete this document?')) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await fetchApi(`/member-auth/me/documents/${docId}/`, { method: 'DELETE' });
+      const fresh = await fetchApi<UserType>('/member-auth/me/');
+      updateUser(fresh);
+      setNotice({ text: 'Document deleted.' });
+    } catch (error) {
+      setNotice({ text: messageFrom(error), error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [viewDoc, setViewDoc] = useState<{ id: string; type: string } | null>(null);
+  const [verifyTarget, setVerifyTarget] = useState<'email' | 'mobile' | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [devOtpHint, setDevOtpHint] = useState('');
+  const [verifying, setVerifying] = useState(false);
+
+  const sendOtp = async (target: 'email' | 'mobile') => {
+    setVerifying(true);
+    setNotice(null);
+    try {
+      const result = await fetchApi<{ expires_in?: number; developer_otp?: string }>(
+        `/member-auth/verification/${target}/send-otp/`,
+        { method: 'POST' },
+      ) as any;
+      const data = result?.data || result;
+      if (data?.developer_otp) setDevOtpHint(data.developer_otp);
+      setVerifyTarget(target);
+      setOtpCode('');
+    } catch (error) {
+      setNotice({ text: messageFrom(error), error: true });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (!verifyTarget || !otpCode.trim()) return;
+    setVerifying(true);
+    setNotice(null);
+    try {
+      await fetchApi(`/member-auth/verification/${verifyTarget}/verify-otp/`, {
+        method: 'POST',
+        body: JSON.stringify({ code: otpCode.trim() }),
+      });
+      const fresh = await fetchApi<UserType>('/member-auth/me/');
+      updateUser(fresh);
+      setNotice({ text: `${verifyTarget === 'email' ? 'Email' : 'Mobile'} verified successfully!` });
+      setVerifyTarget(null);
+      setOtpCode('');
+      setDevOtpHint('');
+    } catch (error) {
+      setNotice({ text: messageFrom(error), error: true });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -518,77 +589,161 @@ export default function EditProfilePage() {
               </div>
             </div>
           ) : activeTab === 'verification' ? (
-            /* Documents Tab */
-            <div className="space-y-6">
+            <div className="space-y-8">
+              {/* Contact Verification */}
               <div>
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-rose-500" /> Verification Documents
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+                  <Shield className="w-5 h-5 text-rose-500" /> Contact Verification
                 </h2>
-                <p className="text-sm text-gray-400 mt-1">
-                  Upload your identification documents for private account verification.
-                </p>
-              </div>
-              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
-                profile?.document_status === 'approved' ? 'bg-green-50 border-green-200 text-green-800' :
-                profile?.document_status === 'pending_review' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                profile?.document_status === 'rejected' ? 'bg-red-50 border-red-200 text-red-800' :
-                'bg-gray-50 border-gray-200 text-gray-700'
-              }`}>
-                <Shield className="w-5 h-5 mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="font-bold text-sm">
-                    Status: {statusLabel(profile?.document_status)}
-                  </h4>
-                  <p className="text-xs mt-1 opacity-90">
-                    {profile?.document_status === 'approved' && 'Your account verification has been completed successfully.'}
-                    {profile?.document_status === 'pending_review' && 'Your documents are currently waiting for admin review.'}
-                    {profile?.document_status === 'rejected' && 'Your verification request was rejected. Please re-submit.'}
-                    {!profile?.document_status && 'Please upload a government-approved identity document.'}
-                  </p>
-                </div>
-              </div>
-              {((profile?.documents as any[]) || []).length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="font-bold text-sm text-gray-700">Uploaded Documents</h4>
-                  <div className="border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-100">
-                    {((profile?.documents as any[]) || []).map((doc: any) => (
-                      <div key={doc.id} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-gray-800 text-sm">{doc.document_type}</p>
-                          <p className="text-gray-400">Uploaded on {new Date(doc.uploaded_at).toLocaleDateString()}</p>
-                          {doc.rejection_reason && <p className="text-red-500 font-medium mt-1">Reason: {doc.rejection_reason}</p>}
-                        </div>
-                        <span className={`px-2.5 py-1 rounded-full font-bold shrink-0 ${
-                          doc.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                          doc.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                        }`}>{doc.status}</span>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {/* Email */}
+                  <div className="border border-gray-100 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm font-semibold text-gray-700">Email</span>
                       </div>
-                    ))}
+                      {(profile as any)?.is_email_verified ? (
+                        <span className="flex items-center gap-1 text-xs font-bold text-emerald-600"><CheckCircle className="w-3.5 h-3.5" /> Verified</span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs font-bold text-slate-400"><XCircle className="w-3.5 h-3.5" /> Not verified</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">{profile?.email}</p>
+                    {!(profile as any)?.is_email_verified && (
+                      <div className="space-y-2">
+                        {verifyTarget === 'email' ? (
+                          <div className="flex items-center gap-2">
+                            <input type="text" maxLength={6} placeholder="Enter OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))} className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-200" />
+                            <button type="button" onClick={verifyOtp} disabled={verifying || otpCode.length < 4} className="px-3 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-colors disabled:opacity-50 cursor-pointer">
+                              {verifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
+                            </button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => sendOtp('email')} disabled={verifying} className="w-full py-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold hover:bg-rose-100 transition-colors disabled:opacity-50 cursor-pointer">
+                            {verifying ? 'Sending...' : 'Send OTP'}
+                          </button>
+                        )}
+                        {verifyTarget === 'email' && devOtpHint && (
+                          <p className="text-[10px] text-amber-600 font-medium">Dev OTP: {devOtpHint}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* Mobile */}
+                  <div className="border border-gray-100 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm font-semibold text-gray-700">Mobile</span>
+                      </div>
+                      {(profile as any)?.is_mobile_verified ? (
+                        <span className="flex items-center gap-1 text-xs font-bold text-emerald-600"><CheckCircle className="w-3.5 h-3.5" /> Verified</span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs font-bold text-slate-400"><XCircle className="w-3.5 h-3.5" /> Not verified</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">{profile?.mobile_number}</p>
+                    {!(profile as any)?.is_mobile_verified && profile?.mobile_number && (
+                      <div className="space-y-2">
+                        {verifyTarget === 'mobile' ? (
+                          <div className="flex items-center gap-2">
+                            <input type="text" maxLength={6} placeholder="Enter OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))} className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-200" />
+                            <button type="button" onClick={verifyOtp} disabled={verifying || otpCode.length < 4} className="px-3 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-colors disabled:opacity-50 cursor-pointer">
+                              {verifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
+                            </button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => sendOtp('mobile')} disabled={verifying} className="w-full py-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold hover:bg-rose-100 transition-colors disabled:opacity-50 cursor-pointer">
+                            {verifying ? 'Sending...' : 'Send OTP'}
+                          </button>
+                        )}
+                        {verifyTarget === 'mobile' && devOtpHint && (
+                          <p className="text-[10px] text-amber-600 font-medium">Dev OTP: {devOtpHint}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-              <form onSubmit={uploadDocument} className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4 max-w-lg">
-                <h4 className="font-bold text-sm text-gray-700 flex items-center gap-1.5">
-                  <Upload className="w-4 h-4" /> Upload New Document
-                </h4>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Document Type</label>
-                  <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold">
-                    <option value="Government ID">Government ID (Aadhaar, Passport, etc.)</option>
-                    <option value="Age proof">Age proof</option>
-                    <option value="Address proof">Address proof</option>
-                    <option value="Education document">Education document</option>
-                    <option value="Employment document">Employment document</option>
-                  </select>
+              </div>
+              {/* Documents */}
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+                  <FileText className="w-5 h-5 text-rose-500" /> Verification Documents
+                </h2>
+                <p className="text-sm text-gray-400 mt-1 mb-4">
+                  Upload your identification documents for private account verification. Documents will be reviewed by admin.
+                </p>
+                <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                  (profile as any)?.document_status === 'approved' ? 'bg-green-50 border-green-200 text-green-800' :
+                  (profile as any)?.document_status === 'pending_review' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                  (profile as any)?.document_status === 'rejected' ? 'bg-red-50 border-red-200 text-red-800' :
+                  'bg-gray-50 border-gray-200 text-gray-700'
+                }`}>
+                  <Shield className="w-5 h-5 mt-0.5 shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-sm">
+                      Status: {statusLabel((profile as any)?.document_status)}
+                    </h4>
+                    <p className="text-xs mt-1 opacity-90">
+                      {(profile as any)?.document_status === 'approved' && 'Your account verification has been completed successfully.'}
+                      {(profile as any)?.document_status === 'pending_review' && 'Your documents are currently waiting for admin review.'}
+                      {(profile as any)?.document_status === 'rejected' && 'Your verification request was rejected. Please re-submit.'}
+                      {!(profile as any)?.document_status && 'Please upload a government-approved identity document.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Select File</label>
-                  <input id="doc_file_input" type="file" required accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setDocFile(e.target.files?.[0] || null)} className="w-full text-xs font-medium text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100" />
-                </div>
-                <button type="submit" disabled={busy || !docFile} className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:brightness-110 text-white text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md border-0 cursor-pointer">
-                  {busy ? 'Uploading...' : 'Submit for Verification'}
-                </button>
-              </form>
+                {((profile?.documents as any[]) || []).length > 0 && (
+                  <div className="space-y-3 mt-4">
+                    <h4 className="font-bold text-sm text-gray-700">Uploaded Documents</h4>
+                    <div className="border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-100">
+                      {((profile?.documents as any[]) || []).map((doc: any) => (
+                        <div key={doc.id} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                          <div className="space-y-1">
+                            <p className="font-semibold text-gray-800 text-sm">{doc.document_type}</p>
+                            <p className="text-gray-400">Uploaded on {new Date(doc.uploaded_at).toLocaleDateString()}</p>
+                            {doc.rejection_reason && <p className="text-red-500 font-medium mt-1">Reason: {doc.rejection_reason}</p>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setViewDoc({ id: doc.id, type: doc.document_type })} className="px-2.5 py-1 rounded-lg border border-gray-200 font-bold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
+                              View
+                            </button>
+                            <button type="button" onClick={() => deleteDocument(doc.id)} disabled={busy} className="px-2.5 py-1 rounded-lg border border-red-200 font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 cursor-pointer">
+                              Delete
+                            </button>
+                            <span className={`px-2.5 py-1 rounded-full font-bold shrink-0 ${
+                              doc.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                              doc.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                            }`}>{doc.status}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <form onSubmit={uploadDocument} className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4 max-w-lg mt-4">
+                  <h4 className="font-bold text-sm text-gray-700 flex items-center gap-1.5">
+                    <Upload className="w-4 h-4" /> Upload New Document
+                  </h4>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Document Type</label>
+                    <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold">
+                      <option value="Government ID">Government ID (Aadhaar, Passport, etc.)</option>
+                      <option value="Age proof">Age proof</option>
+                      <option value="Address proof">Address proof</option>
+                      <option value="Education document">Education document</option>
+                      <option value="Employment document">Employment document</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Select File</label>
+                    <input id="doc_file_input" type="file" required accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setDocFile(e.target.files?.[0] || null)} className="w-full text-xs font-medium text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100" />
+                  </div>
+                  <button type="submit" disabled={busy || !docFile} className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:brightness-110 text-white text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md border-0 cursor-pointer">
+                    {busy ? 'Uploading...' : 'Submit for Verification'}
+                  </button>
+                </form>
+              </div>
             </div>
           ) : (
             /* Form Fields */
@@ -628,6 +783,14 @@ export default function EditProfilePage() {
           {busy ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
+
+      {viewDoc && (
+        <ProtectedDocumentViewer
+          documentId={viewDoc.id}
+          documentType={viewDoc.type}
+          onClose={() => setViewDoc(null)}
+        />
+      )}
     </div>
   );
 }

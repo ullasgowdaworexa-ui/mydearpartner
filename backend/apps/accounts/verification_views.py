@@ -9,6 +9,7 @@ from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import transaction
+from django.http import HttpResponse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
@@ -650,12 +651,21 @@ class AdminVerificationApproveView(APIView):
     
     def _approve_document(self, member, reviewed_by, reason):
         """Approve member's government document"""
+        from .models import MemberDocument
+        MemberDocument.objects.filter(member=member, status=MemberDocument.Status.PENDING).update(
+            status=MemberDocument.Status.APPROVED,
+            reviewed_at=timezone.now(),
+            reviewed_by_id=reviewed_by.pk if reviewed_by else None,
+            rejection_reason='',
+        )
         member.document_status = AccountVerificationService.STATUS_APPROVED
         member.document_reviewed_at = timezone.now()
         member.document_rejection_reason = ''
         member.save(update_fields=['document_status', 'document_reviewed_at', 'document_rejection_reason', 'updated_at'])
         
         return True
+
+
 class AdminVerificationRejectView(APIView):
     """
     POST /api/admin/verifications/{id}/reject/
@@ -746,82 +756,19 @@ class AdminVerificationRejectView(APIView):
     
     def _reject_document(self, member, reviewed_by, reason):
         """Reject member's government document"""
+        from .models import MemberDocument
+        MemberDocument.objects.filter(member=member, status=MemberDocument.Status.PENDING).update(
+            status=MemberDocument.Status.REJECTED,
+            rejection_reason=reason,
+            reviewed_at=timezone.now(),
+            reviewed_by_id=reviewed_by.pk if reviewed_by else None,
+        )
         member.document_status = AccountVerificationService.STATUS_REJECTED
         member.document_reviewed_at = timezone.now()
         member.document_rejection_reason = reason
         member.save(update_fields=['document_status', 'document_reviewed_at', 'document_rejection_reason', 'updated_at'])
         
         return True
-
-
-class AdminVerificationRequestChangesView(APIView):
-    """
-    POST /api/admin/verifications/{id}/request-changes/
-    
-    Request changes to verification submission.
-    """
-    
-    permission_classes = (permissions.IsAuthenticated, IsAdmin | IsSuperAdmin)
-    
-    def post(self, request, verification_id):
-        from apps.core.models import ProfileVerificationRequest
-        
-        try:
-            verification = ProfileVerificationRequest.objects.select_related('member').get(id=verification_id)
-        except ProfileVerificationRequest.DoesNotExist:
-            return ApiResponse(
-                success=False, 
-                message='Verification request not found.', 
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        reason = request.data.get('reason', '').strip()
-        if not reason:
-            return ApiResponse(
-                success=False, 
-                message='Reason for changes is required.', 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        with transaction.atomic():
-            # Request changes based on verification type
-            if verification.verification_type == ProfileVerificationRequest.VerificationType.FULL_PROFILE:
-                success = AccountVerificationService.request_profile_changes(verification.member, request.user, reason)
-            else:
-                # For photos and documents, we treat "request changes" as rejection
-                success = self._reject_with_changes_message(verification, request.user, reason)
-            
-            if success:
-                # Publish real-time event
-                VerificationEvents.publish_verification_changes_requested(
-                    verification.member, 
-                    verification.verification_type, 
-                    reason,
-                    request.user
-                )
-                
-                return ApiResponse(
-                    success=True,
-                    message='Changes requested successfully.',
-                    status=status.HTTP_200_OK
-                )
-            else:
-                return ApiResponse(
-                    success=False, 
-                    message='Failed to request changes.', 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-    
-    def _reject_with_changes_message(self, verification, reviewed_by, reason):
-        """For photos/documents, request changes = reject with specific message"""
-        prefixed_reason = f"Changes requested: {reason}"
-        
-        if verification.verification_type == ProfileVerificationRequest.VerificationType.PROFILE_PHOTO:
-            return AdminVerificationRejectView()._reject_photo(verification.member, reviewed_by, prefixed_reason)
-        elif verification.verification_type == ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT:
-            return AdminVerificationRejectView()._reject_document(verification.member, reviewed_by, prefixed_reason)
-        
-        return False
 
 
 class AdminVerificationRequestChangesView(APIView):
@@ -892,3 +839,123 @@ class AdminVerificationRequestChangesView(APIView):
                 message='Changes requested successfully.',
                 status=status.HTTP_200_OK
             )
+
+
+class MemberDocumentDownloadView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, document_id):
+        from .models import MemberDocument, AccountType
+        from apps.core.models import ProfileVerificationAssignment
+        from apps.accounts.services import decompress_document
+
+        try:
+            document = MemberDocument.objects.get(pk=document_id)
+        except MemberDocument.DoesNotExist:
+            return ApiResponse(
+                success=False,
+                message='This document is no longer available.',
+                code='DOCUMENT_NOT_FOUND',
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if getattr(document, 'is_deleted', False):
+            return ApiResponse(
+                success=False,
+                message='This document is no longer available.',
+                code='DOCUMENT_DELETED',
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        account_type = str(request.user.account_type)
+        allowed = False
+
+        if account_type == AccountType.MEMBER:
+            allowed = document.member_id == request.user.pk
+        elif account_type == AccountType.SUPER_ADMIN:
+            allowed = True
+        elif account_type == AccountType.ADMIN:
+            allowed = request.user.has_admin_permission('documents.view') or request.user.has_admin_permission('verification.view_all')
+        elif account_type == AccountType.STAFF:
+            allowed = (
+                request.user.has_admin_permission('documents.view')
+                or request.user.has_admin_permission('documents.review')
+                or request.user.has_admin_permission('verification.view_assigned')
+            )
+            if allowed:
+                allowed = ProfileVerificationAssignment.objects.filter(
+                    assigned_to_staff=request.user,
+                    is_current=True,
+                    verification_request__member_id=document.member_id,
+                    verification_request__verification_documents__member_document=document,
+                ).exists()
+
+        if not allowed:
+            return ApiResponse(
+                success=False,
+                message='You don\u2019t have permission to view this document.',
+                code='ACCESS_DENIED',
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if account_type != AccountType.MEMBER:
+            from apps.core.api_utils import audit as _audit
+            _audit(
+                request,
+                request.user,
+                action='VERIFICATION_DOCUMENT_VIEWED',
+                module='verification',
+                target_type='MEMBER_DOCUMENT',
+                target_id=document.pk,
+                new_data={'member_id': str(document.member_id)},
+            )
+
+        try:
+            if document.file_data:
+                try:
+                    raw = decompress_document(bytes(document.file_data))
+                except Exception:
+                    return ApiResponse(
+                        success=False,
+                        message='This document cannot be read because its data is corrupted.',
+                        code='DOCUMENT_CORRUPTED',
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+                filename = document.file_name or 'document'
+                content_type = document.file_content_type or 'application/octet-stream'
+                response = HttpResponse(raw, content_type=content_type)
+            elif document.file_path:
+                from pathlib import Path
+                import mimetypes
+                filename = Path(document.file_path.name).name.replace('"', '')
+                content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+                try:
+                    from django.http import FileResponse
+                    response = FileResponse(document.file_path.open('rb'), content_type=content_type)
+                except FileNotFoundError:
+                    return ApiResponse(
+                        success=False,
+                        message='This document is no longer available on the server.',
+                        code='DOCUMENT_FILE_MISSING',
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+            else:
+                return ApiResponse(
+                    success=False,
+                    message='This document has no file data.',
+                    code='DOCUMENT_NO_DATA',
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        except Exception:
+            return ApiResponse(
+                success=False,
+                message='An unexpected error occurred while reading this document.',
+                code='DOCUMENT_READ_ERROR',
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_filename = (filename or 'document').replace('"', '').replace('\\', '').replace('/', '')
+        response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Cache-Control'] = 'private, no-cache, must-revalidate'
+        return response

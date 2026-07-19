@@ -297,6 +297,8 @@ def _create_processed_profile_photo(*, member: Member, processed, uploaded_file,
     # and the per-user six-photo limit without loading BLOB data.
     member = Member.objects.select_for_update().get(pk=member.pk)
     existing_count = ProfilePhoto.objects.active().filter(user=member).count()
+    if existing_count > 0 and not _primary_is_approved(member):
+        raise PrimaryPhotoNotVerifiedError("Your primary photo must be approved before adding more photos.")
     from apps.core.entitlements import get_active_entitlements
     max_photos = get_active_entitlements(member).max_photos
     if existing_count >= max_photos:

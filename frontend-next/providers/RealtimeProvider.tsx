@@ -52,6 +52,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const manuallyClosedRef = useRef(false);
   const handlersRef = useRef<Map<string, Set<(event: RealtimeEvent) => void>>>(new Map());
   const isAuthenticatedRef = useRef(true);
+  const connectInstanceRef = useRef(0);
 
   const [status, setStatus] = useState<RealtimeStatus>('disconnected');
   const [lastEvent, setLastEvent] = useState<RealtimeEvent | null>(null);
@@ -79,7 +80,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const connect = useCallback(async () => {
+    const instanceId = ++connectInstanceRef.current;
     if (manuallyClosedRef.current) return;
+    clearReconnectTimer();
 
     const token = await getFreshAccessToken().catch(() => null);
     if (!token) {
@@ -138,6 +141,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
     socket.onclose = (closeEvent) => {
       socketRef.current = null;
+
+      if (instanceId !== connectInstanceRef.current) return;
 
       if (manuallyClosedRef.current) {
         setStatus('disconnected');

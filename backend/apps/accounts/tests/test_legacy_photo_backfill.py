@@ -123,7 +123,7 @@ def test_backfill_is_batched_idempotent_and_preserves_source_state(
     assert primary_target.image_data.startswith(b"RIFF")
     assert primary_target.thumbnail_data.startswith(b"RIFF")
     assert legacy_photo_storage.exists(primary.image_path.name)
-    assert member.__class__.objects.get(pk=member.pk).photo_status == "APPROVED"
+    assert member.__class__.objects.get(pk=member.pk).photo_status == "approved"
     assert ProfilePhotoAuditLog.objects.filter(
         photo_id=primary.pk,
         actor_type="LEGACY_BACKFILL",
