@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { Navigate, Route, Routes } from '@/lib/router-compat';
 import AdminLayout from '../components/admin/AdminLayout';
@@ -55,6 +55,7 @@ export default function SuperAdminPage() {
         <Route path="memberships/subscriptions" element={<AdminMembershipsPage />} />
         <Route path="memberships/payments" element={<AdminPaymentsPage />} />
         <Route path="memberships/refunds" element={<AdminRefundsPage />} />
+        <Route path="membership-plans" element={<AdminMembershipsPage defaultTab="plans" />} />
 
         {/* Support */}
         <Route path="support-tickets" element={<AdminTicketsPage />} />

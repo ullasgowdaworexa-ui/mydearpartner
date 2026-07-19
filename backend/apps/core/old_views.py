@@ -4,7 +4,7 @@ import mimetypes
 import uuid
 from datetime import timedelta
 from pathlib import Path
-
+from apps.core.entitlements import get_active_entitlements, usage_for
 from django.conf import settings
 from django.db import connection, transaction
 from django.db.models import OuterRef, Prefetch, Q, Subquery

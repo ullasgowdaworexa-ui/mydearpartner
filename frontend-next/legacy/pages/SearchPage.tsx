@@ -2,17 +2,22 @@
 
 import SmartImage from '@/components/shared/smart-image';
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams } from '@/lib/router-compat';
 import {
-  Heart, MessageCircle, MapPin, ShieldCheck, User, Star, Crown, Search, SlidersHorizontal, RefreshCw
+  Heart, MessageCircle, MapPin, ShieldCheck, User, Star, Crown, Search, SlidersHorizontal, RefreshCw, Lock,
 } from 'lucide-react';
 import type { Profile } from '../types/domain';
 import { getProfiles, sendInterest } from '../services/dataService';
 import { useAuth } from '../contexts/AuthContext';
+import { useMembership } from '@/components/member/membership-provider';
+import UpgradeModal from '@/components/member/upgrade-modal';
 
 export default function SearchPage() {
   const { user } = useAuth();
+  const { membershipSummary } = useMembership();
+  const canUseAdvancedSearch = membershipSummary?.can_use_advanced_search ?? true;
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [searchParams] = useSearchParams();
   const [profilesList, setProfilesList] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,69 +213,90 @@ export default function SearchPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Caste</label>
-                <input
-                  type="text"
-                  value={casteFilter}
-                  onChange={(e) => setCasteFilter(e.target.value)}
-                  placeholder="e.g. Nair, General, Brahmin"
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
-                />
-              </div>
+                {/* Advanced Filters - locked for free users */}
+              <div className="relative">
+                {/* Caste */}
+                <div className={!canUseAdvancedSearch ? 'opacity-40 pointer-events-none select-none' : ''}>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Caste</label>
+                    <input
+                      type="text"
+                      value={casteFilter}
+                      onChange={(e) => setCasteFilter(e.target.value)}
+                      placeholder="e.g. Nair, General, Brahmin"
+                      className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Mother Tongue</label>
-                <input
-                  type="text"
-                  value={motherTongueFilter}
-                  onChange={(e) => setMotherTongueFilter(e.target.value)}
-                  placeholder="e.g. Hindi, Punjabi, Tamil"
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
-                />
-              </div>
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Mother Tongue</label>
+                    <input
+                      type="text"
+                      value={motherTongueFilter}
+                      onChange={(e) => setMotherTongueFilter(e.target.value)}
+                      placeholder="e.g. Hindi, Punjabi, Tamil"
+                      className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Education</label>
-                <input
-                  type="text"
-                  value={educationFilter}
-                  onChange={(e) => setEducationFilter(e.target.value)}
-                  placeholder="e.g. B.Tech, MBA, MBBS"
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
-                />
-              </div>
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Education</label>
+                    <input
+                      type="text"
+                      value={educationFilter}
+                      onChange={(e) => setEducationFilter(e.target.value)}
+                      placeholder="e.g. B.Tech, MBA, MBBS"
+                      className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Work Location</label>
-                <input
-                  type="text"
-                  value={locationFilter}
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                  placeholder="e.g. Mumbai, Bangalore"
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
-                />
-              </div>
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Work Location</label>
+                    <input
+                      type="text"
+                      value={locationFilter}
+                      onChange={(e) => setLocationFilter(e.target.value)}
+                      placeholder="e.g. Mumbai, Bangalore"
+                      className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 font-display font-bold">Age Range</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    value={ageMin}
-                    onChange={(e) => setAgeMin(e.target.value)}
-                    placeholder="Min"
-                    min="18"
-                    className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
-                  />
-                  <input
-                    type="number"
-                    value={ageMax}
-                    onChange={(e) => setAgeMax(e.target.value)}
-                    placeholder="Max"
-                    className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
-                  />
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 font-display font-bold">Age Range</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        value={ageMin}
+                        onChange={(e) => setAgeMin(e.target.value)}
+                        placeholder="Min"
+                        min="18"
+                        className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
+                      />
+                      <input
+                        type="number"
+                        value={ageMax}
+                        onChange={(e) => setAgeMax(e.target.value)}
+                        placeholder="Max"
+                        className="w-full bg-slate-50 border border-slate-100 focus:border-rose-200 focus:outline-none rounded-xl text-xs py-2.5 px-3 text-slate-800 font-semibold transition-all placeholder-slate-400"
+                      />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Lock overlay for free users */}
+                {!canUseAdvancedSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setShowUpgradeModal(true)}
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/70 backdrop-blur-[2px] rounded-2xl transition-all hover:bg-white/80"
+                  >
+                    <Lock className="w-5 h-5 text-rose-400" />
+                    <span className="text-xs font-black text-slate-700">Advanced Filters</span>
+                    <span className="text-[10px] font-bold text-rose-500 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                      Upgrade to Unlock
+                    </span>
+                  </button>
+                )}
               </div>
 
               <button
@@ -399,6 +425,16 @@ export default function SearchPage() {
           </div>
         </div>
       </div>
+
+      {/* Upgrade modal for advanced search lock */}
+      <AnimatePresence>
+        {showUpgradeModal && (
+          <UpgradeModal
+            feature="advanced_search"
+            onClose={() => setShowUpgradeModal(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

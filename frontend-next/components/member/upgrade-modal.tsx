@@ -1,9 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { X, Check, ArrowRight, Lock } from 'lucide-react';
+import { X, Check, ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useMembership } from './membership-provider';
+import { useGetMembershipPlansQuery, type MembershipPlan } from '@/legacy/services/membershipApi';
 
 interface UpgradeModalProps {
   feature: 'messaging' | 'advanced_search' | 'contact_details' | 'all_photos';
@@ -16,78 +17,79 @@ const featureConfig = {
     title: 'Messaging',
     description: 'Send direct messages to connections',
     benefits: [
-      '✓ Direct messaging with connections',
-      '✓ Chat history saved',
-      '✓ Real-time notifications',
-      '✓ Message at no extra cost',
+      'Direct messaging with connections',
+      'Chat history saved',
+      'Real-time notifications',
+      'Message at no extra cost',
     ],
-    requiredPlan: 'Gold',
+    planCheck: (plan: MembershipPlan) =>
+      plan.messaging_mode !== 'DISABLED' || (plan as any).can_message === true,
   },
   advanced_search: {
     icon: '🔍',
     title: 'Advanced Search',
     description: 'Find your match with detailed filters',
     benefits: [
-      '✓ Filter by income, education',
-      '✓ Location-based search',
-      '✓ Horoscope compatibility',
-      '✓ Save search preferences',
+      'Filter by income, education, caste',
+      'Location-based search',
+      'Horoscope compatibility',
+      'Save search preferences',
     ],
-    requiredPlan: 'Gold',
+    planCheck: (plan: MembershipPlan) => plan.can_use_advanced_search === true,
   },
   contact_details: {
     icon: '📞',
     title: 'Contact Information',
     description: 'Get full contact details of connections',
     benefits: [
-      '✓ View phone number',
-      '✓ See email address',
-      '✓ Save contact info',
-      '✓ Share safely',
+      'View phone number',
+      'See email address',
+      'Save contact info',
+      'Share safely',
     ],
-    requiredPlan: 'Gold',
+    planCheck: (plan: MembershipPlan) => plan.contact_access_mode !== 'NONE',
   },
   all_photos: {
     icon: '📸',
     title: 'All Photos',
     description: 'View all approved photos',
     benefits: [
-      '✓ See all profile photos',
-      '✓ Photo validation',
-      '✓ Album view',
-      '✓ Download option',
+      'See all profile photos',
+      'Photo validation',
+      'Album view',
     ],
-    requiredPlan: 'Gold',
+    planCheck: (plan: MembershipPlan) =>
+      plan.photo_access_mode === 'ALL_APPROVED' || plan.photo_access_mode === 'ALL',
   },
 };
 
+function formatPrice(price: string): string {
+  const num = parseFloat(price);
+  if (!num) return 'Free';
+  return `₹${num.toLocaleString('en-IN')}`;
+}
+
+function formatDuration(days: number | null): string {
+  if (!days) return '';
+  if (days <= 31) return '1 Month';
+  if (days <= 92) return '3 Months';
+  if (days <= 185) return '6 Months';
+  if (days <= 370) return '12 Months';
+  return `${days} Days`;
+}
+
 export default function UpgradeModal({ feature, onClose }: UpgradeModalProps) {
   const { membershipSummary } = useMembership();
+  const { data: allPlans = [], isLoading } = useGetMembershipPlansQuery();
   const config = featureConfig[feature];
 
-  const plans = [
-    {
-      name: 'Gold',
-      price: '₹2,999',
-      period: '3 Months',
-      hasFeature: true,
-      description: 'Accelerate your search',
-    },
-    {
-      name: 'Platinum',
-      price: '₹5,999',
-      period: '6 Months',
-      hasFeature: true,
-      description: 'AI-powered matchmaking',
-    },
-    {
-      name: 'Elite',
-      price: '₹14,999',
-      period: '12 Months',
-      hasFeature: true,
-      description: 'Premium experience',
-    },
-  ];
+  // Only show active, paid plans that include this feature (sorted by display_order)
+  const eligiblePlans = allPlans
+    .filter((p) => p.slug !== 'free' && config.planCheck(p))
+    .sort((a, b) => a.display_order - b.display_order);
+
+  // Name of the cheapest plan that has the feature
+  const requiredPlanName = eligiblePlans[0]?.display_name || eligiblePlans[0]?.name || 'Gold';
 
   return (
     <motion.div
@@ -123,7 +125,9 @@ export default function UpgradeModal({ feature, onClose }: UpgradeModalProps) {
           {/* Feature Icon */}
           <div className="text-center">
             <div className="text-6xl mb-3 inline-block">{config.icon}</div>
-            <p className="text-sm text-slate-600">Available with {config.requiredPlan} and above</p>
+            <p className="text-sm text-slate-600">
+              Available with <span className="font-bold text-rose-600">{requiredPlanName}</span> and above
+            </p>
           </div>
 
           {/* Current Plan Info */}
@@ -135,7 +139,7 @@ export default function UpgradeModal({ feature, onClose }: UpgradeModalProps) {
               <p className="text-lg font-bold text-blue-900">{membershipSummary.plan_name}</p>
               <p className="text-sm text-blue-700 mt-1">
                 {membershipSummary.is_free
-                  ? '✓ Free features included'
+                  ? 'Upgrade to unlock this feature'
                   : '✓ This feature is included in your plan'}
               </p>
             </div>
@@ -154,63 +158,82 @@ export default function UpgradeModal({ feature, onClose }: UpgradeModalProps) {
             </div>
           </div>
 
-          {/* Plans */}
+          {/* Plans from database */}
           <div>
-            <h4 className="font-semibold text-slate-900 mb-3">Choose a plan</h4>
-            <div className="space-y-3">
-              {plans.map((plan) => (
-                <div
-                  key={plan.name}
-                  className="border border-slate-200 rounded-xl p-4 hover:border-rose-500 hover:bg-rose-50 transition-all"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h5 className="font-bold text-slate-900">{plan.name}</h5>
-                      <p className="text-xs text-slate-600">{plan.description}</p>
+            <h4 className="font-semibold text-slate-900 mb-3">Plans that include this feature</h4>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
+              </div>
+            ) : eligiblePlans.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">No paid plans available.</p>
+            ) : (
+              <div className="space-y-3">
+                {eligiblePlans.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className={`border rounded-xl p-4 transition-all ${
+                      plan.is_featured
+                        ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-400/20'
+                        : 'border-slate-200 hover:border-rose-400 hover:bg-rose-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
+                          {plan.display_name || plan.name}
+                          {plan.is_featured && (
+                            <span className="text-[10px] font-black uppercase bg-amber-400 text-white px-1.5 py-0.5 rounded-full">
+                              Popular
+                            </span>
+                          )}
+                        </h5>
+                        {plan.description && (
+                          <p className="text-xs text-slate-500 mt-0.5">{plan.description}</p>
+                        )}
+                      </div>
+                      <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
                     </div>
-                    {plan.hasFeature && <Check className="w-5 h-5 text-green-500" />}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold text-slate-900">
-                      {plan.price}
-                      <span className="text-sm text-slate-600 font-normal ml-1">
-                        / {plan.period}
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-lg font-bold text-slate-900">
+                        {formatPrice(plan.price)}
+                        {plan.duration_days && (
+                          <span className="text-sm text-slate-500 font-normal ml-1">
+                            / {formatDuration(plan.duration_days)}
+                          </span>
+                        )}
                       </span>
-                    </span>
-                    <Link
-                      href="/membership"
-                      className="text-sm font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
-                    >
-                      Choose <ArrowRight className="w-3 h-3" />
-                    </Link>
+                      <Link
+                        href="/membership"
+                        onClick={onClose}
+                        className="text-sm font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                      >
+                        Choose <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* CTA */}
-          <div className="space-y-3 pt-4">
+          <div className="space-y-3 pt-2">
             <Link
               href="/membership"
               onClick={onClose}
-              className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 text-white font-bold text-sm shadow-md hover:brightness-110 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-bold text-sm shadow-md hover:brightness-110 transition-all flex items-center justify-center gap-2"
             >
-              <span>Upgrade Now</span>
+              <span>View All Plans</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <button
               onClick={onClose}
-              className="w-full py-3 px-4 rounded-lg border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+              className="w-full py-3 px-4 rounded-xl border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-colors"
             >
               Maybe Later
             </button>
           </div>
-
-          {/* Info */}
-          <p className="text-xs text-slate-500 text-center">
-            All plans include full access to messaging, advanced search, and contact details.
-          </p>
         </div>
       </motion.div>
     </motion.div>

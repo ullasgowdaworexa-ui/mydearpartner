@@ -7,7 +7,7 @@ import {
   Heart, MessageCircle, Shield, Crown, MapPin, GraduationCap,
   Briefcase, Users, Star, Phone, Mail, Calendar, Ruler, Globe,
   Home, ChevronLeft, ChevronRight, Send, Check, Flag, Loader2,
-  ArrowLeft, X, Bookmark, BookmarkCheck, Scale,
+  ArrowLeft, X, Bookmark, BookmarkCheck, Scale, Lock,
 } from 'lucide-react';
 import Link from 'next/link';
 import ProfileImage from '@/components/profile/ProfileImage';
@@ -16,6 +16,7 @@ import type { MemberPhoto } from '@/legacy/services/photoApi';
 import UnlockModal from '@/components/member/unlock-modal';
 import UpgradeModal from '@/components/member/upgrade-modal';
 import { useAuth } from '@/legacy/contexts/AuthContext';
+import { useMembership } from '@/components/member/membership-provider';
 import { toggleShortlist, isProfileShortlisted } from '@/legacy/services/dataService';
 
 export default function ProfileDetailPage() {
@@ -24,6 +25,7 @@ export default function ProfileDetailPage() {
   const profileId = params.id as string;
 
   const { user } = useAuth();
+  const { membershipSummary } = useMembership();
   const { data: profileData, isLoading, error } = useGetProfileDetailQuery(profileId);
   const [sendInterest, { isLoading: interestLoading }] = useSendInterestMutation();
 
@@ -258,13 +260,20 @@ export default function ProfileDetailPage() {
                     )}
                   </button>
 
-                  {profile.can_message && (
+                  {profile.can_message ? (
                     <Link
                       href={`/messages?user=${profileId}`}
                       className="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
                       <MessageCircle className="w-4 h-4" /> Message Candidate
                     </Link>
+                  ) : !membershipSummary?.can_message && !isOwnProfile && (
+                    <button
+                      onClick={() => setShowUpgradeModal('messaging')}
+                      className="w-full py-4 bg-slate-50 border border-dashed border-slate-300 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Lock className="w-4 h-4" /> Message Candidate
+                    </button>
                   )}
 
                   <div className="flex gap-2">
@@ -401,7 +410,7 @@ export default function ProfileDetailPage() {
             )}
 
             {/* Contact Details Panel */}
-            {profile.can_view_contact && (
+            {profile.can_view_contact ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-gradient-to-br from-emerald-50 to-white rounded-[2rem] border border-emerald-100 p-6 sm:p-8 shadow-sm space-y-4">
                 <h3 className="text-base font-black text-emerald-950 flex items-center gap-2 font-display">
                   <Phone className="w-5 h-5 text-emerald-600" /> Direct Contact Information
@@ -426,6 +435,34 @@ export default function ProfileDetailPage() {
                     </div>
                   )}
                 </div>
+              </motion.div>
+            ) : !isOwnProfile && membershipSummary && membershipSummary.contact_access_mode === 'NONE' && (
+              /* Locked contact details teaser */
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-gradient-to-br from-slate-50 to-white rounded-[2rem] border border-dashed border-slate-300 p-6 sm:p-8 shadow-sm"
+              >
+                <h3 className="text-base font-black text-slate-500 flex items-center gap-2 font-display mb-4">
+                  <Lock className="w-5 h-5 text-slate-400" /> Direct Contact Information
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {[{ label: 'Mobile Number', icon: Phone }, { label: 'Email Address', icon: Mail }].map(({ label, icon: Icon }) => (
+                    <div key={label} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm blur-[0px]">
+                      <Icon className="w-4 h-4 text-slate-300 shrink-0" />
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">{label}</p>
+                        <p className="text-sm font-bold text-slate-200 mt-0.5 select-none">•••••••••••</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setShowUpgradeModal('contact_details')}
+                  className="mt-4 w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Lock className="w-4 h-4" /> Upgrade to View Contact Details
+                </button>
               </motion.div>
             )}
           </div>

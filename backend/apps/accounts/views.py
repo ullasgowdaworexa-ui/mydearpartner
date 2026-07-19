@@ -880,29 +880,67 @@ class MemberDocumentDeleteView(APIView):
 
     @transaction.atomic
     def delete(self, request, document_id):
-        document = get_object_or_404(MemberDocument, pk=document_id, member=request.user, is_deleted=False)
-        if document.status in (MemberDocument.Status.APPROVED,):
-            reason = (request.data or {}).get('reason', '').strip()
+        try:
+            document = get_object_or_404(MemberDocument, pk=document_id, member=request.user, is_deleted=False)
+        except Exception as e:
+            return ApiResponse(
+                success=False,
+                message='Document not found or access denied.',
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        # Check if approved document requires deletion reason
+        deletion_reason = ''
+        if document.status == MemberDocument.Status.APPROVED:
+            # For DELETE requests, try to get reason from query params or request body
+            reason = None
+            if hasattr(request, 'data') and request.data:
+                reason = request.data.get('reason', '').strip()
+            if not reason:
+                reason = request.query_params.get('reason', '').strip()
+            
             if not reason:
                 return ApiResponse(
                     success=False,
-                    message='Please provide a reason for deleting this document.',
+                    message='Please provide a reason for deleting this approved document.',
                     code='REASON_REQUIRED',
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            document.deletion_reason = reason
-        document.is_deleted = True
-        document.deleted_at = timezone.now()
-        document.deleted_by_id = request.user.pk
-        document.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by_id', 'deletion_reason', 'updated_at'])
-        remaining = MemberDocument.objects.filter(member=request.user, is_deleted=False).count()
-        if remaining == 0:
-            request.user.document_status = Member.VerificationStatus.NOT_STARTED
-            request.user.save(update_fields=('document_status', 'updated_at'))
-        return ApiResponse(
-            message='Document deleted successfully.',
-            status=status.HTTP_200_OK,
-        )
+            deletion_reason = reason
+        
+        # Perform soft delete
+        try:
+            document.is_deleted = True
+            document.deleted_at = timezone.now()
+            document.deleted_by_id = request.user.pk
+            if deletion_reason:
+                document.deletion_reason = deletion_reason
+            
+            # Build update fields dynamically to avoid field errors
+            update_fields = ['is_deleted', 'deleted_at', 'deleted_by_id', 'updated_at']
+            if deletion_reason:
+                update_fields.append('deletion_reason')
+            
+            document.save(update_fields=update_fields)
+            
+            # Update member document status if no active documents remain
+            remaining = MemberDocument.objects.filter(member=request.user, is_deleted=False).count()
+            if remaining == 0:
+                request.user.document_status = Member.VerificationStatus.NOT_STARTED
+                request.user.save(update_fields=['document_status', 'updated_at'])
+            
+            return ApiResponse(
+                success=True,
+                message='Document deleted successfully.',
+                status=status.HTTP_200_OK,
+            )
+            
+        except Exception as e:
+            return ApiResponse(
+                success=False,
+                message=f'Failed to delete document: {str(e)}',
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class MemberProfileSubmitView(APIView):

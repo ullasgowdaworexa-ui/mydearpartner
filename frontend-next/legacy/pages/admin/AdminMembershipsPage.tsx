@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { BadgeCheck, Clock3, Filter, LoaderCircle, RefreshCw, Search, Plus, Edit3, Trash2, ShieldAlert, Award } from 'lucide-react';
@@ -107,9 +107,14 @@ const messageFrom = (error: unknown) => {
   return error instanceof Error ? error.message : 'The request could not be completed.';
 };
 
-export default function AdminMembershipsPage() {
+export default function AdminMembershipsPage({ defaultTab }: { defaultTab?: 'records' | 'requests' | 'plans' } = {}) {
   const { user, hasAdminPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<'records' | 'requests' | 'plans'>('records');
+  const [activeTab, setActiveTab] = useState<'records' | 'requests' | 'plans'>(defaultTab ?? 'records');
+
+  // Sync active tab when defaultTab prop changes (e.g. route change)
+  useEffect(() => {
+    if (defaultTab) setActiveTab(defaultTab);
+  }, [defaultTab]);
 
   // Permission Checks
   const canView = user?.admin_role === 'SUPER_ADMIN' || hasAdminPermission('memberships.view');

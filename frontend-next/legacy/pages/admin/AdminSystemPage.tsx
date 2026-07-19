@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Save, Sliders, ShieldCheck, CreditCard, Mail, Bell, Settings, Lock, Database, Trash2, Plus } from 'lucide-react';
@@ -14,7 +14,6 @@ const CONFIG_TABS = [
   { key: 'BRANDING', label: 'Branding', icon: Sliders, desc: 'Corporate branding, logos, favicons, and accent colors.' },
   { key: 'REGISTRATION', label: 'Registration', icon: ShieldCheck, desc: 'Onboarding policies and verification requirements.' },
   { key: 'VERIFICATION', label: 'Verification', icon: ShieldCheck, desc: 'Identity checklist documents and AI checks.' },
-  { key: 'MEMBERSHIP', label: 'Membership', icon: CreditCard, desc: 'Entitlements, view limits, and discounts.' },
   { key: 'PAYMENTS', label: 'Payments', icon: CreditCard, desc: 'Manual approval, currency, and refund policies.' },
   { key: 'NOTIFICATIONS', label: 'Notifications', icon: Bell, desc: 'WhatsApp notifications, push messages, and system alerts.' },
   { key: 'EMAIL', label: 'Email', icon: Mail, desc: 'SMTP server host, port, username, password and templates.' },
@@ -386,37 +385,7 @@ export default function AdminSystemPage({ mode }: { mode: 'settings' | 'backups'
           </div>
         );
 
-      case 'MEMBERSHIP':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-              <label className="admin-form-field">
-                <span>Pricing Model</span>
-                <select value={val.pricing_model || 'fixed'} onChange={e => updateFormField('MEMBERSHIP', 'pricing_model', e.target.value)}>
-                  <option value="fixed">Fixed Price Catalog</option>
-                  <option value="dynamic">Dynamic SLA Based</option>
-                </select>
-              </label>
-              
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', height: '100%', paddingTop: '1.5rem', cursor: 'pointer' }}>
-                <input type="checkbox" checked={Boolean(val.discounts_enabled)} onChange={e => updateFormField('MEMBERSHIP', 'discounts_enabled', e.target.checked)} style={{ width: '18px', height: '18px' }} />
-                <span>Allow Promotional Discounts & Coupons</span>
-              </label>
-            </div>
 
-            <h3 style={{ margin: '1rem 0 0.5rem', fontSize: '1rem', color: 'var(--admin-wine)' }}>Free Account Usage Limits</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-              <label className="admin-form-field">
-                <span>Daily Connection Requests (Max)</span>
-                <input type="number" min="0" value={val.free_plan_limits?.daily_interests ?? 5} onChange={e => updateFormField('MEMBERSHIP', 'free_plan_limits.daily_interests', Number(e.target.value))} />
-              </label>
-              <label className="admin-form-field">
-                <span>Daily Profile Views (Max)</span>
-                <input type="number" min="0" value={val.free_plan_limits?.profile_views ?? 10} onChange={e => updateFormField('MEMBERSHIP', 'free_plan_limits.profile_views', Number(e.target.value))} />
-              </label>
-            </div>
-          </div>
-        );
 
       case 'PAYMENTS':
         return (

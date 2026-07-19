@@ -49,7 +49,7 @@ const routes: Record<string, RouteEntry> = {
   documents: { component: Documents, permission: 'verification.view_all' },
   'document-verifications': { component: Documents, permission: 'verification.view_all' },
   memberships: { component: Memberships, permission: 'memberships.view' },
-  'membership-plans': { component: Memberships, permission: 'memberships.view' },
+  'membership-plans': { component: Memberships, permission: 'memberships.view', props: { defaultTab: 'plans' } },
   tickets: { component: Tickets, permission: 'tickets.view_all' },
   'support-tickets': { component: Tickets, permission: 'tickets.view_all' },
   'contact-enquiries': { component: Enquiries, permission: 'tickets.view_all' },
