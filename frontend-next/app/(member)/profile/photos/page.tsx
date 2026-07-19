@@ -567,7 +567,7 @@ export default function PhotosPage() {
                           <ProfileImage
                             photoId={photo.id}
                             src={photo.image_url || photo.thumbnail_url}
-                            variant="full"
+                            variant="image"
                             version={photo.updated_at}
                             alt="Profile photo preview"
                             size="full"

@@ -364,8 +364,10 @@ export default function AdminUsersPage() {
       {/* Confirm action dialog */}
       {pendingAction && (
         <AdminConfirmDialog
-          label={pendingAction.label}
+          open={true}
+          title={pendingAction.label}
           description={pendingAction.description}
+          confirmLabel={pendingAction.label}
           dangerous={pendingAction.dangerous}
           busy={busy}
           onConfirm={() => doAction(pendingAction.user, pendingAction.action)}

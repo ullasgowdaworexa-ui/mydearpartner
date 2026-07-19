@@ -7,11 +7,6 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-from apps.common.file_deletion import (
-    PRIVATE_MEDIA_STORAGE_ALIAS,
-    enqueue_stored_file_deletion,
-)
-
 from .models import Member, MemberDocument, MemberPreference, MemberProfile
 
 
@@ -206,27 +201,13 @@ def permanently_delete_member(*, member: Member, actor=None) -> PermanentMemberD
         .only(
             'id',
             'document_type',
-            'file_path',
+            'file_data',
             'status',
             'uploaded_at',
             'reviewed_at',
             'reviewed_by_id',
         )
     )
-    seen_stored_files = set()
-    for document in documents:
-        name = document.file_path.name
-        if not name:
-            continue
-        storage = document.file_path.storage
-        storage_key = (id(storage), name)
-        if storage_key not in seen_stored_files:
-            seen_stored_files.add(storage_key)
-            enqueue_stored_file_deletion(
-                storage_alias=PRIVATE_MEDIA_STORAGE_ALIAS,
-                storage_key=name,
-                storage=storage,
-            )
 
     retained_metadata = ()
     if document_policy == RETAIN_DOCUMENT_METADATA:

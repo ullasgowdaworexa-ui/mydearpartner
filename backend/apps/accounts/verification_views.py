@@ -847,7 +847,6 @@ class MemberDocumentDownloadView(APIView):
     def get(self, request, document_id):
         from .models import MemberDocument, AccountType
         from apps.core.models import ProfileVerificationAssignment
-        from apps.accounts.services import decompress_document
 
         try:
             document = MemberDocument.objects.get(pk=document_id)
@@ -856,14 +855,6 @@ class MemberDocumentDownloadView(APIView):
                 success=False,
                 message='This document is no longer available.',
                 code='DOCUMENT_NOT_FOUND',
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if getattr(document, 'is_deleted', False):
-            return ApiResponse(
-                success=False,
-                message='This document is no longer available.',
-                code='DOCUMENT_DELETED',
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -910,42 +901,19 @@ class MemberDocumentDownloadView(APIView):
                 new_data={'member_id': str(document.member_id)},
             )
 
+        if not document.file_data:
+            return ApiResponse(
+                success=False,
+                message='This document has no file data.',
+                code='DOCUMENT_NO_DATA',
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         try:
-            if document.file_data:
-                try:
-                    raw = decompress_document(bytes(document.file_data))
-                except Exception:
-                    return ApiResponse(
-                        success=False,
-                        message='This document cannot be read because its data is corrupted.',
-                        code='DOCUMENT_CORRUPTED',
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
-                filename = document.file_name or 'document'
-                content_type = document.file_content_type or 'application/octet-stream'
-                response = HttpResponse(raw, content_type=content_type)
-            elif document.file_path:
-                from pathlib import Path
-                import mimetypes
-                filename = Path(document.file_path.name).name.replace('"', '')
-                content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-                try:
-                    from django.http import FileResponse
-                    response = FileResponse(document.file_path.open('rb'), content_type=content_type)
-                except FileNotFoundError:
-                    return ApiResponse(
-                        success=False,
-                        message='This document is no longer available on the server.',
-                        code='DOCUMENT_FILE_MISSING',
-                        status=status.HTTP_404_NOT_FOUND,
-                    )
-            else:
-                return ApiResponse(
-                    success=False,
-                    message='This document has no file data.',
-                    code='DOCUMENT_NO_DATA',
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+            raw_bytes = document.raw_file_bytes
+            if raw_bytes is None:
+                raise ValueError('Decompression failed')
+            response = HttpResponse(raw_bytes, content_type=document.mime_type or 'application/octet-stream')
         except Exception:
             return ApiResponse(
                 success=False,
@@ -954,8 +922,9 @@ class MemberDocumentDownloadView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        safe_filename = (filename or 'document').replace('"', '').replace('\\', '').replace('/', '')
+        safe_filename = document.original_file_name.replace('"', '').replace('\\', '').replace('/', '')
         response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
+        response['Content-Length'] = document.file_size
         response['X-Content-Type-Options'] = 'nosniff'
         response['Cache-Control'] = 'private, no-cache, must-revalidate'
         return response

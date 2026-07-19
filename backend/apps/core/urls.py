@@ -96,6 +96,14 @@ from .role_views import (
 )
 from .old_views import VerificationDocumentDownloadView
 
+from apps.accounts.document_admin_views import (
+    AdminDocumentListView,
+    AdminDocumentDetailView,
+    AdminDocumentDownloadView,
+    AdminDocumentApproveView,
+    AdminDocumentRejectView,
+)
+
 from .views import (
     BlogPostListView,
     CompatibilityCheckView,
@@ -208,6 +216,13 @@ urlpatterns = [
     path('super-admin/accounts/<str:account_type>/<uuid:account_id>/', SuperAdminAccountDetailView.as_view(), name='super_admin_account_detail'),
     path('super-admin/accounts/<str:account_type>/<uuid:account_id>/<str:action>/', SuperAdminAccountActionView.as_view(), name='super_admin_account_action'),
     path('super-admin/accounts/<str:account_type>/<uuid:account_id>/activity/', SuperAdminAccountActivityView.as_view(), name='super_admin_account_activity'),
+
+    # Admin document management APIs
+    path('admin/documents/', AdminDocumentListView.as_view(), name='admin_documents'),
+    path('admin/documents/<uuid:document_id>/', AdminDocumentDetailView.as_view(), name='admin_document_detail'),
+    path('admin/documents/<uuid:document_id>/download/', AdminDocumentDownloadView.as_view(), name='admin_document_download'),
+    path('admin/documents/<uuid:document_id>/approve/', AdminDocumentApproveView.as_view(), name='admin_document_approve'),
+    path('admin/documents/<uuid:document_id>/reject/', AdminDocumentRejectView.as_view(), name='admin_document_reject'),
 
     # Admin operational APIs. Super Admin may also enter these APIs explicitly.
     path('admin/dashboard/', AdminDashboardView.as_view(), name='admin_dashboard'),

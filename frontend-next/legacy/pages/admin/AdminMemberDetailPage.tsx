@@ -211,7 +211,7 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
     try {
       await fetchApi(`/admin/profile-photos/${photoAction.photoId}/${photoAction.approve ? 'approve' : 'reject'}/`, {
         method: 'POST',
-        body: photoAction.approve ? {} : { reason: rejectionReason },
+        body: photoAction.approve ? undefined : JSON.stringify({ reason: rejectionReason }),
       });
       setToast({ message: `Photo ${photoAction.approve ? 'approved' : 'rejected'} successfully.`, tone: 'success' });
       setPhotoAction(null);
@@ -785,8 +785,10 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
       {/* Confirm dialogs */}
       {confirmAction && (
         <AdminConfirmDialog
-          label={confirmAction.label}
+          open={true}
+          title={confirmAction.label}
           description={confirmAction.description}
+          confirmLabel={confirmAction.label}
           dangerous={confirmAction.dangerous}
           busy={actionBusy}
           onConfirm={() => performAction(confirmAction.action)}

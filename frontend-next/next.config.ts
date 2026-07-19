@@ -48,7 +48,7 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   "img-src 'self' data: blob: http://localhost:8000 https:",
   `connect-src 'self' ${connectOrigins} ${razorpayOrigins}`,
-  "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+  "frame-src 'self' blob: https://api.razorpay.com https://checkout.razorpay.com",
   "media-src 'self' blob:",
   ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");

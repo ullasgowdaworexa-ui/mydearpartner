@@ -1,3 +1,4 @@
+import gzip
 import secrets
 from datetime import timedelta
 from pathlib import Path
@@ -14,9 +15,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.responses import ApiResponse
-
-from .services import compress_document
+from apps.core.responses import ApiErrorResponse, ApiResponse
 
 from .models import (
     AccountType,
@@ -47,6 +46,7 @@ from .permissions import IsMember
 from .serializers import (
     AdministrativeLoginSerializer,
     ForgotPasswordSerializer,
+    MemberDocumentSerializer,
     MemberLoginSerializer,
     MemberProfileUpdateSerializer,
     MemberDocumentSerializer,
@@ -818,38 +818,48 @@ class MemberDocumentListCreateView(APIView):
     def get(self, request):
         _ensure_account_type(request, AccountType.MEMBER)
         documents = MemberDocument.objects.filter(member=request.user)
-        return ApiResponse(
-            data=MemberDocumentSerializer(documents, many=True, context={'request': request}).data
-        )
+        serializer = MemberDocumentSerializer(documents, many=True)
+        return ApiResponse(data=serializer.data, message='Documents retrieved successfully.')
 
     @transaction.atomic
     def post(self, request):
         _ensure_account_type(request, AccountType.MEMBER)
-        document_type = str(request.data.get('document_type', '')).strip()
+        upload = request.FILES.get('file')
+        if not upload:
+            raise ValidationError({'file': ['File is required.']})
+
+        document_type = str(request.data.get('document_type', '')).strip().upper()
         if not document_type:
             raise ValidationError({'document_type': ['Document type is required.']})
-        if len(document_type) > 80:
-            raise ValidationError({'document_type': ['Document type must be 80 characters or fewer.']})
-        upload = _validate_member_document(request.FILES.get('file') or request.FILES.get('document'))
+
+        valid_types = [t[0] for t in MemberDocument.DocumentType.choices]
+        if document_type not in valid_types:
+            raise ValidationError({'document_type': [f'Invalid document type. Must be one of: {", ".join(valid_types)}']})
+
+        custom_document_name = str(request.data.get('custom_document_name', '')).strip()
+        if document_type == MemberDocument.DocumentType.OTHER and not custom_document_name:
+            raise ValidationError({'custom_document_name': ['Custom document name is required when type is OTHER.']})
+
+        upload = _validate_member_document(upload)
+        mime_type = upload.content_type or 'application/octet-stream'
+
         raw_bytes = upload.read()
-        original_size = len(raw_bytes)
-        compressed = compress_document(raw_bytes)
+        upload.seek(0)
+        compressed = gzip.compress(raw_bytes)
+
         document = MemberDocument.objects.create(
             member=request.user,
             document_type=document_type,
+            custom_document_name=custom_document_name,
+            original_file_name=upload.name,
             file_data=compressed,
-            file_name=upload.name,
-            file_content_type=upload.content_type or 'application/octet-stream',
-            file_size=original_size,
+            mime_type=mime_type,
+            file_size=len(raw_bytes),
             compressed_size=len(compressed),
             status=MemberDocument.Status.PENDING,
-            reviewed_at=None,
         )
-        request.user.document_status = Member.VerificationStatus.PENDING_REVIEW
-        request.user.save(update_fields=('document_status', 'updated_at'))
 
         from apps.core.models import ProfileVerificationDocument, ProfileVerificationRequest
-
         active_statuses = (
             ProfileVerificationRequest.Status.PENDING_REVIEW,
             ProfileVerificationRequest.Status.IN_REVIEW,
@@ -868,9 +878,27 @@ class MemberDocumentListCreateView(APIView):
             verification_request=verification,
             member_document=document,
         )
+
+        from apps.core.api_utils import create_notification
+        from apps.accounts.permissions import IsAdmin, IsSuperAdmin
+        from apps.accounts.models import SuperAdmin, Admin
+        admins = list(SuperAdmin.objects.filter(is_active=True)) + list(Admin.objects.filter(is_active=True))
+        for admin in admins:
+            try:
+                create_notification(
+                    admin,
+                    type='document_uploaded',
+                    title='New Document Uploaded',
+                    body=f'{request.user.get_full_name() or request.user.email} uploaded a {document.display_name}.',
+                    related_object=document,
+                )
+            except Exception:
+                pass
+
+        serializer = MemberDocumentSerializer(document)
         return ApiResponse(
-            data=MemberDocumentSerializer(document, context={'request': request}).data,
-            message='Document uploaded for verification.',
+            data={'document': serializer.data},
+            message='Document uploaded successfully.',
             status=status.HTTP_201_CREATED,
         )
 
@@ -881,66 +909,93 @@ class MemberDocumentDeleteView(APIView):
     @transaction.atomic
     def delete(self, request, document_id):
         try:
-            document = get_object_or_404(MemberDocument, pk=document_id, member=request.user, is_deleted=False)
-        except Exception as e:
+            document = MemberDocument.objects.get(pk=document_id, member=request.user)
+        except MemberDocument.DoesNotExist:
             return ApiResponse(
                 success=False,
-                message='Document not found or access denied.',
+                message='Document not found.',
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
-        # Check if approved document requires deletion reason
-        deletion_reason = ''
-        if document.status == MemberDocument.Status.APPROVED:
-            # For DELETE requests, try to get reason from query params or request body
-            reason = None
-            if hasattr(request, 'data') and request.data:
-                reason = request.data.get('reason', '').strip()
-            if not reason:
-                reason = request.query_params.get('reason', '').strip()
-            
-            if not reason:
-                return ApiResponse(
-                    success=False,
-                    message='Please provide a reason for deleting this approved document.',
-                    code='REASON_REQUIRED',
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            deletion_reason = reason
-        
-        # Perform soft delete
+
+        from apps.core.models import ProfileVerificationDocument
+        ProfileVerificationDocument.objects.filter(member_document=document).delete()
+
+        document.delete()
+
+        return ApiResponse(
+            success=True,
+            message='Document permanently deleted.',
+            status=status.HTTP_200_OK,
+        )
+
+
+class MemberDocumentReuploadView(APIView):
+    permission_classes = (permissions.IsAuthenticated, IsMember)
+    parser_classes = (FormParser, MultiPartParser)
+
+    @transaction.atomic
+    def post(self, request, document_id):
+        _ensure_account_type(request, AccountType.MEMBER)
         try:
-            document.is_deleted = True
-            document.deleted_at = timezone.now()
-            document.deleted_by_id = request.user.pk
-            if deletion_reason:
-                document.deletion_reason = deletion_reason
-            
-            # Build update fields dynamically to avoid field errors
-            update_fields = ['is_deleted', 'deleted_at', 'deleted_by_id', 'updated_at']
-            if deletion_reason:
-                update_fields.append('deletion_reason')
-            
-            document.save(update_fields=update_fields)
-            
-            # Update member document status if no active documents remain
-            remaining = MemberDocument.objects.filter(member=request.user, is_deleted=False).count()
-            if remaining == 0:
-                request.user.document_status = Member.VerificationStatus.NOT_STARTED
-                request.user.save(update_fields=['document_status', 'updated_at'])
-            
-            return ApiResponse(
-                success=True,
-                message='Document deleted successfully.',
-                status=status.HTTP_200_OK,
-            )
-            
-        except Exception as e:
+            document = MemberDocument.objects.get(pk=document_id, member=request.user)
+        except MemberDocument.DoesNotExist:
             return ApiResponse(
                 success=False,
-                message=f'Failed to delete document: {str(e)}',
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message='Document not found.',
+                status=status.HTTP_404_NOT_FOUND,
             )
+
+        if document.status != MemberDocument.Status.REJECTED:
+            return ApiResponse(
+                success=False,
+                message='Only rejected documents can be re-uploaded.',
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        upload = request.FILES.get('file')
+        if not upload:
+            raise ValidationError({'file': ['File is required.']})
+
+        mime_type = upload.content_type or 'application/octet-stream'
+        upload = _validate_member_document(upload)
+
+        raw_bytes = upload.read()
+        upload.seek(0)
+        compressed = gzip.compress(raw_bytes)
+
+        document.file_data = compressed
+        document.original_file_name = upload.name
+        document.mime_type = mime_type
+        document.file_size = len(raw_bytes)
+        document.compressed_size = len(compressed)
+        document.status = MemberDocument.Status.PENDING
+        document.rejection_reason = ''
+        document.admin_comment = ''
+        document.reviewed_at = None
+        document.reviewed_by_id = None
+        document.save()
+
+        from apps.core.api_utils import create_notification
+        from apps.accounts.models import SuperAdmin, Admin
+        admins = list(SuperAdmin.objects.filter(is_active=True)) + list(Admin.objects.filter(is_active=True))
+        for admin in admins:
+            try:
+                create_notification(
+                    admin,
+                    type='document_reuploaded',
+                    title='Document Re-uploaded',
+                    body=f'{request.user.get_full_name() or request.user.email} re-uploaded a {document.display_name}.',
+                    related_object=document,
+                )
+            except Exception:
+                pass
+
+        serializer = MemberDocumentSerializer(document)
+        return ApiResponse(
+            data={'document': serializer.data},
+            message='Document re-uploaded successfully.',
+            status=status.HTTP_200_OK,
+        )
 
 
 class MemberProfileSubmitView(APIView):

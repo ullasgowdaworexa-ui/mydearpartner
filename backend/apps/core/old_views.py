@@ -785,17 +785,26 @@ class VerificationDocumentDownloadView(APIView):
                 target_id=document.pk,
                 new_data={'member_id': str(document.member_id)},
             )
-        if document.file_data:
-            from apps.accounts.services import decompress_document
-            raw = decompress_document(bytes(document.file_data))
-            filename = document.file_name or 'document'
-            content_type = document.file_content_type or 'application/octet-stream'
-            response = HttpResponse(raw, content_type=content_type)
-        else:
-            filename = Path(document.file_path.name).name.replace('"', '')
-            content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-            response = FileResponse(document.file_path.open('rb'), content_type=content_type)
-        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        if not document.file_data:
+            return ApiResponse(
+                success=False,
+                message='Document file not found.',
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            raw_bytes = document.raw_file_bytes
+            if raw_bytes is None:
+                raise ValueError('Decompression failed')
+        except Exception:
+            return ApiResponse(
+                success=False,
+                message='Error reading document file.',
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        response = HttpResponse(raw_bytes, content_type=document.mime_type or 'application/octet-stream')
+        safe_filename = document.original_file_name.replace('"', '').replace('\\', '').replace('/', '')
+        response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
+        response['Content-Length'] = document.file_size
         response['X-Content-Type-Options'] = 'nosniff'
         response['Cache-Control'] = 'private, no-store'
         return response

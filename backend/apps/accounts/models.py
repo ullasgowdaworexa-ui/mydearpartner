@@ -7,8 +7,6 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from .storage import private_media_storage
-
 
 class AccountType(models.TextChoices):
     MEMBER = 'MEMBER', 'Member'
@@ -1108,54 +1106,84 @@ class MemberPreference(models.Model):
         ]
 
 
-class ActiveDocumentManager(models.Manager):
-    def get_queryset(self):
-        return super().get_queryset().filter(is_deleted=False)
-
-
 class MemberDocument(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
         APPROVED = 'APPROVED', 'Approved'
         REJECTED = 'REJECTED', 'Rejected'
-        EXPIRED = 'EXPIRED', 'Expired'
+
+    class DocumentType(models.TextChoices):
+        AADHAAR = 'AADHAAR', 'Aadhaar Card'
+        PAN = 'PAN', 'PAN Card'
+        PASSPORT = 'PASSPORT', 'Passport'
+        DRIVING_LICENCE = 'DRIVING_LICENCE', 'Driving Licence'
+        VOTER_ID = 'VOTER_ID', 'Voter ID'
+        BIRTH_CERTIFICATE = 'BIRTH_CERTIFICATE', 'Birth Certificate'
+        ADDRESS_PROOF = 'ADDRESS_PROOF', 'Address Proof'
+        INCOME_CERTIFICATE = 'INCOME_CERTIFICATE', 'Income Certificate'
+        DEGREE_CERTIFICATE = 'DEGREE_CERTIFICATE', 'Degree Certificate'
+        TENTH_MARKSHEET = 'TENTH_MARKSHEET', '10th Marks Card'
+        TWELFTH_MARKSHEET = 'TWELFTH_MARKSHEET', '12th Marks Card'
+        DIPLOMA_CERTIFICATE = 'DIPLOMA_CERTIFICATE', 'Diploma Certificate'
+        EMPLOYMENT_PROOF = 'EMPLOYMENT_PROOF', 'Employment Proof'
+        SALARY_SLIP = 'SALARY_SLIP', 'Salary Slip'
+        DIVORCE_CERTIFICATE = 'DIVORCE_CERTIFICATE', 'Divorce Certificate'
+        DEATH_CERTIFICATE = 'DEATH_CERTIFICATE', 'Death Certificate'
+        OTHER = 'OTHER', 'Other'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='documents')
-    objects = ActiveDocumentManager()
-    all_objects = models.Manager()
-    document_type = models.CharField(max_length=80)
-    file_data = models.BinaryField(null=True, blank=True)
-    file_name = models.CharField(max_length=255, blank=True)
-    file_content_type = models.CharField(max_length=100, blank=True)
-    file_size = models.IntegerField(null=True, blank=True)
-    compressed_size = models.IntegerField(null=True, blank=True)
-    file_path = models.FileField(
-        upload_to='member_documents/',
-        storage=private_media_storage,
-        null=True, blank=True,
-    )
+    document_type = models.CharField(max_length=30, choices=DocumentType.choices)
+    custom_document_name = models.CharField(max_length=255, blank=True)
+    original_file_name = models.CharField(max_length=255)
+    file_data = models.BinaryField(null=True, blank=True, help_text='Gzip-compressed document bytes stored in the database.')
+    mime_type = models.CharField(max_length=100)
+    file_size = models.IntegerField(help_text='Original uncompressed file size in bytes.')
+    compressed_size = models.IntegerField(null=True, blank=True, help_text='Size of the stored compressed bytes.')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    admin_comment = models.TextField(blank=True)
     rejection_reason = models.TextField(blank=True)
-    changes_requested_reason = models.TextField(blank=True)
-    is_deleted = models.BooleanField(default=False)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-    deleted_by_id = models.UUIDField(null=True, blank=True)
-    deletion_reason = models.TextField(blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     reviewed_by_id = models.UUIDField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     @property
     def reviewed_by(self):
-        from apps.accounts.models import Admin, SuperAdmin
         if not self.reviewed_by_id:
             return None
-        return Admin.objects.filter(pk=self.reviewed_by_id).first() or SuperAdmin.objects.filter(pk=self.reviewed_by_id).first()
+        from .models import Admin, SuperAdmin
+        return (Admin.objects.filter(pk=self.reviewed_by_id).first()
+                or SuperAdmin.objects.filter(pk=self.reviewed_by_id).first())
 
     @reviewed_by.setter
     def reviewed_by(self, value):
         self.reviewed_by_id = value.pk if value else None
+
+    @property
+    def display_name(self):
+        if self.document_type == self.DocumentType.OTHER and self.custom_document_name:
+            return self.custom_document_name
+        return self.get_document_type_display()
+
+    @property
+    def can_delete(self):
+        return True
+
+    @property
+    def can_reupload(self):
+        return self.status == self.Status.REJECTED
+
+    @property
+    def raw_file_bytes(self):
+        """Return the decompressed document bytes, or None if no data."""
+        if self.file_data is None:
+            return None
+        import gzip
+        try:
+            return gzip.decompress(self.file_data)
+        except (OSError, gzip.BadGzipFile):
+            return bytes(self.file_data)
 
     class Meta:
         db_table = 'member_documents'

@@ -5,7 +5,7 @@ import {
   ClipboardCheck, FileCheck2, FileImage, FileText, FolderHeart,
   Headphones, ListTodo, LockKeyhole, Megaphone, Newspaper,
   NotebookPen, ReceiptText, RefreshCcw, Activity, UserCog,
-  ShieldEllipsis, Flag, CircleHelp, MapPinned, type LucideIcon,
+  ShieldEllipsis, Flag, CircleHelp, MapPinned, FolderOpen, type LucideIcon,
 } from 'lucide-react';
 import type { AccountType } from '@/lib/auth';
 
@@ -33,6 +33,7 @@ export const memberNavigation: NavItem[] = [
   { label: 'Shortlist', icon: Star, href: '/shortlist', allowedRoles: ['MEMBER'] },
   { label: 'Messages', icon: MessageSquareMore, href: '/messages', allowedRoles: ['MEMBER'] },
   { label: 'Notifications', icon: Bell, href: '/notifications', allowedRoles: ['MEMBER'] },
+  { label: 'My Documents', icon: FolderOpen, href: '/profile/documents', allowedRoles: ['MEMBER'] },
   { label: 'Verification', icon: ShieldCheck, href: '/verification', allowedRoles: ['MEMBER'] },
   { label: 'Membership', icon: CreditCard, href: '/membership', allowedRoles: ['MEMBER'] },
   {

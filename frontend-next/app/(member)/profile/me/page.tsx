@@ -153,7 +153,7 @@ export default function MyProfilePage() {
             <div className="flex-1 min-w-0 text-center md:text-left">
               <div className="flex flex-wrap items-center gap-3 mb-2 justify-center md:justify-start">
                 <h1 className="text-2xl font-extrabold text-gray-900">{p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()}</h1>
-                {p.is_premium && <Crown className="w-5 h-5 text-amber-500" title="Premium Member" />}
+                {p.is_premium && <Crown className="w-5 h-5 text-amber-500" aria-label="Premium Member" />}
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mb-3 justify-center md:justify-start">
                 {p.age && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{p.age} yrs</span>}

@@ -705,17 +705,48 @@ class MemberProfileUpdateSerializer(serializers.Serializer):
 
 
 class MemberDocumentSerializer(serializers.ModelSerializer):
-    download_url = serializers.SerializerMethodField()
+    display_name = serializers.CharField(read_only=True)
+    can_delete = serializers.BooleanField(read_only=True)
+    can_reupload = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = MemberDocument
         fields = (
-            'id', 'document_type', 'status', 'rejection_reason',
-            'uploaded_at', 'reviewed_at', 'download_url',
+            'id', 'document_type', 'custom_document_name', 'display_name',
+            'original_file_name', 'mime_type', 'file_size',
+            'status', 'admin_comment', 'rejection_reason',
+            'uploaded_at', 'reviewed_at',
+            'can_delete', 'can_reupload',
         )
 
-    def get_download_url(self, obj):
-        return f'/api/proxy/member-auth/verification/documents/{obj.pk}/download/'
+
+class AdminDocumentSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(read_only=True)
+    member_id = serializers.UUIDField(source='member_id', read_only=True)
+    member_name = serializers.SerializerMethodField()
+    member_email = serializers.SerializerMethodField()
+    reviewer_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MemberDocument
+        fields = (
+            'id', 'member_id', 'member_name', 'member_email',
+            'document_type', 'custom_document_name', 'display_name',
+            'original_file_name', 'mime_type', 'file_size',
+            'status', 'admin_comment', 'rejection_reason',
+            'uploaded_at', 'reviewed_at', 'reviewed_by_id', 'reviewer_name',
+            'updated_at',
+        )
+
+    def get_member_name(self, obj):
+        return obj.member.get_full_name() or obj.member.email
+
+    def get_member_email(self, obj):
+        return obj.member.email
+
+    def get_reviewer_name(self, obj):
+        reviewer = obj.reviewed_by
+        return reviewer.get_full_name() if reviewer else None
 
 
 # Compatibility aliases for internal imports while all callers move to member terminology.

@@ -228,8 +228,9 @@ export default function EditProfilePage() {
       updateUser(updated);
       setNotice({ text: 'Your profile has been submitted for review.' });
     } catch (error) {
-      if (error instanceof ApiError && error.errors?.missing_fields) {
-        const fields = (error.errors.missing_fields as string[]).map((f) => f.replace(/_/g, ' '));
+      if (error instanceof ApiError && error.errors && (error.errors as Record<string, unknown>).missing_fields) {
+        const missing = (error.errors as Record<string, unknown>).missing_fields as string[];
+        const fields = missing.map((f) => f.replace(/_/g, ' '));
         setNotice({ text: `Complete ${fields.length} required field${fields.length > 1 ? 's' : ''}: ${fields.join(', ')}.`, error: true });
       } else {
         setNotice({ text: messageFrom(error), error: true });
@@ -295,7 +296,8 @@ export default function EditProfilePage() {
     }
   };
 
-  const [docType, setDocType] = useState('Government ID');
+  const [docType, setDocType] = useState('AADHAAR');
+  const [customDocName, setCustomDocName] = useState('');
   const [docFile, setDocFile] = useState<File | null>(null);
 
   const uploadDocument = async (e: React.FormEvent) => {
@@ -306,6 +308,9 @@ export default function EditProfilePage() {
     try {
       const data = new FormData();
       data.append('document_type', docType);
+      if (docType === 'OTHER' && customDocName.trim()) {
+        data.append('custom_document_name', customDocName.trim());
+      }
       data.append('file', docFile);
       await fetchApi('/member-auth/me/documents/', { method: 'POST', body: data });
       const fresh = await fetchApi<UserType>('/member-auth/me/');
@@ -321,12 +326,20 @@ export default function EditProfilePage() {
     }
   };
 
-  const deleteDocument = async (docId: string) => {
+  const deleteDocument = async (docId: string, docStatus?: string) => {
+    let reason = '';
+    if (docStatus === 'APPROVED') {
+      reason = window.prompt('This document is approved. Please provide a reason for deletion:')?.trim() || '';
+      if (!reason) return;
+    }
     if (!confirm('Delete this document?')) return;
     setBusy(true);
     setNotice(null);
     try {
-      await fetchApi(`/member-auth/me/documents/${docId}/`, { method: 'DELETE' });
+      await fetchApi(`/member-auth/me/documents/${docId}/`, {
+        method: 'DELETE',
+        body: reason ? JSON.stringify({ reason }) : undefined,
+      });
       const fresh = await fetchApi<UserType>('/member-auth/me/');
       updateUser(fresh);
       setNotice({ text: 'Document deleted.' });
@@ -406,11 +419,11 @@ export default function EditProfilePage() {
           <div>
             <h1 className="text-xl font-extrabold text-gray-900">Edit Profile</h1>
             <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-bold ${statusColor(profile.profile_status)}`}>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-bold ${statusColor(String(profile.profile_status))}`}>
                 {profile.profile_status === 'approved' && <CheckCircle className="w-3 h-3" />}
                 {profile.profile_status === 'rejected' && <XCircle className="w-3 h-3" />}
                 {profile.profile_status === 'changes_requested' && <AlertCircle className="w-3 h-3" />}
-                {statusLabel(profile.profile_status)}
+                {statusLabel(String(profile.profile_status))}
               </span>
               <span aria-hidden="true" className="text-gray-300">&middot;</span>
               <span>{completion}% complete</span>
@@ -708,7 +721,7 @@ export default function EditProfilePage() {
                             <button type="button" onClick={() => setViewDoc({ id: doc.id, type: doc.document_type })} className="px-2.5 py-1 rounded-lg border border-gray-200 font-bold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
                               View
                             </button>
-                            <button type="button" onClick={() => deleteDocument(doc.id)} disabled={busy} className="px-2.5 py-1 rounded-lg border border-red-200 font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 cursor-pointer">
+                            <button type="button" onClick={() => deleteDocument(doc.id, doc.status)} disabled={busy} className="px-2.5 py-1 rounded-lg border border-red-200 font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 cursor-pointer">
                               Delete
                             </button>
                             <span className={`px-2.5 py-1 rounded-full font-bold shrink-0 ${
@@ -728,13 +741,31 @@ export default function EditProfilePage() {
                   <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Document Type</label>
                     <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold">
-                      <option value="Government ID">Government ID (Aadhaar, Passport, etc.)</option>
-                      <option value="Age proof">Age proof</option>
-                      <option value="Address proof">Address proof</option>
-                      <option value="Education document">Education document</option>
-                      <option value="Employment document">Employment document</option>
+                      <option value="AADHAAR">Aadhaar Card</option>
+                      <option value="PAN">PAN Card</option>
+                      <option value="PASSPORT">Passport</option>
+                      <option value="DRIVING_LICENCE">Driving Licence</option>
+                      <option value="VOTER_ID">Voter ID</option>
+                      <option value="BIRTH_CERTIFICATE">Birth Certificate</option>
+                      <option value="ADDRESS_PROOF">Address Proof</option>
+                      <option value="INCOME_CERTIFICATE">Income Certificate</option>
+                      <option value="DEGREE_CERTIFICATE">Degree Certificate</option>
+                      <option value="TENTH_MARKSHEET">10th Marks Card</option>
+                      <option value="TWELFTH_MARKSHEET">12th Marks Card</option>
+                      <option value="DIPLOMA_CERTIFICATE">Diploma Certificate</option>
+                      <option value="EMPLOYMENT_PROOF">Employment Proof</option>
+                      <option value="SALARY_SLIP">Salary Slip</option>
+                      <option value="DIVORCE_CERTIFICATE">Divorce Certificate</option>
+                      <option value="DEATH_CERTIFICATE">Death Certificate</option>
+                      <option value="OTHER">Other</option>
                     </select>
                   </div>
+                  {docType === 'OTHER' && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Document Name</label>
+                      <input type="text" value={customDocName} onChange={(e) => setCustomDocName(e.target.value)} placeholder="e.g. Caste Certificate" className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300" />
+                    </div>
+                  )}
                   <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Select File</label>
                     <input id="doc_file_input" type="file" required accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setDocFile(e.target.files?.[0] || null)} className="w-full text-xs font-medium text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100" />

@@ -1,2 +1,2 @@
-import EditProfilePage from '@/legacy/pages/EditProfilePage';
-export default function Page() { return <EditProfilePage />; }
+import MemberDocumentsPage from '@/legacy/pages/MemberDocumentsPage';
+export default function Page() { return <MemberDocumentsPage />; }
