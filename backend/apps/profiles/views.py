@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import AccountType
-from apps.core.responses import ApiResponse
+from apps.core.responses import ApiResponse, ApiErrorResponse
 
 from .models import ProfilePhoto
 from .photo_permissions import can_review_profile_photos, can_view_profile_photo
@@ -58,8 +58,30 @@ def _uploaded_photo(request):
     return uploaded
 
 
-def _error_response(error: Exception, *, field="photo"):
-    return Response({field: [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+def _photo_error_code(message: str) -> str:
+    text = (message or "").lower()
+    if "already" in text and ("gallery" in text or "uploaded" in text):
+        return "DUPLICATE_PHOTO"
+    if "maximum" in text or "plan allows" in text or "limit reached" in text or "max " in text or "reached the limit" in text:
+        return "PHOTO_LIMIT_REACHED"
+    if "dimension" in text or "pixels" in text or "600" in text or "750" in text:
+        return "INVALID_FILE"
+    if "format" in text or "jpeg" in text or "png" in text or "webp" in text:
+        return "INVALID_FILE"
+    if "valid" in text or "complete" in text or "identify" in text or "empty" in text:
+        return "INVALID_FILE"
+    return "INVALID_FILE"
+
+
+def _error_response(error: Exception, *, field="photo", code: str | None = None):
+    code = code or _photo_error_code(str(error))
+    return ApiErrorResponse(
+        message=str(error),
+        code=code,
+        errors={field: [str(error)]},
+        status=status.HTTP_400_BAD_REQUEST,
+        request=None,
+    )
 
 
 def _etag_matches(request, etag: str) -> bool:
@@ -508,7 +530,13 @@ class UserProfileImageUploadView(APIView):
                     actor=member,
                 ))
         except PrimaryPhotoNotVerifiedError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+            return ApiErrorResponse(
+                message=str(exc),
+                code="PRIMARY_PHOTO_NOT_VERIFIED",
+                errors={"code": ["PRIMARY_PHOTO_NOT_VERIFIED"]},
+                status=status.HTTP_403_FORBIDDEN,
+                request=None,
+            )
         except ProfilePhotoProcessingError as exc:
             return _error_response(exc)
 

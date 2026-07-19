@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Member, MemberDocument
 from apps.accounts.security import issue_account_tokens
-from apps.core.middleware import JWTAuthMiddleware
+from apps.notifications.middleware import JwtAuthMiddleware as JWTAuthMiddleware
 from apps.core.models import ChatMessage, MemberMembership, MembershipPlan
 from apps.core.routing import websocket_urlpatterns
 from apps.profiles.models import ProfilePhoto

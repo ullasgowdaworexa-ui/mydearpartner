@@ -35,17 +35,20 @@ const connectOrigins = [publicApi, publicWs]
 
 const isDev = process.env.NODE_ENV !== "production";
 
+const razorpayOrigins = "https://api.razorpay.com https://checkout.razorpay.com";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "img-src 'self' data: blob: http://localhost:8000 https:",
-  `connect-src 'self' ${connectOrigins}`,
+  `connect-src 'self' ${connectOrigins} ${razorpayOrigins}`,
+  "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
   "media-src 'self' blob:",
   ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");

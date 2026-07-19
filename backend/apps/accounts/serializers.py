@@ -621,6 +621,8 @@ class MemberProfileUpdateSerializer(serializers.Serializer):
     hobbies = serializers.ListField(child=serializers.CharField(max_length=80), required=False)
     pref_age_min = serializers.IntegerField(required=False, min_value=18, max_value=100)
     pref_age_max = serializers.IntegerField(required=False, min_value=18, max_value=100)
+    pref_height_min = serializers.CharField(required=False, allow_blank=True)
+    pref_height_max = serializers.CharField(required=False, allow_blank=True)
     pref_religion = serializers.CharField(required=False, allow_blank=True)
     pref_caste = serializers.CharField(required=False, allow_blank=True)
     pref_location = serializers.CharField(required=False, allow_blank=True)
@@ -642,6 +644,14 @@ class MemberProfileUpdateSerializer(serializers.Serializer):
         maximum = attrs.get('pref_age_max')
         if minimum is not None and maximum is not None and minimum > maximum:
             raise serializers.ValidationError({'pref_age_min': 'Minimum age cannot exceed maximum age.'})
+        # Reject unknown fields instead of silently dropping them. A field sent
+        # under the wrong name (e.g. `about_me` instead of `about`) would
+        # otherwise vanish without any error, which is the root cause of
+        # "saved" values never reaching the database.
+        unknown = set(self.initial_data.keys()) - set(self.fields.keys())
+        if unknown:
+            errors = {field: ['This field name is not supported.'] for field in sorted(unknown)}
+            raise serializers.ValidationError(errors, code='UNKNOWN_PROFILE_FIELD')
         return attrs
 
     def update(self, instance, validated_data):

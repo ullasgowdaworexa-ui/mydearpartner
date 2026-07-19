@@ -188,6 +188,8 @@ export async function forwardToDjango(request: NextRequest, segments: string[]) 
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
+  const requestId = headers.get("x-request-id") || crypto.randomUUID();
+  headers.set("x-request-id", requestId);
   if (isProtectedPhotoPath(path) && !headers.has("authorization")) {
     let photoAccessToken = request.cookies.get(PHOTO_ACCESS_COOKIE)?.value;
     // If the cookie is missing (user logged in before this feature was deployed),
@@ -222,19 +224,37 @@ export async function forwardToDjango(request: NextRequest, segments: string[]) 
     clearTimeout(timeout);
     if (timedOut) {
       return NextResponse.json(
-        { success: false, message: "The request took too long. Please try again.", code: "GATEWAY_TIMEOUT" },
+        {
+          success: false,
+          message: "The request took too long. Please try again.",
+          code: "GATEWAY_TIMEOUT",
+          errors: { detail: "The request took too long. Please try again." },
+          meta: { request_id: requestId, gateway: true },
+        },
         { status: 504, headers: { "Cache-Control": "no-store" } },
       );
     }
     const isNetworkError = error instanceof TypeError && error.message?.includes("fetch");
     if (isNetworkError) {
       return NextResponse.json(
-        { success: false, message: "The backend service is unavailable. Please try again.", code: "SERVICE_UNAVAILABLE" },
+        {
+          success: false,
+          message: "The backend service is unavailable. Please try again.",
+          code: "SERVICE_UNAVAILABLE",
+          errors: { detail: "The backend service is unavailable. Please try again." },
+          meta: { request_id: requestId, gateway: true },
+        },
         { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
     return NextResponse.json(
-      { success: false, message: "The Django API is currently unavailable.", code: "BAD_GATEWAY" },
+      {
+        success: false,
+        message: "The Django API is currently unavailable.",
+        code: "BAD_GATEWAY",
+        errors: { detail: "The Django API is currently unavailable." },
+        meta: { request_id: requestId, gateway: true },
+      },
       { status: 502, headers: { "Cache-Control": "no-store" } },
     );
   } finally {

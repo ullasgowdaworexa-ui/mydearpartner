@@ -2132,7 +2132,7 @@ def _review_verification(request, verification, action):
         'start_review': ProfileVerificationRequest.Status.IN_REVIEW,
         'approve': ProfileVerificationRequest.Status.APPROVED,
         'reject': ProfileVerificationRequest.Status.REJECTED,
-        'escalate': ProfileVerificationRequest.Status.ESCALATED,
+        'escalate': ProfileVerificationRequest.Status.CHANGES_REQUESTED,
     }
     old_status = verification.status
     new_status = status_map[action]
@@ -2231,7 +2231,7 @@ def _review_verification(request, verification, action):
         priority=verification.priority,
     )
     audit(
-        request, request.user, action=f'PROFILE_{new_status}', module='verification',
+        request, request.user, action=f'PROFILE_{new_status.upper()}', module='verification',
         target_type='PROFILE_VERIFICATION', target_id=verification.pk,
         old_data={'status': old_status}, new_data={'status': new_status, 'reason': reason},
     )

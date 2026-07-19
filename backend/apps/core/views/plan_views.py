@@ -232,7 +232,7 @@ class AdminMembershipPlanToggleView(APIView):
     """
     POST /api/admin/membership-plans/{plan_id}/toggle/
     
-    Toggle plan active status (admin only).
+    Toggle plan active status (super admin only).
     
     Request Body:
         {
@@ -243,6 +243,8 @@ class AdminMembershipPlanToggleView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsAdmin)
     
     def post(self, request, plan_id):
+        if str(request.user.account_type) != AccountType.SUPER_ADMIN:
+            return ApiResponse(success=False, message='Only Super Admin can change membership plans.', status=status.HTTP_403_FORBIDDEN)
         try:
             plan = MembershipPlan.objects.get(pk=plan_id)
         except MembershipPlan.DoesNotExist:

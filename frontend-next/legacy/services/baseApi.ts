@@ -26,7 +26,7 @@ function requestBody(body: unknown): BodyInit | undefined {
 const customBaseQuery: BaseQueryFn<
   { url: string; method?: string; body?: any; params?: Record<string, any> },
   unknown,
-  { message: string; status: number; errors?: any }
+  { message: string; status: number; code?: string | null; errors?: any }
 > = async ({ url, method = 'GET', body, params }, api) => {
   try {
     const data = await fetchApi<any>(url, {
@@ -41,6 +41,7 @@ const customBaseQuery: BaseQueryFn<
       return {
         error: {
           status: error.status,
+          code: error.code ?? null,
           message: sanitizeMessage(error.message),
           errors: error.errors,
         },
@@ -50,6 +51,7 @@ const customBaseQuery: BaseQueryFn<
     return {
       error: {
         status: 500,
+        code: 'UNKNOWN_ERROR',
         message: sanitizeMessage(genericMsg),
       },
     };

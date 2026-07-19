@@ -18,7 +18,7 @@ from apps.core.consumers import (
     CLOSE_UNAUTHENTICATED,
     MAX_CHAT_PAYLOAD_BYTES,
 )
-from apps.core.middleware import JWTAuthMiddleware, token_from_subprotocols
+from apps.notifications.middleware import JwtAuthMiddleware as JWTAuthMiddleware, token_from_subprotocols
 from apps.core.models import ChatMessage, MemberMembership, MembershipPlan
 from apps.core.routing import websocket_urlpatterns
 

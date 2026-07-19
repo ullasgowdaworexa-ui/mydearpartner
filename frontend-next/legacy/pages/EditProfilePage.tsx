@@ -158,15 +158,23 @@ export default function EditProfilePage() {
 
   const profileFields = useMemo(() => Object.values(sections).flat(), []);
 
-  useEffect(() => {
-    if (!profile) return;
+  const mapApiToForm = (source: ProfileUser | null): FormState => {
     const next: FormState = {};
     for (const { key } of profileFields) {
-      const value = profile[key];
+      const value = source ? source[key] : undefined;
       next[key] = Array.isArray(value) ? value.join(', ') : value == null ? '' : String(value);
     }
+    return next;
+  };
+
+  // Reset the form ONLY from authoritative server data (initial load or a
+  // successful save). Never overwrite a dirty form with stale local state.
+  useEffect(() => {
+    if (!profile) return;
+    const next = mapApiToForm(profile);
     setForm(next);
     setInitialForm(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, profileFields]);
 
   const setValue = (key: string, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -191,12 +199,11 @@ export default function EditProfilePage() {
       }
       const updated = await fetchApi<UserType>('/member-auth/me/', { method: 'PATCH', body: JSON.stringify(payload) });
       updateUser(updated);
-      const nextInitial: FormState = {};
-      for (const { key } of profileFields) {
-        const value = (updated as any)[key];
-        nextInitial[key] = Array.isArray(value) ? value.join(', ') : value == null ? '' : String(value);
-      }
-      setInitialForm(nextInitial);
+      // Re-populate the form from the canonical server response so the
+      // just-saved values stay visible and survive a refresh.
+      const saved = mapApiToForm(updated as ProfileUser);
+      setForm(saved);
+      setInitialForm(saved);
       setNotice({ text: 'Profile changes saved successfully.' });
     } catch (error) {
       setNotice({ text: messageFrom(error), error: true });

@@ -29,6 +29,7 @@ import {
   useSetPrimaryPhotoMutation,
   useUploadPhotoMutation,
 } from '@/legacy/services/photoApi';
+import { friendlyMessage, ACTION_MESSAGES, SUCCESS_MESSAGES } from '@/lib/error-messages';
 
 const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const ACCEPTED_IMAGE_NAME = /\.(?:jpe?g|png|webp)$/i;
@@ -41,17 +42,62 @@ function selectedFileError(file: File): string | null {
   return null;
 }
 
-function uploadErrorMessage(error: unknown): string {
-  if (!error || typeof error !== 'object') return 'Failed to upload photo.';
-  const record = error as { data?: unknown; message?: unknown };
-  if (typeof record.message === 'string') return record.message;
-  if (typeof record.data === 'string') return record.data;
-  if (record.data && typeof record.data === 'object') {
-    const data = record.data as { message?: unknown; detail?: unknown };
-    if (typeof data.message === 'string') return data.message;
-    if (typeof data.detail === 'string') return data.detail;
+const MIN_PHOTO_WIDTH = 600;
+const MIN_PHOTO_HEIGHT = 750;
+
+function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const width = img.naturalWidth;
+      const height = img.naturalHeight;
+      URL.revokeObjectURL(url);
+      resolve({ width, height });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('unreadable'));
+    };
+    img.src = url;
+  });
+}
+
+async function imageDimensionError(file: File): Promise<string | null> {
+  try {
+    const { width, height } = await readImageDimensions(file);
+    if (width < MIN_PHOTO_WIDTH || height < MIN_PHOTO_HEIGHT) {
+      return `Image must be at least ${MIN_PHOTO_WIDTH} × ${MIN_PHOTO_HEIGHT} px (your image is ${width} × ${height} px).`;
+    }
+    return null;
+  } catch {
+    return null;
   }
-  return 'Failed to upload photo.';
+}
+
+function uploadErrorMessage(error: unknown, action: keyof typeof ACTION_MESSAGES = 'photo_upload'): string {
+  if (!error || typeof error !== 'object') return ACTION_MESSAGES[action] ?? ACTION_MESSAGES.photo_upload;
+  const record = error as { status?: unknown; data?: unknown; message?: unknown };
+  if (record.status === 'FETCH_ERROR' || record.status === 'TIMEOUT_ERROR') {
+    return friendlyMessage({ code: 'NETWORK_ERROR' });
+  }
+  const data = (record.data && typeof record.data === 'object' ? record.data : null) as {
+    code?: unknown;
+    message?: unknown;
+    errors?: unknown;
+  } | null;
+  const status = typeof record.status === 'number' ? record.status : undefined;
+  return friendlyMessage({
+    code: typeof data?.code === 'string' ? data.code : null,
+    message:
+      typeof data?.message === 'string'
+        ? data.message
+        : typeof record.message === 'string'
+          ? record.message
+          : null,
+    status,
+    errors: data?.errors ?? null,
+  }) || ACTION_MESSAGES[action] || ACTION_MESSAGES.photo_upload;
 }
 
 export default function PhotosPage() {
@@ -99,13 +145,20 @@ export default function PhotosPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const validationError = selectedFileError(file);
     if (validationError) {
       setError(validationError);
+      clearSelectedFile();
+      return;
+    }
+
+    const dimError = await imageDimensionError(file);
+    if (dimError) {
+      setError(dimError);
       clearSelectedFile();
       return;
     }
@@ -141,13 +194,20 @@ export default function PhotosPage() {
       return;
     }
 
+    const dimError = await imageDimensionError(file);
+    if (dimError) {
+      setError(dimError);
+      setReplaceTargetId(null);
+      return;
+    }
+
     setReplacingPhotoId(photoId);
     setError('');
     try {
       await replacePhoto({ photoId, photo: file }).unwrap();
       await refetch();
     } catch (replaceError) {
-      setError(uploadErrorMessage(replaceError));
+      setError(uploadErrorMessage(replaceError, 'photo_replace'));
     } finally {
       setReplacingPhotoId(null);
       setReplaceTargetId(null);
@@ -167,7 +227,7 @@ export default function PhotosPage() {
       clearSelectedFile();
       await refetch();
     } catch (uploadError) {
-      setError(uploadErrorMessage(uploadError));
+      setError(uploadErrorMessage(uploadError, 'photo_upload'));
       setUploadProgress(0);
     } finally {
       setUploading(false);
@@ -181,7 +241,7 @@ export default function PhotosPage() {
       await deletePhoto(photoId).unwrap();
       await refetch();
     } catch (deleteError) {
-      setError(uploadErrorMessage(deleteError));
+      setError(uploadErrorMessage(deleteError, 'photo_delete'));
     }
   };
 
@@ -195,7 +255,7 @@ export default function PhotosPage() {
       await setPrimary(photo.id).unwrap();
       await refetch();
     } catch (primaryError) {
-      setError(uploadErrorMessage(primaryError));
+      setError(uploadErrorMessage(primaryError, 'photo_set_primary'));
     }
   };
 

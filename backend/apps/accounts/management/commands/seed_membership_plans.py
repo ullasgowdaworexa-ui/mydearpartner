@@ -1,9 +1,9 @@
 from django.core.management.base import BaseCommand
-from apps.core.models import MembershipPlan
+from apps.core.models import MembershipPlan, MembershipRequest, Payment
 
 
 class Command(BaseCommand):
-    help = 'Idempotently seeds default membership plans with correct limits and features.'
+    help = 'Idempotently seeds the 4 membership plans (Free, Gold, Elite, Premium) and removes legacy plans.'
 
     def handle(self, *args, **options):
         plans_data = [
@@ -33,8 +33,8 @@ class Command(BaseCommand):
                 'support_priority': 'STANDARD',
                 'description': 'Basic search and matching with limitations',
                 'color': 'from-gray-400 to-gray-600',
-                'features': ['Basic profiles search', 'Send 3 interests daily', 'View primary photos only']
-                ,'entitlements': {'daily_profile_view_limit': 10, 'can_send_interest': True, 'daily_interest_limit': 3, 'can_chat': False, 'can_view_contact_details': False, 'profile_visibility_boost': False, 'can_see_who_viewed_profile': False, 'can_view_received_interests': False, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'NONE', 'photo_access_mode': 'PRIMARY_ONLY', 'can_use_advanced_search': False}
+                'features': ['Basic profiles search', 'Send 3 interests daily', 'View primary photos only'],
+                'entitlements': {'daily_profile_view_limit': 10, 'can_send_interest': True, 'daily_interest_limit': 3, 'can_chat': False, 'can_view_contact_details': False, 'profile_visibility_boost': False, 'can_see_who_viewed_profile': False, 'can_view_received_interests': False, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'NONE', 'photo_access_mode': 'PRIMARY_ONLY', 'can_use_advanced_search': False},
             },
             {
                 'slug': 'gold',
@@ -62,12 +62,12 @@ class Command(BaseCommand):
                 'support_priority': 'STANDARD',
                 'description': 'For active seekers who want priority connections',
                 'color': 'from-amber-400 to-amber-600',
-                'features': ['Send 15 interests daily', 'Messaging allowed on accepted interest', 'Mutual contact details access', 'View all approved photos', 'Advanced filter searches']
-                ,'entitlements': {'daily_profile_view_limit': 50, 'can_send_interest': True, 'daily_interest_limit': 15, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': False, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'MUTUAL_ONLY', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True}
+                'features': ['Send 15 interests daily', 'Messaging allowed on accepted interest', 'Mutual contact details access', 'View all approved photos', 'Advanced filter searches'],
+                'entitlements': {'daily_profile_view_limit': 50, 'can_send_interest': True, 'daily_interest_limit': 15, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': False, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'MUTUAL_ONLY', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True},
             },
             {
-                'slug': 'platinum',
-                'name': 'Platinum',
+                'slug': 'elite',
+                'name': 'Elite',
                 'price': 5999.00,
                 'duration': '6 Months',
                 'duration_days': 180,
@@ -91,12 +91,12 @@ class Command(BaseCommand):
                 'support_priority': 'STANDARD',
                 'description': 'Our most popular plan for faster premium matchmaking',
                 'color': 'from-cyan-500 to-blue-600',
-                'features': ['Send 50 interests daily', 'Unrestricted direct messaging', 'Unrestricted contact details access', 'Medium profile visibility boost', 'Advanced filters & horoscope match']
-                ,'entitlements': {'daily_profile_view_limit': 200, 'can_send_interest': True, 'daily_interest_limit': 50, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': True, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'FULL', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True}
+                'features': ['Send 50 interests daily', 'Unrestricted direct messaging', 'Unrestricted contact details access', 'Medium profile visibility boost', 'Advanced filters & horoscope match'],
+                'entitlements': {'daily_profile_view_limit': 200, 'can_send_interest': True, 'daily_interest_limit': 50, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': True, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': False, 'max_photos': 6, 'contact_access_mode': 'FULL', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True},
             },
             {
-                'slug': 'elite',
-                'name': 'Elite',
+                'slug': 'premium',
+                'name': 'Premium',
                 'price': 14999.00,
                 'duration': '12 Months',
                 'duration_days': 360,
@@ -120,16 +120,28 @@ class Command(BaseCommand):
                 'support_priority': 'HIGH',
                 'description': 'The ultimate matrimonial package with VIP concierge services',
                 'color': 'from-purple-600 to-indigo-800',
-                'features': ['Unlimited profile views & interests', 'Unlimited messaging & contacts', 'Strongest profile visibility boost', 'Priority support services', 'Assisted personal matchmaking']
-                ,'entitlements': {'daily_profile_view_limit': None, 'can_send_interest': True, 'daily_interest_limit': None, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': True, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': True, 'max_photos': 6, 'contact_access_mode': 'FULL', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True}
-            }
+                'features': ['Unlimited profile views & interests', 'Unlimited messaging & contacts', 'Strongest profile visibility boost', 'Priority support services', 'Assisted personal matchmaking'],
+                'entitlements': {'daily_profile_view_limit': None, 'can_send_interest': True, 'daily_interest_limit': None, 'can_chat': True, 'can_view_contact_details': True, 'profile_visibility_boost': True, 'can_see_who_viewed_profile': True, 'can_view_received_interests': True, 'priority_support': True, 'max_photos': 6, 'contact_access_mode': 'FULL', 'photo_access_mode': 'ALL_APPROVED', 'can_use_advanced_search': True},
+            },
         ]
+
+        keep_slugs = {p['slug'] for p in plans_data}
 
         for p_data in plans_data:
             slug = p_data.pop('slug')
             plan, created = MembershipPlan.objects.update_or_create(
                 slug=slug,
-                defaults=p_data
+                defaults=p_data,
             )
             action = 'Created' if created else 'Updated'
             self.stdout.write(self.style.SUCCESS(f'{action} membership plan: {plan.name}'))
+
+        # Remove any legacy plans (e.g. the old platinum tier) while preserving
+        # member data: detach requests/payments before deleting the plan row.
+        legacy_plans = MembershipPlan.objects.exclude(slug__in=keep_slugs)
+        for plan in legacy_plans:
+            MembershipRequest.objects.filter(selected_plan=plan).update(selected_plan=None)
+            Payment.objects.filter(plan=plan).update(plan=None)
+            plan_name = plan.name
+            plan.delete()
+            self.stdout.write(self.style.WARNING(f'Removed legacy membership plan: {plan_name}'))

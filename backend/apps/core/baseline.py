@@ -14,6 +14,20 @@ SUPPORT_CATEGORIES = {
 def seed_membership_plans():
     plans = [
         {
+            'name': 'Free',
+            'slug': 'free',
+            'price': 0.00,
+            'duration': '30 Days',
+            'highlighted': False,
+            'badge': '',
+            'color': 'from-gray-400 to-gray-600',
+            'features': [
+                'Basic profile search',
+                'Send 3 interests daily',
+                'View primary photos only',
+            ],
+        },
+        {
             'name': 'Gold',
             'slug': 'gold',
             'price': 2999.00,
@@ -32,8 +46,8 @@ def seed_membership_plans():
             ],
         },
         {
-            'name': 'Platinum',
-            'slug': 'platinum',
+            'name': 'Elite',
+            'slug': 'elite',
             'price': 5999.00,
             'duration': '6 Months',
             'highlighted': True,
@@ -51,15 +65,15 @@ def seed_membership_plans():
             ],
         },
         {
-            'name': 'Elite',
-            'slug': 'elite',
+            'name': 'Premium',
+            'slug': 'premium',
             'price': 14999.00,
             'duration': '12 Months',
             'highlighted': False,
             'badge': '✦ Premium',
             'color': 'from-slate-800 to-slate-950',
             'features': [
-                'Everything in Platinum',
+                'Everything in Elite',
                 'Dedicated matchmaker',
                 'Premium profile showcase',
                 'Background verification',

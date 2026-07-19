@@ -339,8 +339,8 @@ export default function AdminUsersPage() {
         <AdminPagination
           page={page}
           pageSize={PAGE_SIZE}
-          total={count}
-          onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          count={count}
+          onPageChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
         />
       )}
 

@@ -18,6 +18,7 @@ def free_plan(db):
             'daily_profile_unlock_limit': 5,
             'messaging_mode': 'DISABLED',
             'is_active': True,
+            'entitlements': {},
         }
     )
     return plan
@@ -34,6 +35,7 @@ def gold_plan(db):
             'daily_profile_unlock_limit': 50,
             'messaging_mode': 'MUTUAL_ONLY',
             'is_active': True,
+            'entitlements': {},
         }
     )
     return plan

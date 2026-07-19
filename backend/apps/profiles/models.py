@@ -24,7 +24,7 @@ class ProfilePhotoQuerySet(models.QuerySet):
         return self.filter(is_deleted=False)
 
 
-class ProfilePhotoManager(models.Manager):
+class ProfilePhotoManager(models.Manager.from_queryset(ProfilePhotoQuerySet)):
     """Default manager. Use .active() to exclude soft-deleted photos."""
 
     def get_queryset(self):

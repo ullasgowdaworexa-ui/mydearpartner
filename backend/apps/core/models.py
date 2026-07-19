@@ -142,7 +142,9 @@ class MembershipRequest(models.Model):
     )
     selected_plan = models.ForeignKey(
         MembershipPlan,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='membership_requests',
     )
     status = models.CharField(
@@ -329,7 +331,7 @@ class Payment(models.Model):
         blank=True,
         related_name='payments',
     )
-    plan = models.ForeignKey(MembershipPlan, on_delete=models.PROTECT, null=True, related_name='payments')
+    plan = models.ForeignKey(MembershipPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
     client_reference = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, default='INR')

@@ -12,6 +12,7 @@ import ProfileImage from '@/components/profile/ProfileImage';
 import { useAuth } from '@/legacy/contexts/AuthContext';
 import { fetchApi } from '@/legacy/services/apiClient';
 import { useDeletePhotoMutation, type MemberPhoto } from '@/legacy/services/photoApi';
+import { friendlyMessage } from '@/lib/error-messages';
 
 function statusBadge(status: string) {
   const styles: Record<string, string> = {
@@ -75,7 +76,10 @@ export default function MyProfilePage() {
     }
     fetchApi<any>('/member-auth/me/')
       .then((data) => { setProfile(data); setLoading(false); })
-      .catch((err) => { setError(err.message || 'Failed to load profile'); setLoading(false); });
+      .catch((err: any) => {
+        setError(friendlyMessage({ message: err?.message, status: err?.status, code: err?.code, errors: err?.errors }) || 'Failed to load profile');
+        setLoading(false);
+      });
   }, [user, authLoading]);
 
   if (authLoading || loading) {

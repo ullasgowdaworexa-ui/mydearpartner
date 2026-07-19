@@ -1,5 +1,12 @@
 'use client';
 
+import {
+  friendlyMessage,
+  statusMessage,
+  networkErrorMessage,
+  formatFieldErrors,
+} from '@/lib/error-messages';
+
 export type AccountType = 'MEMBER' | 'SUPER_ADMIN' | 'ADMIN' | 'STAFF' | 'CUSTOMER_SUPPORT';
 
 const API_NAMESPACE: Record<AccountType, string> = {
@@ -23,6 +30,9 @@ export class ApiError extends Error {
     public status: number,
     public errors: unknown = null,
     public data: unknown = null,
+    public code?: string | null,
+    public requestId?: string | null,
+    public retryAfter?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -34,43 +44,33 @@ let accessToken: string | null = null;
 let accountTypeHint: AccountType | null = null;
 let refreshInFlight: Promise<string> | null = null;
 
-function getFriendlyStatusMessage(status: number) {
-  if (status === 400) return 'The server could not process this request.';
-  if (status === 401) return 'Please sign in again.';
-  if (status === 403) return 'You do not have permission to perform this action.';
-  if (status === 404) return 'The requested resource could not be found.';
-  if (status === 408) return 'The request timed out. Please try again.';
-  if (status === 429) return 'Too many requests. Please try again later.';
-  if (status >= 500) return 'The service is temporarily unavailable. Please try again.';
-  return `Request failed with status ${status}.`;
+function getFriendlyStatusMessage(status: number, retryAfter?: number): string {
+  return statusMessage(status, retryAfter);
 }
 
 function fieldErrorsMessage(errors: Record<string, unknown>) {
-  const messages: string[] = [];
-  for (const [field, value] of Object.entries(errors)) {
-    const label = field === 'non_field_errors' ? '' : `${field.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase())}: `;
-    const values = Array.isArray(value) ? value : [value];
-    const text = values.filter((item): item is string => typeof item === 'string').join(' ');
-    if (text) messages.push(`${label}${text}`.trim());
-  }
-  return messages.join(' ');
+  const formatted = formatFieldErrors(errors);
+  return Object.entries(formatted)
+    .map(([label, text]) => (label && label !== 'General' ? `${label}: ${text}` : text))
+    .join(' ');
 }
 
-export function extractErrorMessage(data: unknown, status: number): string {
-  if (!data) return getFriendlyStatusMessage(status);
+export function extractErrorMessage(data: unknown, status: number, retryAfter?: number): string {
+  if (!data) return getFriendlyStatusMessage(status, retryAfter);
   if (typeof data === 'string') {
-    return /<\/?[a-z][\s\S]*>/i.test(data) ? getFriendlyStatusMessage(status) : data;
+    return /<\/?[a-z][\s\S]*>/i.test(data)
+      ? getFriendlyStatusMessage(status, retryAfter)
+      : friendlyMessage({ message: data, status, retryAfter });
   }
-  if (typeof data !== 'object') return getFriendlyStatusMessage(status);
+  if (typeof data !== 'object') return getFriendlyStatusMessage(status, retryAfter);
   const record = data as Record<string, unknown>;
-  if (typeof record.detail === 'string') return record.detail;
-  if (typeof record.message === 'string' && record.message !== 'Validation failed.') return record.message;
-  if (record.errors && typeof record.errors === 'object') {
-    const message = fieldErrorsMessage(record.errors as Record<string, unknown>);
-    if (message) return message;
-  }
-  const message = fieldErrorsMessage(record);
-  return message || getFriendlyStatusMessage(status);
+  return friendlyMessage({
+    code: typeof record.code === 'string' ? record.code : null,
+    message: typeof record.message === 'string' ? record.message : null,
+    status,
+    errors: record.errors ?? null,
+    retryAfter,
+  });
 }
 
 function persistPortalHint(type: AccountType | null) {
@@ -210,7 +210,19 @@ export async function fetchApi<T>(endpoint: string, options: FetchOptions = {}):
       cache: 'no-store',
     });
   } catch {
-    throw new ApiError('The backend service is unavailable.', 502);
+    const navigatorOffline =
+      typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
+        ? !navigator.onLine
+        : false;
+    throw new ApiError(
+      networkErrorMessage(navigatorOffline),
+      0,
+      null,
+      null,
+      'NETWORK_ERROR',
+      null,
+      undefined,
+    );
   }
   const payload = await parseResponse(response);
 
@@ -226,11 +238,26 @@ export async function fetchApi<T>(endpoint: string, options: FetchOptions = {}):
 
   const envelope = payload as Record<string, unknown> | null;
   if (!response.ok || (envelope && envelope.success === false)) {
+    const retryAfter = response.headers.get('Retry-After');
+    const retryAfterNum = retryAfter ? Number.parseInt(retryAfter, 10) : undefined;
+    const meta =
+      envelope && typeof envelope.meta === 'object' && envelope.meta
+        ? (envelope.meta as Record<string, unknown>)
+        : null;
+    const requestId =
+      (typeof meta?.request_id === 'string' ? meta.request_id : null) ??
+      response.headers.get('X-Request-ID') ??
+      null;
+    const code =
+      envelope && typeof envelope.code === 'string' ? envelope.code : undefined;
     throw new ApiError(
-      extractErrorMessage(payload, response.status),
+      extractErrorMessage(payload, response.status, retryAfterNum),
       response.status,
       envelope?.errors ?? payload,
       envelope?.data ?? null,
+      code,
+      requestId,
+      Number.isFinite(retryAfterNum) ? retryAfterNum : undefined,
     );
   }
   return unwrapPayload(payload) as T;

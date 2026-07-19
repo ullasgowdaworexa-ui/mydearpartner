@@ -302,7 +302,7 @@ def _create_processed_profile_photo(*, member: Member, processed, uploaded_file,
     if existing_count >= max_photos:
         raise ProfilePhotoProcessingError(f"Your {get_active_entitlements(member).plan_name} plan allows a maximum of {max_photos} profile photos.")
     if ImageProcessingService.check_duplicate(processed.checksum, member.pk):
-        raise ProfilePhotoProcessingError("This photo has already been uploaded.")
+        raise ProfilePhotoProcessingError("This photo is already in your gallery. Please choose a different image.")
 
     initial_status = _initial_status()
     photo = ProfilePhoto.objects.create(
@@ -366,7 +366,7 @@ def _replace_processed_profile_photo(*, photo_id, member, processed, uploaded_fi
     if ImageProcessingService.check_duplicate(
         processed.checksum, member.pk, exclude_photo_id=photo.pk
     ):
-        raise ProfilePhotoProcessingError("This photo has already been uploaded.")
+        raise ProfilePhotoProcessingError("This photo is already in your gallery. Please choose a different image.")
 
     photo.status = _initial_status()
     photo.rejection_reason = ""

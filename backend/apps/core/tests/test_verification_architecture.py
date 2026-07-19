@@ -110,7 +110,7 @@ def test_staff_approval_updates_member_and_writes_separate_activity(
     ('action', 'expected_status'),
     (
         ('reject', ProfileVerificationRequest.Status.REJECTED),
-        ('escalate', ProfileVerificationRequest.Status.ESCALATED),
+        ('escalate', ProfileVerificationRequest.Status.CHANGES_REQUESTED),
     ),
 )
 def test_staff_rejection_and_escalation_require_reasons(
