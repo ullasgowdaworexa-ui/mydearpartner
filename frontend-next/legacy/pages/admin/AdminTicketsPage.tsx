@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from '@/lib/router-compat';
 import {
   ArrowRight, CheckCircle2, Filter, LoaderCircle, MessageSquarePlus, Plus,
@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { fetchApi, getAccessToken, extractErrorMessage } from '../../services/apiClient';
 import {
   getAdminAssignees, getAdminTickets, replyToAdminTicket, updateAdminTicket,
-  getAdminSupportDashboard, getAdminSupportReports, createPhoneTicket,
+  getAdminSupportDashboard, createPhoneTicket,
   type AdminIdentity, type SupportTicket, type TicketPriority, type TicketStatus,
   type AdminSupportDashboardData
 } from '../../services/adminService';
@@ -114,7 +114,10 @@ export default function AdminTicketsPage() {
     }
   };
 
+  const loadInFlightRef = useRef(false);
   const load = useCallback(async () => {
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     setLoading(true);
     setError('');
     try {
@@ -159,6 +162,7 @@ export default function AdminTicketsPage() {
       setError(err instanceof Error ? err.message : 'Support tickets could not be loaded.');
     } finally {
       setLoading(false);
+      loadInFlightRef.current = false;
     }
   }, [page, priority, category, source, assignedStaff, overdueOnly, unassignedOnly, startDate, endDate, search, setSearchParams, status]);
 
@@ -177,7 +181,7 @@ export default function AdminTicketsPage() {
       'support.ticket_resolved',
       'support.ticket_reopened',
     ],
-    refresh: useCallback(() => { load(); loadDashboard(); }, [load]),
+    refresh: useCallback(() => { load(); }, [load]),
     debounceMs: 350,
   });
 

@@ -213,6 +213,10 @@ def permanently_delete_member(*, member: Member, actor=None) -> PermanentMemberD
     if document_policy == RETAIN_DOCUMENT_METADATA:
         retained_metadata = tuple(_document_audit_metadata(document) for document in documents)
 
+    # Remove verification links that protect documents from deletion.
+    from apps.core.models import ProfileVerificationDocument
+    ProfileVerificationDocument.objects.filter(member_document__member_id=member_id).delete()
+
     transaction.on_commit(lambda: _invalidate_deleted_member_profile_caches(member_id))
     member.delete()
 

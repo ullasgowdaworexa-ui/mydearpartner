@@ -100,6 +100,7 @@ from apps.accounts.document_admin_views import (
     AdminDocumentListView,
     AdminDocumentDetailView,
     AdminDocumentDownloadView,
+    AdminDocumentPreviewView,
     AdminDocumentApproveView,
     AdminDocumentRejectView,
 )
@@ -221,6 +222,7 @@ urlpatterns = [
     path('admin/documents/', AdminDocumentListView.as_view(), name='admin_documents'),
     path('admin/documents/<uuid:document_id>/', AdminDocumentDetailView.as_view(), name='admin_document_detail'),
     path('admin/documents/<uuid:document_id>/download/', AdminDocumentDownloadView.as_view(), name='admin_document_download'),
+    path('admin/documents/<uuid:document_id>/preview/', AdminDocumentPreviewView.as_view(), name='admin_document_preview'),
     path('admin/documents/<uuid:document_id>/approve/', AdminDocumentApproveView.as_view(), name='admin_document_approve'),
     path('admin/documents/<uuid:document_id>/reject/', AdminDocumentRejectView.as_view(), name='admin_document_reject'),
 

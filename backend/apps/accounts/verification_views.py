@@ -17,7 +17,7 @@ from .models import Member
 from .permissions import IsMember, IsAdmin, IsStaffAccount, IsSuperAdmin
 from .verification_service import AccountVerificationService
 from .verification_events import VerificationEvents
-from apps.core.responses import ApiResponse
+from apps.core.responses import ApiResponse, ApiErrorResponse
 
 
 class MemberVerificationStatusView(APIView):
@@ -851,8 +851,7 @@ class MemberDocumentDownloadView(APIView):
         try:
             document = MemberDocument.objects.get(pk=document_id)
         except MemberDocument.DoesNotExist:
-            return ApiResponse(
-                success=False,
+            return ApiErrorResponse(
                 message='This document is no longer available.',
                 code='DOCUMENT_NOT_FOUND',
                 status=status.HTTP_404_NOT_FOUND,
@@ -882,9 +881,8 @@ class MemberDocumentDownloadView(APIView):
                 ).exists()
 
         if not allowed:
-            return ApiResponse(
-                success=False,
-                message='You don\u2019t have permission to view this document.',
+            return ApiErrorResponse(
+                message='You don',
                 code='ACCESS_DENIED',
                 status=status.HTTP_403_FORBIDDEN,
             )
@@ -902,8 +900,7 @@ class MemberDocumentDownloadView(APIView):
             )
 
         if not document.file_data:
-            return ApiResponse(
-                success=False,
+            return ApiErrorResponse(
                 message='This document has no file data.',
                 code='DOCUMENT_NO_DATA',
                 status=status.HTTP_404_NOT_FOUND,
@@ -915,8 +912,55 @@ class MemberDocumentDownloadView(APIView):
                 raise ValueError('Decompression failed')
             response = HttpResponse(raw_bytes, content_type=document.mime_type or 'application/octet-stream')
         except Exception:
-            return ApiResponse(
-                success=False,
+            return ApiErrorResponse(
+                message='An unexpected error occurred while reading this document.',
+                code='DOCUMENT_READ_ERROR',
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_filename = document.original_file_name.replace('"', '').replace('\\', '').replace('/', '')
+        response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
+        response['Content-Length'] = document.file_size
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Cache-Control'] = 'private, no-cache, must-revalidate'
+        return response
+
+
+class MemberDocumentPreviewView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, document_id):
+        from .models import MemberDocument, AccountType
+        try:
+            document = MemberDocument.objects.get(pk=document_id)
+        except MemberDocument.DoesNotExist:
+            return ApiErrorResponse(
+                message='This document is no longer available.',
+                code='DOCUMENT_NOT_FOUND',
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if str(request.user.account_type) != str(AccountType.MEMBER) or document.member_id != request.user.pk:
+            return ApiErrorResponse(
+                message='You don',
+                code='ACCESS_DENIED',
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not document.file_data:
+            return ApiErrorResponse(
+                message='This document has no file data.',
+                code='DOCUMENT_NO_DATA',
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            raw_bytes = document.raw_file_bytes
+            if raw_bytes is None:
+                raise ValueError('Decompression failed')
+            response = HttpResponse(raw_bytes, content_type=document.mime_type or 'application/octet-stream')
+        except Exception:
+            return ApiErrorResponse(
                 message='An unexpected error occurred while reading this document.',
                 code='DOCUMENT_READ_ERROR',
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

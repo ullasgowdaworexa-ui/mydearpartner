@@ -1,3 +1,4 @@
+import gzip
 import pytest
 
 from apps.accounts.models import AdminActivityLog, Member, MemberDocument, StaffActivityLog
@@ -56,8 +57,12 @@ def test_super_admin_can_directly_approve_a_pending_document_verification(
 ):
     document = MemberDocument.objects.create(
         member=member,
-        document_type='Government ID',
-        file_path='member_documents/test-id.pdf',
+        document_type='AADHAAR',
+        original_file_name='test-id.pdf',
+        file_data=gzip.compress(b'%PDF-1.4 test document'),
+        mime_type='application/pdf',
+        file_size=18,
+        compressed_size=len(gzip.compress(b'%PDF-1.4 test document')),
         status=MemberDocument.Status.PENDING,
     )
     verification = new_verification(member, ProfileVerificationRequest.VerificationType.IDENTITY_DOCUMENT)

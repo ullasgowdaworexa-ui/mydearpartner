@@ -33,7 +33,7 @@ class AdminDocumentListView(APIView):
         from django.core.paginator import Paginator
         from django.db.models import Q
 
-        queryset = MemberDocument.objects.select_related('member').order_by('-uploaded_at')
+        queryset = MemberDocument.objects.select_related('member').defer('file_data').order_by('-uploaded_at')
 
         status_filter = request.query_params.get('status')
         doc_type = request.query_params.get('document_type')
@@ -114,6 +114,41 @@ class AdminDocumentDownloadView(APIView):
             response = HttpResponse(raw_bytes, content_type=doc.mime_type or 'application/octet-stream')
             safe_filename = doc.original_file_name.replace('"', '').replace('\\', '').replace('/', '')
             response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
+            response['Content-Length'] = doc.file_size
+            response['X-Content-Type-Options'] = 'nosniff'
+            response['Cache-Control'] = 'private, no-cache'
+            return response
+        except Exception:
+            return ApiResponse(success=False, message='Error reading document file.', status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminDocumentPreviewView(APIView):
+    permission_classes = (permissions.IsAuthenticated, IsAdministrativeUser)
+
+    def get(self, request, document_id):
+        try:
+            doc = MemberDocument.objects.get(pk=document_id)
+        except MemberDocument.DoesNotExist:
+            return ApiResponse(success=False, message='Document not found.', status=status.HTTP_404_NOT_FOUND)
+
+        has_perm = (
+            request.user.account_type == AccountType.SUPER_ADMIN or
+            request.user.has_admin_permission('documents.view') or
+            request.user.has_admin_permission('documents.download')
+        )
+        if not has_perm:
+            return ApiResponse(success=False, message='Access denied.', status=status.HTTP_403_FORBIDDEN)
+
+        if not doc.file_data:
+            return ApiResponse(success=False, message='Document file not found.', status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            raw_bytes = doc.raw_file_bytes
+            if raw_bytes is None:
+                raise ValueError('Decompression failed')
+            response = HttpResponse(raw_bytes, content_type=doc.mime_type or 'application/octet-stream')
+            safe_filename = doc.original_file_name.replace('"', '').replace('\\', '').replace('/', '')
+            response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
             response['Content-Length'] = doc.file_size
             response['X-Content-Type-Options'] = 'nosniff'
             response['Cache-Control'] = 'private, no-cache'

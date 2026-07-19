@@ -86,9 +86,9 @@ export default function AdminDocumentVerificationPage() {
       if (search) params.search = search;
       if (docType) params.document_type = docType;
 
-      const data = await fetchApi<any>('/admin/documents/', { params });
-      setDocuments(data.data?.items || []);
-      setCount(data.data?.pagination?.total_items || 0);
+      const data = await fetchApi<{ items: any[]; pagination?: { total_items?: number } }>('/admin/documents/', { params });
+      setDocuments(data.items || []);
+      setCount(data.pagination?.total_items || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Documents could not be loaded.');
     } finally {
@@ -304,6 +304,7 @@ export default function AdminDocumentVerificationPage() {
         <ProtectedDocumentViewer
           documentId={viewDoc.id}
           documentType={viewDoc.type}
+          namespace="admin"
           onClose={() => setViewDoc(null)}
         />
       )}

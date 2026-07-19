@@ -32,17 +32,12 @@ export default function PhotoModerationGallery({
 
   if (!photos.length) {
     return (
-      <p style={{ margin: 0, color: 'var(--admin-text-muted, #6b7280)', fontSize: '0.875rem' }}>
-        {emptyMessage}
-      </p>
+      <p className="photo-moderation-empty">{emptyMessage}</p>
     );
   }
 
   return (
-    <div
-      aria-label="Profile photos awaiting moderation"
-      style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}
-    >
+    <div className="photo-moderation-grid" aria-label="Profile photos awaiting moderation">
       {photos.map((photo, index) => {
         const status = photo.status.toLowerCase();
         const pending = status === 'pending';
@@ -52,16 +47,7 @@ export default function PhotoModerationGallery({
         const anotherPhotoIsBusy = Boolean(busyPhotoId) && !busy;
 
         return (
-          <article
-            key={photo.id}
-            style={{
-              minWidth: 0,
-              padding: '0.75rem',
-              border: '1px solid var(--admin-line, rgba(0,0,0,0.12))',
-              borderRadius: '10px',
-              background: 'var(--admin-surface, #fff)',
-            }}
-          >
+          <article key={photo.id} className="photo-moderation-card">
             <ProfileImage
               photoId={photo.id}
               variant="image"
@@ -72,26 +58,24 @@ export default function PhotoModerationGallery({
               shape="rounded"
             />
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginTop: '0.75rem' }}>
+            <div className="photo-moderation-meta">
               <AdminStatusBadge status={status} />
               {photo.is_primary ? (
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--admin-text-muted, #6b7280)' }}>
-                  Primary
-                </span>
+                <span className="photo-moderation-primary">Primary</span>
               ) : null}
             </div>
 
             {status === 'rejected' && photo.rejection_reason ? (
-              <p style={{ margin: '0.65rem 0 0', color: '#b91c1c', fontSize: '0.8rem' }}>
+              <p className="photo-moderation-reason">
                 <strong>Reason:</strong> {photo.rejection_reason}
               </p>
             ) : null}
 
             {pending && reviewEnabled && (canApprove || canReject) ? (
-              <div style={{ display: 'grid', gap: '0.55rem', marginTop: '0.75rem' }}>
+              <div className="photo-moderation-actions">
                 {canReject ? (
                   <>
-                    <label htmlFor={reasonId} style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                    <label htmlFor={reasonId} className="photo-moderation-label">
                       Rejection reason
                     </label>
                     <textarea
@@ -105,27 +89,18 @@ export default function PhotoModerationGallery({
                       maxLength={1000}
                       placeholder="Required before rejecting"
                       disabled={Boolean(busyPhotoId)}
-                      style={{
-                        width: '100%',
-                        resize: 'vertical',
-                        padding: '0.5rem',
-                        border: '1px solid var(--admin-line, rgba(0,0,0,0.15))',
-                        borderRadius: '6px',
-                        background: 'transparent',
-                        color: 'var(--admin-text, #111827)',
-                      }}
+                      className="photo-moderation-textarea"
                     />
                   </>
                 ) : null}
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div className="photo-moderation-buttons">
                   {canApprove ? (
                     <button
                       type="button"
-                      className="admin-btn"
+                      className="admin-btn photo-moderation-btn photo-moderation-approve"
                       onClick={() => void onApprove(photo.id)}
                       disabled={Boolean(busyPhotoId)}
-                      style={{ background: '#059669', border: 'none', padding: '0.4rem 0.7rem' }}
                     >
                       {busy ? 'Saving…' : 'Approve photo'}
                     </button>
@@ -133,10 +108,9 @@ export default function PhotoModerationGallery({
                   {canReject ? (
                     <button
                       type="button"
-                      className="admin-btn"
+                      className="admin-btn photo-moderation-btn photo-moderation-reject"
                       onClick={() => void onReject(photo.id, reason.trim())}
                       disabled={Boolean(busyPhotoId) || !reason.trim()}
-                      style={{ background: '#dc2626', border: 'none', padding: '0.4rem 0.7rem' }}
                     >
                       {busy ? 'Saving…' : 'Reject photo'}
                     </button>
@@ -149,7 +123,7 @@ export default function PhotoModerationGallery({
             ) : null}
 
             {pending && !reviewEnabled ? (
-              <p style={{ margin: '0.65rem 0 0', color: 'var(--admin-text-muted, #6b7280)', fontSize: '0.8rem' }}>
+              <p className="photo-moderation-hint">
                 Start this assigned review before making a decision.
               </p>
             ) : null}

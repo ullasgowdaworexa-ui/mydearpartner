@@ -26,6 +26,7 @@ from .views import (
 )
 from .verification_views import (
     MemberDocumentDownloadView,
+    MemberDocumentPreviewView,
     MemberEmailOtpSendView,
     MemberEmailOtpVerifyView,
     MemberMobileOtpSendView,
@@ -86,6 +87,7 @@ urlpatterns = [
     path('verification/profile/', MemberProfileSubmitView.as_view(), name='verification_profile_submit'),
     path('verification/photo/', MemberPhotoSubmitView.as_view(), name='verification_photo_submit'),
     path('verification/documents/<uuid:document_id>/download/', MemberDocumentDownloadView.as_view(), name='member_document_download'),
+    path('verification/documents/<uuid:document_id>/preview/', MemberDocumentPreviewView.as_view(), name='member_document_preview'),
     path('verification/government-id/', MemberDocumentSubmitView.as_view(), name='verification_document_submit'),
     
     # Verification endpoints - Admin

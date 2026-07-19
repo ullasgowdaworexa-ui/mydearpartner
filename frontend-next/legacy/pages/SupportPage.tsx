@@ -3,26 +3,49 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from '@/lib/router-compat';
 import { supportService, SupportTicket, TicketReply } from '../services/supportService';
-import { 
-  StatsSkeleton, 
-  TicketListSkeleton, 
-  ConversationSkeleton 
+import {
+  StatsSkeleton,
+  TicketListSkeleton,
+  ConversationSkeleton
 } from '../components/SkeletonLoader';
-import { 
-  FileText, 
-  MessageSquare, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle, 
-  Search, 
-  Plus, 
-  X, 
-  Upload, 
-  ArrowLeft, 
-  CornerDownRight, 
+import {
+  FileText,
+  MessageSquare,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Search,
+  Plus,
+  X,
+  Upload,
+  ArrowLeft,
+  CornerDownRight,
   Download,
-  Info
+  Info,
+  LifeBuoy,
+  Send,
+  Star,
+  Paperclip
 } from 'lucide-react';
+
+const CATEGORY_OPTIONS: { value: string; label: string; icon: string; blurb: string; subjectHint: string }[] = [
+  { value: 'PAYMENT', label: 'Payments & Plans', icon: '💳', blurb: 'Refunds, plan unlocks, billing queries.', subjectHint: 'Issue with my plan / payment' },
+  { value: 'ACCOUNT', label: 'Account & Verification', icon: '🪪', blurb: 'Profile, login, KYC document checks.', subjectHint: 'Need help with verification' },
+  { value: 'REPORT_PROFILE', label: 'Report a Profile', icon: '🚩', blurb: 'Flag fake, duplicate or abusive members.', subjectHint: 'Report a suspicious profile' },
+  { value: 'TECHNICAL', label: 'Technical Issue', icon: '🛠️', blurb: 'Site or app bugs, upload failures.', subjectHint: 'Something is not working' },
+  { value: 'OTHER', label: 'General Enquiry', icon: '💬', blurb: 'Anything else we can help with.', subjectHint: 'General question' },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: 'LOW', label: 'Low' },
+  { value: 'NORMAL', label: 'Normal' },
+  { value: 'HIGH', label: 'High' },
+  { value: 'URGENT', label: 'Urgent' },
+];
+
+function categoryMeta(value: string) {
+  return CATEGORY_OPTIONS.find((c) => c.value === value) || CATEGORY_OPTIONS[CATEGORY_OPTIONS.length - 1];
+}
 
 export default function SupportPage() {
   const navigate = useNavigate();
@@ -34,13 +57,13 @@ export default function SupportPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
-  
+
   // Loading & Action states
   const [loading, setLoading] = useState<boolean>(true);
   const [submitLoading, setSubmitLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<'list' | 'detail'>('list');
-  
+
   // Modal for new ticket creation
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [newSubject, setNewSubject] = useState<string>('');
@@ -49,7 +72,7 @@ export default function SupportPage() {
   const [newPriority, setNewPriority] = useState<string>('NORMAL');
   const [newAttachment, setNewAttachment] = useState<File | undefined>(undefined);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
-  
+
   // Reply & Feedback states
   const [replyMessage, setReplyMessage] = useState<string>('');
   const [replyAttachment, setReplyAttachment] = useState<File | undefined>(undefined);
@@ -58,6 +81,7 @@ export default function SupportPage() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
 
   const conversationEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 300ms Debounce search input
   useEffect(() => {
@@ -71,7 +95,6 @@ export default function SupportPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      // Fetching all tickets (we filter client-side for dynamic search and query experience)
       const data = await supportService.listTickets(statusFilter);
       setTickets(data.results);
     } catch (err: any) {
@@ -121,6 +144,16 @@ export default function SupportPage() {
     }
   };
 
+  const openCreateModal = (presetCategory = 'OTHER') => {
+    setNewCategory(presetCategory);
+    setNewSubject(categoryMeta(presetCategory).subjectHint);
+    setNewPriority('NORMAL');
+    setNewDescription('');
+    setNewAttachment(undefined);
+    setValidationErrors({});
+    setIsModalOpen(true);
+  };
+
   const validateTicketForm = (): boolean => {
     const errors: { [key: string]: string } = {};
     if (!newSubject.trim()) {
@@ -140,7 +173,7 @@ export default function SupportPage() {
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateTicketForm()) return;
-    
+
     setSubmitLoading(true);
     setErrorMsg(null);
     try {
@@ -153,14 +186,12 @@ export default function SupportPage() {
       );
       setTickets([created, ...tickets]);
       setIsModalOpen(false);
-      // Reset fields
       setNewSubject('');
       setNewDescription('');
       setNewCategory('OTHER');
       setNewPriority('NORMAL');
       setNewAttachment(undefined);
       setValidationErrors({});
-      // Select the newly created ticket
       handleSelectTicket(created);
     } catch (err: any) {
       console.error(err);
@@ -184,8 +215,7 @@ export default function SupportPage() {
       setReplies([...replies, newReply]);
       setReplyMessage('');
       setReplyAttachment(undefined);
-      
-      // Update state locally
+
       setSelectedTicket({
         ...selectedTicket,
         status: selectedTicket.status === 'WAITING_FOR_USER' ? 'IN_PROGRESS' : selectedTicket.status,
@@ -244,8 +274,8 @@ export default function SupportPage() {
 
   // Client side filters application
   const filteredTickets = tickets.filter(t => {
-    const matchesSearch = t.subject.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) || 
-                          t.ticket_number.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
+    const matchesSearch = t.subject.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      t.ticket_number.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
     const matchesPriority = priorityFilter ? t.priority === priorityFilter : true;
     return matchesSearch && matchesPriority;
   });
@@ -256,25 +286,34 @@ export default function SupportPage() {
   const resolvedCount = tickets.filter(t => t.status === 'RESOLVED').length;
   const highPriorityCount = tickets.filter(t => ['HIGH', 'URGENT'].includes(t.priority)).length;
 
+  const statusTabs = [
+    { value: '', label: 'All' },
+    { value: 'OPEN', label: 'Open' },
+    { value: 'IN_PROGRESS', label: 'In Progress' },
+    { value: 'WAITING_FOR_USER', label: 'Awaiting You' },
+    { value: 'RESOLVED', label: 'Resolved' },
+  ];
+
   return (
     <div className="support-container mt-20">
-      
+
       {/* 1. Header Row */}
       <div className="support-header-row">
         <div>
-          <h1 className="text-3xl font-extrabold font-display text-gray-900">Member Help Center</h1>
-          <p className="text-sm text-gray-500 mt-1">Raise support tickets, check verification progress, and talk to matches assistants.</p>
+          <span className="support-eyebrow"><LifeBuoy className="w-4 h-4" /> Help Center</span>
+          <h1 className="text-3xl font-extrabold font-display text-gray-900">We&apos;re here to help</h1>
+          <p className="text-sm text-gray-500 mt-1">Raise a ticket, track its status, and chat with our support team — all in one place.</p>
         </div>
-        <button 
-          type="button" 
+        <button
+          type="button"
           className="support-create-btn"
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => openCreateModal('OTHER')}
         >
-          <Plus className="w-5 h-5" /> Raise New Ticket
+          <Plus className="w-5 h-5" /> New Ticket
         </button>
       </div>
 
-      {/* 2. Premium Colored Statistics Cards */}
+      {/* 2. Statistics Cards */}
       {loading ? <StatsSkeleton /> : (
         <div className="support-stats-grid">
           <div className="stat-card border-l-4 border-indigo-500 shadow-sm">
@@ -289,7 +328,7 @@ export default function SupportPage() {
           <div className="stat-card border-l-4 border-blue-500 shadow-sm">
             <div className="flex justify-between items-start">
               <div>
-                <span className="stat-label">Active Tickets</span>
+                <span className="stat-label">Active</span>
                 <span className="stat-value">{activeCount}</span>
               </div>
               <MessageSquare className="w-6 h-6 text-blue-500" />
@@ -298,7 +337,7 @@ export default function SupportPage() {
           <div className="stat-card border-l-4 border-amber-500 shadow-sm">
             <div className="flex justify-between items-start">
               <div>
-                <span className="stat-label">Waiting Action</span>
+                <span className="stat-label">Awaiting You</span>
                 <span className="stat-value">{waitingCount}</span>
               </div>
               <Clock className="w-6 h-6 text-amber-500" />
@@ -333,67 +372,58 @@ export default function SupportPage() {
         </div>
       )}
 
-      {/* 3. Horizontal Inline Filter Controls */}
+      {/* 3. Filters Bar */}
       <div className="support-filters-bar">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search ticket subjects or IDs..."
+            placeholder="Search tickets or IDs..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="support-search-input"
           />
           {searchQuery && (
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setSearchQuery('')}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold"
             >
-              âœ•
+              ✕
             </button>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="support-select-filter"
+        <div className="support-status-tabs">
+          {statusTabs.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              className={`support-status-tab ${statusFilter === tab.value ? 'active' : ''}`}
+              onClick={() => setStatusFilter(tab.value)}
             >
-              <option value="">All Statuses</option>
-              <option value="OPEN">Open</option>
-              <option value="ASSIGNED">Assigned</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="WAITING_FOR_USER">Waiting Action</option>
-              <option value="RESOLVED">Resolved</option>
-              <option value="CLOSED">Closed</option>
-              <option value="REOPENED">Reopened</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Priority:</span>
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="support-select-filter"
-            >
-              <option value="">All Priorities</option>
-              <option value="LOW">Low</option>
-              <option value="NORMAL">Normal</option>
-              <option value="HIGH">High</option>
-              <option value="URGENT">Urgent</option>
-            </select>
-          </div>
+              {tab.label}
+            </button>
+          ))}
         </div>
+
+        <select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value)}
+          className="support-select-filter"
+          aria-label="Filter by priority"
+        >
+          <option value="">All Priorities</option>
+          <option value="LOW">Low</option>
+          <option value="NORMAL">Normal</option>
+          <option value="HIGH">High</option>
+          <option value="URGENT">Urgent</option>
+        </select>
       </div>
 
       {/* 4. Split Pane Workspace */}
       <div className="support-workspace-layout">
-        
+
         {/* Left Column: Ticket List */}
         <div className={`support-list-viewport ${activeMobileTab === 'detail' ? 'hidden lg:block' : ''}`}>
           <div className="list-viewport-header">
@@ -404,13 +434,15 @@ export default function SupportPage() {
           <div className="list-viewport-content">
             {loading ? <TicketListSkeleton /> : filteredTickets.length === 0 ? (
               <div className="support-empty-list-box">
-                <span className="text-4xl">ðŸŽ«</span>
+                <span className="text-4xl">🎫</span>
                 <h3>No Support Tickets Found</h3>
                 <p className="text-xs text-gray-500 max-w-[240px] mx-auto mt-1">
-                  We couldn't find any tickets matching your search query or status criteria.
+                  {tickets.length === 0
+                    ? "You haven't raised any tickets yet. We're happy to help whenever you need us."
+                    : "We couldn't find any tickets matching your search or filter."}
                 </p>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="btn-outline text-xs mt-4 py-1.5 px-3"
                   onClick={() => { setSearchQuery(''); setStatusFilter(''); setPriorityFilter(''); }}
                 >
@@ -446,28 +478,28 @@ export default function SupportPage() {
           </div>
         </div>
 
-        {/* Right Column: Active Conversation thread detail view */}
+        {/* Right Column: Conversation */}
         <div className={`support-detail-viewport ${activeMobileTab === 'list' ? 'hidden lg:flex' : 'flex'}`}>
           {selectedTicket ? (
             <div className="flex flex-col h-full w-full">
-              
-              {/* Mobile Back trigger header */}
+
+              {/* Mobile Back header */}
               <div className="lg:hidden p-3 bg-gray-50 border-b border-gray-100 flex items-center">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => { setActiveMobileTab('list'); navigate('/tickets', { replace: true, preventScrollReset: true }); }}
                   className="flex items-center gap-1.5 text-sm font-bold text-[var(--theme-primary-700)] cursor-pointer"
                 >
-                  <ArrowLeft className="w-4 h-4" /> Back to ticket list
+                  <ArrowLeft className="w-4 h-4" /> Back to tickets
                 </button>
               </div>
 
-              {/* Detail Header meta */}
+              {/* Detail Header */}
               <div className="detail-panel-header">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                   <div>
                     <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1 block">
-                      Ticket #{selectedTicket.ticket_number} Â· Raised on {formatDate(selectedTicket.created_at).split(',')[0]}
+                      Ticket #{selectedTicket.ticket_number} · Raised on {formatDate(selectedTicket.created_at).split(',')[0]}
                     </span>
                     <h2>{selectedTicket.subject}</h2>
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -488,32 +520,32 @@ export default function SupportPage() {
                   <div className={`sla-deadline-box ${new Date(selectedTicket.sla_deadline) < new Date() ? 'overdue' : ''}`}>
                     <Clock className="w-4 h-4 shrink-0" />
                     <span>
-                      {new Date(selectedTicket.sla_deadline) < new Date() 
-                        ? `Overdue - Target resolution date was: ${formatDate(selectedTicket.sla_deadline)}` 
-                        : `Target Resolution Deadline: ${formatDate(selectedTicket.sla_deadline)}`}
+                      {new Date(selectedTicket.sla_deadline) < new Date()
+                        ? `Overdue — target was: ${formatDate(selectedTicket.sla_deadline)}`
+                        : `Target resolution: ${formatDate(selectedTicket.sla_deadline)}`}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Chat timeline thread body */}
+              {/* Conversation timeline */}
               <div className="detail-panel-body">
-                
-                {/* Original Description complaint */}
+
+                {/* Original description */}
                 <div className="description-detail-card">
                   <div className="flex justify-between items-center text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-100 pb-1.5">
-                    <span>Complaint Details</span>
+                    <span>You reported</span>
                     <span>{formatDate(selectedTicket.created_at)}</span>
                   </div>
                   <p className="description-detail-text">{selectedTicket.description}</p>
                   {selectedTicket.attachment && (
                     <a href={selectedTicket.attachment} target="_blank" rel="noreferrer" className="attachment-badge-link">
-                      <Download className="w-3.5 h-3.5" /> Download original attachment
+                      <Download className="w-3.5 h-3.5" /> Download attachment
                     </a>
                   )}
                 </div>
 
-                {/* Conversation bubbles timeline */}
+                {/* Replies */}
                 {replies.map((reply) => {
                   const isUserSender = reply.sender?.id === selectedTicket.user?.id || reply.author?.id === selectedTicket.user?.id;
                   return (
@@ -521,9 +553,12 @@ export default function SupportPage() {
                       key={reply.id}
                       className={`chat-bubble-wrapper ${isUserSender ? 'user-reply' : 'agent-reply'}`}
                     >
+                      <div className={`chat-avatar ${isUserSender ? 'avatar-user' : 'avatar-agent'}`}>
+                        {isUserSender ? 'You' : (reply.sender?.full_name || reply.author?.full_name || 'Support').slice(0, 2)}
+                      </div>
                       <div className="chat-bubble-card">
                         <div className="chat-bubble-meta flex justify-between items-center text-[10px] uppercase font-bold tracking-wider mb-1 text-gray-400/80">
-                          <span>{isUserSender ? 'You (Member)' : (reply.sender?.full_name || reply.author?.full_name || 'Support Specialist')}</span>
+                          <span>{isUserSender ? 'You' : (reply.sender?.full_name || reply.author?.full_name || 'Support Specialist')}</span>
                           <span>{formatDate(reply.created_at)}</span>
                         </div>
                         <p className="chat-bubble-text text-sm leading-relaxed">{reply.message}</p>
@@ -544,13 +579,13 @@ export default function SupportPage() {
                 <div ref={conversationEndRef} />
               </div>
 
-              {/* Actions, Ratings & Reply edit box footer */}
+              {/* Footer actions / reply */}
               <div className="detail-panel-footer">
                 {selectedTicket.status === 'RESOLVED' ? (
                   <div className="resolution-review-card">
-                    <h3>Review & Close Ticket</h3>
+                    <h3>How did we do?</h3>
                     <p className="text-xs text-gray-500 mb-4">
-                      Our support specialists have resolved your ticket. Please confirm and close this ticket by leaving a rating feedback.
+                      Your ticket is resolved. Let us know how we did — your feedback helps us improve.
                     </p>
 
                     {!feedbackSubmitted ? (
@@ -562,29 +597,30 @@ export default function SupportPage() {
                               type="button"
                               onClick={() => setFeedbackRating(star)}
                               className={`star-icon-btn ${star <= feedbackRating ? 'selected' : ''}`}
+                              aria-label={`Rate ${star} star`}
                             >
-                              â˜…
+                              <Star className="w-7 h-7" fill={star <= feedbackRating ? 'currentColor' : 'none'} />
                             </button>
                           ))}
                         </div>
                         <textarea
-                          placeholder="Write a brief comment about your ticket resolution (optional)..."
+                          placeholder="Anything you'd like to share? (optional)"
                           value={feedbackText}
                           onChange={(e) => setFeedbackText(e.target.value)}
                           className="support-textarea-field"
                         />
                         <div className="flex gap-3 justify-center">
                           <button type="button" className="btn-primary py-2 px-5 text-sm" onClick={handleConfirmResolution}>
-                            Confirm & Close
+                            Submit & Close
                           </button>
                           <button type="button" className="btn-secondary py-2 px-5 text-sm" onClick={handleReopenTicket}>
-                            Reopen Ticket
+                            Reopen
                           </button>
                         </div>
                       </div>
                     ) : (
                       <div className="text-center py-2">
-                        <p className="text-green-700 font-bold text-sm">âœ“ Thank you! Resolution verified and ticket has been closed.</p>
+                        <p className="text-green-700 font-bold text-sm">✓ Thank you! Your ticket is closed.</p>
                         <button type="button" className="btn-outline mt-3 text-xs py-1.5 px-4" onClick={handleReopenTicket}>
                           Reopen Ticket
                         </button>
@@ -593,7 +629,7 @@ export default function SupportPage() {
                   </div>
                 ) : selectedTicket.status === 'CLOSED' ? (
                   <div className="resolution-review-card text-center">
-                    <p className="text-sm font-semibold text-gray-500 mb-3">This support ticket is closed.</p>
+                    <p className="text-sm font-semibold text-gray-500 mb-3">This ticket is closed.</p>
                     <button type="button" className="btn-secondary py-2 px-6 text-sm" onClick={handleReopenTicket}>
                       Reopen Ticket
                     </button>
@@ -601,30 +637,33 @@ export default function SupportPage() {
                 ) : (
                   <form onSubmit={handleReplySubmit} className="reply-editor-form">
                     <textarea
-                      placeholder="Type a response message here to reply to the agent..."
+                      placeholder="Write a reply to the support team..."
                       value={replyMessage}
                       onChange={(e) => setReplyMessage(e.target.value)}
                       className="support-textarea-field"
                       required
                     />
                     <div className="flex justify-between items-center gap-4 mt-2">
-                      <div className="relative overflow-hidden inline-block">
-                        <button type="button" className="btn-outline flex items-center gap-1.5 text-xs py-2 px-4 cursor-pointer">
-                          <Upload className="w-3.5 h-3.5" /> {replyAttachment ? replyAttachment.name : 'Attach File'}
-                        </button>
-                        <input
-                          type="file"
-                          accept=".jpeg,.jpg,.png,.webp,.pdf"
-                          className="absolute inset-0 opacity-0 cursor-pointer"
-                          onChange={(e) => setReplyAttachment(e.target.files?.[0])}
-                        />
-                      </div>
+                      <button
+                        type="button"
+                        className="btn-outline flex items-center gap-1.5 text-xs py-2 px-4 cursor-pointer"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Paperclip className="w-3.5 h-3.5" /> {replyAttachment ? replyAttachment.name : 'Attach'}
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".jpeg,.jpg,.png,.webp,.pdf"
+                        className="hidden"
+                        onChange={(e) => setReplyAttachment(e.target.files?.[0])}
+                      />
                       <button
                         type="submit"
-                        className="btn-primary py-2 px-6 text-sm"
+                        className="btn-primary py-2 px-6 text-sm flex items-center gap-2"
                         disabled={submitLoading || !replyMessage.trim()}
                       >
-                        {submitLoading ? 'Sending...' : 'Send Reply'}
+                        {submitLoading ? 'Sending...' : (<><Send className="w-4 h-4" /> Send</>)}
                       </button>
                     </div>
                   </form>
@@ -633,52 +672,36 @@ export default function SupportPage() {
 
             </div>
           ) : (
-            
-            // Seeker Default placeholder when no ticket is selected (premium help deck)
+
+            // Empty placeholder
             <div className="support-detail-empty-placeholder">
-              <span className="text-6xl mb-4">ðŸŽ«</span>
-              <h2>Need help? Create your first support ticket.</h2>
+              <span className="empty-illustration">💌</span>
+              <h2>How can we help you today?</h2>
               <p className="text-gray-500 max-w-sm mx-auto text-sm mt-1 mb-8">
-                Our support team is active 24/7 to resolve profile, search, verification, or billing enquiries.
+                Pick a topic to get started, or raise a ticket and our team will get back to you shortly.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto mb-8 text-left">
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-start gap-3">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Info className="w-4 h-4" /></div>
-                  <div>
-                    <h4 className="font-bold text-sm text-gray-800">Payment Issues</h4>
-                    <p className="text-xs text-gray-500 mt-0.5">Refunds or gold plan unlock assistance.</p>
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-start gap-3">
-                  <div className="p-2 bg-green-50 text-green-600 rounded-lg"><Info className="w-4 h-4" /></div>
-                  <div>
-                    <h4 className="font-bold text-sm text-gray-800">Verification</h4>
-                    <p className="text-xs text-gray-500 mt-0.5">Identity documents audit checks.</p>
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-start gap-3">
-                  <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Info className="w-4 h-4" /></div>
-                  <div>
-                    <h4 className="font-bold text-sm text-gray-800">Membership Limits</h4>
-                    <p className="text-xs text-gray-500 mt-0.5">Daily quota counts or plans details.</p>
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-start gap-3">
-                  <div className="p-2 bg-red-50 text-red-600 rounded-lg"><Info className="w-4 h-4" /></div>
-                  <div>
-                    <h4 className="font-bold text-sm text-gray-800">Report Seeker</h4>
-                    <p className="text-xs text-gray-500 mt-0.5">Flag suspected duplicate or fake accounts.</p>
-                  </div>
-                </div>
+              <div className="support-category-grid">
+                {CATEGORY_OPTIONS.map((cat) => (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    className="support-category-tile"
+                    onClick={() => openCreateModal(cat.value)}
+                  >
+                    <span className="support-category-icon">{cat.icon}</span>
+                    <span className="support-category-label">{cat.label}</span>
+                    <span className="support-category-blurb">{cat.blurb}</span>
+                  </button>
+                ))}
               </div>
 
-              <button 
-                type="button" 
-                className="btn-primary py-3 px-8 text-base shadow-lg"
-                onClick={() => setIsModalOpen(true)}
+              <button
+                type="button"
+                className="btn-primary py-3 px-8 text-base shadow-lg mt-8"
+                onClick={() => openCreateModal('OTHER')}
               >
-                <Plus className="w-5 h-5 mr-1 inline" /> Create Support Ticket
+                <Plus className="w-5 h-5 mr-1 inline" /> Raise a Ticket
               </button>
             </div>
           )}
@@ -686,40 +709,40 @@ export default function SupportPage() {
 
       </div>
 
-      {/* 5. Create Ticket Dialog Modal */}
+      {/* 5. Create Ticket Modal */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content animate-fade-in-up">
             <div className="modal-header">
-              <h2>Raise New Support Ticket</h2>
-              <button 
-                type="button" 
+              <h2>Raise a Support Ticket</h2>
+              <button
+                type="button"
                 className="close-btn"
                 onClick={() => { setIsModalOpen(false); setValidationErrors({}); }}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <form onSubmit={handleCreateTicket} className="space-y-4">
               <div className="form-group">
-                <label>Category</label>
-                <select
-                  className="form-control"
-                  value={newCategory}
-                  onChange={(e) => {
-                    setNewCategory(e.target.value);
-                    if (!['PAYMENT', 'ACCOUNT', 'REPORT_PROFILE'].includes(e.target.value)) {
-                      setNewPriority('NORMAL');
-                    }
-                  }}
-                >
-                  <option value="PAYMENT">Payment / Subscription Query</option>
-                  <option value="ACCOUNT">Account Settings / Verification</option>
-                  <option value="REPORT_PROFILE">Report a Seeker Profile</option>
-                  <option value="TECHNICAL">Technical Site Issue</option>
-                  <option value="OTHER">General / Other Inquiries</option>
-                </select>
+                <label>What is it about?</label>
+                <div className="support-category-chips">
+                  {CATEGORY_OPTIONS.map((cat) => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      className={`support-category-chip ${newCategory === cat.value ? 'active' : ''}`}
+                      onClick={() => {
+                        setNewCategory(cat.value);
+                        setNewSubject(cat.subjectHint);
+                        if (!['PAYMENT', 'ACCOUNT', 'REPORT_PROFILE'].includes(cat.value)) setNewPriority('NORMAL');
+                      }}
+                    >
+                      <span aria-hidden>{cat.icon}</span> {cat.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="form-group">
@@ -729,14 +752,9 @@ export default function SupportPage() {
                   value={newPriority}
                   onChange={(e) => setNewPriority(e.target.value)}
                 >
-                  <option value="LOW">Low</option>
-                  <option value="NORMAL">Normal</option>
-                  {['PAYMENT', 'ACCOUNT', 'REPORT_PROFILE'].includes(newCategory) && (
-                    <>
-                      <option value="HIGH">High</option>
-                      <option value="URGENT">Urgent (SLA: 1 hour)</option>
-                    </>
-                  )}
+                  {PRIORITY_OPTIONS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -749,39 +767,35 @@ export default function SupportPage() {
                   value={newSubject}
                   onChange={(e) => {
                     setNewSubject(e.target.value);
-                    if (validationErrors.subject) {
-                      setValidationErrors({ ...validationErrors, subject: '' });
-                    }
+                    if (validationErrors.subject) setValidationErrors({ ...validationErrors, subject: '' });
                   }}
                   required
                 />
                 {validationErrors.subject && (
-                  <p className="text-red-500 text-xs font-bold mt-1">âœ• {validationErrors.subject}</p>
+                  <p className="text-red-500 text-xs font-bold mt-1">✕ {validationErrors.subject}</p>
                 )}
               </div>
 
               <div className="form-group">
-                <label>Detailed Description</label>
+                <label>Describe the issue</label>
                 <textarea
-                  placeholder="Describe your issue in detail so we can reproduce it..."
+                  placeholder="Share the details so we can help faster..."
                   className={`form-control ${validationErrors.description ? 'border-red-500' : ''}`}
                   style={{ minHeight: '120px' }}
                   value={newDescription}
                   onChange={(e) => {
                     setNewDescription(e.target.value);
-                    if (validationErrors.description) {
-                      setValidationErrors({ ...validationErrors, description: '' });
-                    }
+                    if (validationErrors.description) setValidationErrors({ ...validationErrors, description: '' });
                   }}
                   required
                 />
                 {validationErrors.description && (
-                  <p className="text-red-500 text-xs font-bold mt-1">âœ• {validationErrors.description}</p>
+                  <p className="text-red-500 text-xs font-bold mt-1">✕ {validationErrors.description}</p>
                 )}
               </div>
 
               <div className="form-group">
-                <label>Add Attachment (Max 5MB: Image, PDF)</label>
+                <label>Attachment (optional · image or PDF, max 5MB)</label>
                 <div className="relative flex items-center justify-center border-2 border-dashed border-gray-200 hover:border-[var(--theme-primary-500)] rounded-xl py-6 transition-colors">
                   <input
                     type="file"
@@ -791,21 +805,21 @@ export default function SupportPage() {
                   />
                   <div className="text-center text-xs text-gray-500">
                     <Upload className="w-6 h-6 mx-auto mb-1 text-gray-400" />
-                    <span>{newAttachment ? `Selected: ${newAttachment.name}` : 'Drag & Drop or Click to upload'}</span>
+                    <span>{newAttachment ? `Selected: ${newAttachment.name}` : 'Click to upload a screenshot'}</span>
                   </div>
                 </div>
               </div>
 
               <div className="form-actions border-t border-gray-100 pt-4 flex gap-3">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="btn-secondary py-2.5 px-6 text-sm"
                   onClick={() => { setIsModalOpen(false); setValidationErrors({}); }}
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="btn-primary py-2.5 px-6 text-sm"
                   disabled={submitLoading}
                 >

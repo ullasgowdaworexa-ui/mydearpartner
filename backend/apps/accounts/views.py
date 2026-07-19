@@ -1,4 +1,5 @@
 import gzip
+import hashlib
 import secrets
 from datetime import timedelta
 from pathlib import Path
@@ -63,10 +64,21 @@ from .serializers import (
 
 MAX_PROFILE_PHOTO_SIZE = 5 * 1024 * 1024
 MAX_MEMBER_DOCUMENT_SIZE = 10 * 1024 * 1024
+MAX_MEMBER_DOCUMENT_IMAGE_SIZE = 5 * 1024 * 1024
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
 IMAGE_MIME_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
 DOCUMENT_EXTENSIONS = IMAGE_EXTENSIONS | {'.pdf'}
 DOCUMENT_MIME_TYPES = IMAGE_MIME_TYPES | {'application/pdf'}
+
+# Known dangerous/executable signatures that must never be accepted as documents.
+UNSAFE_SIGNATURES = (
+    b'MZ',            # DOS/Windows executable
+    b'\x7fELF',       # Linux ELF binary
+    b'PK\x03\x04',    # ZIP / Office Open XML (docx, xlsx) - not allowed
+    b'\xd0\xcf\x11\xe0',  # Legacy OLE (doc, xls, ppt)
+    b'#!/',           # Script shebang
+    b'<?php',         # PHP source
+)
 
 
 def _validate_real_image(upload, *, maximum_size=MAX_PROFILE_PHOTO_SIZE):
@@ -91,20 +103,33 @@ def _validate_real_image(upload, *, maximum_size=MAX_PROFILE_PHOTO_SIZE):
 def _validate_member_document(upload):
     if upload is None:
         raise ValidationError({'file': ['Choose a document to upload.']})
+    if upload.size == 0:
+        raise ValidationError({'file': ['The uploaded file is empty.']})
     if upload.size > MAX_MEMBER_DOCUMENT_SIZE:
         raise ValidationError({'file': ['Document must be 10 MB or smaller.']})
+
     extension = Path(upload.name).suffix.lower()
     mime_type = (getattr(upload, 'content_type', '') or '').lower()
     if extension not in DOCUMENT_EXTENSIONS or mime_type not in DOCUMENT_MIME_TYPES:
         raise ValidationError({'file': ['Upload a PDF, JPEG, PNG, or WebP document.']})
+
+    # Reject unsafe/executable files regardless of the claimed extension or MIME.
+    head = upload.read(8)
+    upload.seek(0)
+    if any(head.startswith(sig) for sig in UNSAFE_SIGNATURES):
+        raise ValidationError({'file': ['This file type is not allowed.']})
+
     if extension == '.pdf':
+        if upload.size > MAX_MEMBER_DOCUMENT_SIZE:
+            raise ValidationError({'file': ['PDF must be 10 MB or smaller.']})
         signature = upload.read(5)
         upload.seek(0)
         if signature != b'%PDF-':
             raise ValidationError({'file': ['The uploaded file is not a valid PDF.']})
     else:
-        _validate_real_image(upload, maximum_size=MAX_MEMBER_DOCUMENT_SIZE)
+        _validate_real_image(upload, maximum_size=MAX_MEMBER_DOCUMENT_IMAGE_SIZE)
     return upload
+
 
 
 LOGIN_ACTIVITY_CONFIG = {
@@ -817,7 +842,7 @@ class MemberDocumentListCreateView(APIView):
 
     def get(self, request):
         _ensure_account_type(request, AccountType.MEMBER)
-        documents = MemberDocument.objects.filter(member=request.user)
+        documents = MemberDocument.objects.filter(member=request.user).defer('file_data')
         serializer = MemberDocumentSerializer(documents, many=True)
         return ApiResponse(data=serializer.data, message='Documents retrieved successfully.')
 
@@ -846,6 +871,7 @@ class MemberDocumentListCreateView(APIView):
         raw_bytes = upload.read()
         upload.seek(0)
         compressed = gzip.compress(raw_bytes)
+        file_hash = hashlib.sha256(raw_bytes).hexdigest()
 
         document = MemberDocument.objects.create(
             member=request.user,
@@ -856,6 +882,7 @@ class MemberDocumentListCreateView(APIView):
             mime_type=mime_type,
             file_size=len(raw_bytes),
             compressed_size=len(compressed),
+            file_hash=file_hash,
             status=MemberDocument.Status.PENDING,
         )
 
@@ -962,12 +989,14 @@ class MemberDocumentReuploadView(APIView):
         raw_bytes = upload.read()
         upload.seek(0)
         compressed = gzip.compress(raw_bytes)
+        file_hash = hashlib.sha256(raw_bytes).hexdigest()
 
         document.file_data = compressed
         document.original_file_name = upload.name
         document.mime_type = mime_type
         document.file_size = len(raw_bytes)
         document.compressed_size = len(compressed)
+        document.file_hash = file_hash
         document.status = MemberDocument.Status.PENDING
         document.rejection_reason = ''
         document.admin_comment = ''

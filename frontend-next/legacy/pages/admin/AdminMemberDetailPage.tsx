@@ -191,7 +191,7 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
         method: 'PUT',
         body: JSON.stringify(editData),
       });
-      setDetail(prev => prev ? { ...prev, member: result.data } : prev);
+      setDetail(prev => prev ? { ...prev, member: result } : prev);
       setToast({ message: 'Member updated successfully.', tone: 'success' });
       setEditing(false);
     } catch {
@@ -799,6 +799,7 @@ export default function AdminMemberDetailPage({ memberId }: { memberId: string }
         <ProtectedDocumentViewer
           documentId={viewDoc.id}
           documentType={viewDoc.type}
+          namespace="admin"
           onClose={() => setViewDoc(null)}
         />
       )}

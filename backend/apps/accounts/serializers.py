@@ -722,7 +722,7 @@ class MemberDocumentSerializer(serializers.ModelSerializer):
 
 class AdminDocumentSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(read_only=True)
-    member_id = serializers.UUIDField(source='member_id', read_only=True)
+    member_id = serializers.UUIDField(read_only=True)
     member_name = serializers.SerializerMethodField()
     member_email = serializers.SerializerMethodField()
     reviewer_name = serializers.SerializerMethodField()

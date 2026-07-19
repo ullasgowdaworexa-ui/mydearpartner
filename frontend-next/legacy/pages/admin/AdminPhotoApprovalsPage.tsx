@@ -18,6 +18,7 @@ import {
 import AdminAssignModal from '../../components/admin/AdminAssignModal';
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 import PhotoModerationGallery from '../../components/admin/PhotoModerationGallery';
+import '../../pages/AdminPage.css';
 
 interface PhotoVerification {
   id: string;
@@ -62,7 +63,7 @@ export default function AdminPhotoApprovalsPage() {
   const [verifications, setVerifications] = useState<PhotoVerification[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(Number(searchParams.get('page')) || 1);
-  const [status, setStatus] = useState(searchParams.get('status') || 'PENDING');
+  const [status, setStatus] = useState(searchParams.get('status') || 'pending_review');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -172,12 +173,12 @@ export default function AdminPhotoApprovalsPage() {
         <div className="admin-table-toolbar">
           <div className="admin-filter-row">
             <label><Filter />Status:
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="PENDING">Pending</option>
-                <option value="ASSIGNED">Assigned</option>
-                <option value="IN_REVIEW">In Review</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="pending_review">Pending Review</option>
+                <option value="in_review">In Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="changes_requested">Changes Requested</option>
                 <option value="">All statuses</option>
               </select>
             </label>
@@ -215,7 +216,7 @@ export default function AdminPhotoApprovalsPage() {
                         </p>
                       </div>
                     </td>
-                    <td data-label="Pending Photos" style={{ minWidth: '390px' }}>
+                    <td data-label="Pending Photos" style={{ minWidth: 0 }}>
                       <PhotoModerationGallery
                         photos={v.profile_photos}
                         canApprove={canApprove}

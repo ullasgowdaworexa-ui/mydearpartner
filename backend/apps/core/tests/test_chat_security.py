@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+import gzip
 import pytest
 from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
@@ -82,7 +83,14 @@ def approve(member):
     MemberDocument.objects.get_or_create(
         member=member,
         status=MemberDocument.Status.APPROVED,
-        defaults={'document_type': 'Government ID', 'file_path': 'test_doc.pdf'}
+        defaults={
+            'document_type': 'AADHAAR',
+            'original_file_name': 'test_doc.pdf',
+            'file_data': gzip.compress(b'%PDF-1.4 test document'),
+            'mime_type': 'application/pdf',
+            'file_size': 18,
+            'compressed_size': len(gzip.compress(b'%PDF-1.4 test document')),
+        }
     )
 
 

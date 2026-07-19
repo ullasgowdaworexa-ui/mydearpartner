@@ -1,23 +1,40 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { fetchApi, ApiError } from '@/legacy/services/apiClient';
-import { Loader2, XCircle, FileText, AlertCircle, X } from 'lucide-react';
+import { getAccessToken } from '@/legacy/services/apiClient';
+import { Loader2, XCircle, AlertCircle, X } from 'lucide-react';
 
 interface ProtectedDocumentViewerProps {
   documentId: string;
   documentType: string;
+  /** Backend proxy namespace, e.g. 'member-auth' or 'admin'. */
+  namespace?: string;
   onClose: () => void;
 }
 
 type LoadState = 'loading' | 'ready' | 'error' | 'unsupported';
 
-export default function ProtectedDocumentViewer({ documentId, documentType, onClose }: ProtectedDocumentViewerProps) {
+// Backend document route prefixes differ by namespace:
+//   member-auth -> /verification/documents/<id>/
+//   admin       -> /documents/<id>/
+const DOCUMENT_ROUTE_PREFIX: Record<string, string> = {
+  'member-auth': 'verification/documents',
+  admin: 'documents',
+};
+
+export default function ProtectedDocumentViewer({
+  documentId,
+  documentType,
+  namespace = 'member-auth',
+  onClose,
+}: ProtectedDocumentViewerProps) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const mountedRef = useRef(true);
+
+  const routePrefix = DOCUMENT_ROUTE_PREFIX[namespace] ?? 'verification/documents';
 
   useEffect(() => {
     mountedRef.current = true;
@@ -25,14 +42,20 @@ export default function ProtectedDocumentViewer({ documentId, documentType, onCl
 
     const load = async () => {
       try {
-        const response = await fetch(`/api/proxy/member-auth/verification/documents/${documentId}/download/`, {
-          credentials: 'include',
-          headers: { Accept: 'application/pdf,image/jpeg,image/png,image/webp,*/*' },
-        });
+        const token = getAccessToken();
+        const headers: Record<string, string> = {
+          Accept: 'application/pdf,image/jpeg,image/png,image/webp,*/*',
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(
+          `/api/proxy/${namespace}/${routePrefix}/${documentId}/preview/`,
+          { credentials: 'include', headers },
+        );
         if (!response.ok) {
-          let msg = 'We couldn\u2019t load this document. Please try again.';
+          let msg = 'We couldn’t load this document. Please try again.';
           if (response.status === 401) msg = 'Your session has expired. Please sign in again.';
-          else if (response.status === 403) msg = 'You don\u2019t have permission to view this document.';
+          else if (response.status === 403) msg = 'You don’t have permission to view this document.';
           else if (response.status === 404) msg = 'This document is no longer available.';
           else {
             try {
@@ -58,7 +81,7 @@ export default function ProtectedDocumentViewer({ documentId, documentType, onCl
         setLoadState('ready');
       } catch (err) {
         if (!mountedRef.current) return;
-        setErrorMessage(err instanceof Error ? err.message : 'We couldn\u2019t load this document.');
+        setErrorMessage(err instanceof Error ? err.message : 'We couldn’t load this document.');
         setLoadState('error');
       }
     };
@@ -69,7 +92,7 @@ export default function ProtectedDocumentViewer({ documentId, documentType, onCl
       mountedRef.current = false;
       if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     };
-  }, [documentId]);
+  }, [documentId, namespace]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -107,7 +130,7 @@ export default function ProtectedDocumentViewer({ documentId, documentType, onCl
               <p className="text-sm font-medium">This document cannot be previewed here.</p>
               <p className="mt-1 text-xs text-gray-400">You can download it securely instead.</p>
               <a
-                href={`/api/proxy/member-auth/verification/documents/${documentId}/download/`}
+                href={`/api/proxy/${namespace}/${routePrefix}/${documentId}/download/`}
                 download
                 className="mt-4 cursor-pointer rounded-xl bg-rose-500 px-5 py-2 text-xs font-bold text-white hover:bg-rose-600"
               >

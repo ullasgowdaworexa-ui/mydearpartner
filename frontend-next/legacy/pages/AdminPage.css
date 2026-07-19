@@ -763,5 +763,113 @@
   }
 }
 
+/* Photo moderation gallery (Photo Approvals) */
+.photo-moderation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1rem;
+}
+
+.photo-moderation-card {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--admin-line, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+  background: var(--admin-surface, #fff);
+  display: flex;
+  flex-direction: column;
+}
+
+.photo-moderation-card .profile-image,
+.photo-moderation-card [class*='profile-image'] {
+  width: 100%;
+}
+
+.photo-moderation-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.photo-moderation-primary {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--admin-muted, #6b7280);
+}
+
+.photo-moderation-reason {
+  margin: 0.65rem 0 0;
+  color: #b91c1c;
+  font-size: 0.8rem;
+}
+
+.photo-moderation-hint {
+  margin: 0.65rem 0 0;
+  color: var(--admin-muted, #6b7280);
+  font-size: 0.8rem;
+}
+
+.photo-moderation-actions {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.photo-moderation-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.photo-moderation-textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 0.5rem;
+  border: 1px solid var(--admin-line, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--admin-ink, #111827);
+  font: inherit;
+}
+
+.photo-moderation-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.photo-moderation-btn {
+  flex: 1 1 auto;
+  min-width: 120px;
+  padding: 0.45rem 0.7rem;
+  border: none;
+}
+
+.photo-moderation-approve { background: #059669; color: #fff; }
+.photo-moderation-reject { background: #dc2626; color: #fff; }
+
+.photo-moderation-empty {
+  margin: 0;
+  color: var(--admin-muted, #6b7280);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 640px) {
+  .photo-moderation-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+  }
+  .photo-moderation-btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .photo-moderation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 

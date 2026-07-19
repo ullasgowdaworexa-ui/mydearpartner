@@ -1,7 +1,24 @@
 import math
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
 
 from django.core.paginator import EmptyPage, Paginator
 from rest_framework import status
+
+
+def _json_safe(value):
+    """Recursively convert non-JSON-serializable objects to strings so audit
+    payloads can be stored in a JSONB column without psycopg2 raising."""
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, (UUID, Decimal)):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
 
 from apps.accounts.models import (
     AccountType,
@@ -49,8 +66,8 @@ def audit(
         target_type=target_type,
         target_id=str(target_id or ''),
         description=description,
-        old_data=old_data or {},
-        new_data=new_data or {},
+        old_data=_json_safe(old_data or {}),
+        new_data=_json_safe(new_data or {}),
         ip_address=client_ip(request),
         user_agent=request.META.get('HTTP_USER_AGENT', '')[:1000],
     )
