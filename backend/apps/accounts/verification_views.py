@@ -78,6 +78,7 @@ class MemberEmailOtpSendView(APIView):
     """
     
     permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_scope = 'reset-password'
     
     def post(self, request):
         from .views import _issue_challenge
@@ -122,6 +123,7 @@ class MemberEmailOtpVerifyView(APIView):
     """
     
     permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_scope = 'reset-password'
     
     def post(self, request):
         from .views import _consume_challenge
@@ -177,6 +179,7 @@ class MemberMobileOtpSendView(APIView):
     """
     
     permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_scope = 'reset-password'
     
     def post(self, request):
         from .views import _issue_challenge
@@ -227,6 +230,7 @@ class MemberMobileOtpVerifyView(APIView):
     """
     
     permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_scope = 'reset-password'
     
     def post(self, request):
         from .views import _consume_challenge

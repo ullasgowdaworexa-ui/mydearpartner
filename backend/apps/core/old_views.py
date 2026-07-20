@@ -264,12 +264,15 @@ class ProfileDetailView(APIView):
             if payload and payload.get('code') == 'daily_profile_unlock_limit_reached':
                 if 'limit' in payload:
                     payload['views_limit'] = payload['limit']
+                elif 'daily_limit' in payload:
+                    payload['views_limit'] = payload['daily_limit']
                 from apps.core.entitlements import entitlement_denial, get_active_entitlements
                 denial = entitlement_denial(get_active_entitlements(request.user), 'daily_profile_view_limit', daily_limit=True)
                 denial.update({
                     'code': 'daily_profile_unlock_limit_reached',
-                    'used': payload.get('used'),
-                    'remaining': payload.get('remaining'),
+                    'used': payload.get('used') if 'used' in payload else payload.get('used_today'),
+                    'remaining': payload.get('remaining') if 'remaining' in payload else payload.get('remaining_today'),
+                    'views_limit': payload.get('views_limit'),
                 })
                 return Response(
                     denial,

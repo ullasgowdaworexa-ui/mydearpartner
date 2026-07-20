@@ -4789,9 +4789,9 @@ class StaffWorkActionView(ScopedAPIView):
                     req.approved_at = timezone.now()
                     member = req.member
                     if req.verification_type == 'FULL_PROFILE':
-                        member.profile_status = 'APPROVED'
+                        member.profile_status = Member.ProfileStatus.APPROVED
                     elif req.verification_type == 'IDENTITY_DOCUMENT':
-                        member.document_status = 'APPROVED'
+                        member.document_status = Member.DocumentStatus.APPROVED
                         member.documents.filter(status='PENDING').update(
                             status='APPROVED',
                             reviewed_at=timezone.now(),
@@ -4803,9 +4803,9 @@ class StaffWorkActionView(ScopedAPIView):
                     req.rejection_reason = notes
                     member = req.member
                     if req.verification_type == 'FULL_PROFILE':
-                        member.profile_status = 'REJECTED'
+                        member.profile_status = Member.ProfileStatus.REJECTED
                     elif req.verification_type == 'IDENTITY_DOCUMENT':
-                        member.document_status = 'REJECTED'
+                        member.document_status = Member.DocumentStatus.REJECTED
                         member.documents.filter(status='PENDING').update(
                             status='REJECTED',
                             rejection_reason=notes,

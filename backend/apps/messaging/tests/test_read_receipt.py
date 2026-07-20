@@ -48,10 +48,16 @@ def enable_chat(member, plan):
         is_primary=True,
         status=ProfilePhoto.Status.APPROVED,
     )
+    import gzip
     MemberDocument.objects.create(
         member=member,
-        document_type="Government ID",
-        file_path="test_document.pdf",
+        document_type=MemberDocument.DocumentType.OTHER,
+        custom_document_name="Government ID",
+        original_file_name="test_document.pdf",
+        file_data=gzip.compress(b"dummy bytes"),
+        mime_type="application/pdf",
+        file_size=11,
+        compressed_size=len(gzip.compress(b"dummy bytes")),
         status=MemberDocument.Status.APPROVED,
     )
     MemberMembership.objects.create(

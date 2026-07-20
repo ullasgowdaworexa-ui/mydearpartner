@@ -38,7 +38,7 @@ def make_member(email, mobile, *, first_name="Test", gender="Female", dob=date(1
         date_of_birth=dob,
         is_email_verified=True,
         is_mobile_verified=True,
-        profile_status='APPROVED',
+        profile_status=Member.ProfileStatus.APPROVED,
     )
     defaults = {
         "marital_status": "NEVER_MARRIED",
@@ -191,9 +191,10 @@ def test_profile_detail_charges_subscription_and_blocks_at_limit(mock_verify):
             "daily_profile_unlock_limit": 1,
         }
     )
-    if plan.daily_profile_unlock_limit != 1:
-        plan.daily_profile_unlock_limit = 1
-        plan.save(update_fields=["daily_profile_unlock_limit"])
+    plan.daily_profile_unlock_limit = 1
+    if isinstance(plan.entitlements, dict):
+        plan.entitlements['daily_profile_view_limit'] = 1
+    plan.save(update_fields=["daily_profile_unlock_limit", "entitlements"])
     MemberMembership.objects.create(
         member=viewer,
         plan=plan,

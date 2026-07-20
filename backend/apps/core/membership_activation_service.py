@@ -24,7 +24,7 @@ class MembershipActivationResult(NamedTuple):
     success: bool
     message: str
     membership: Optional['MemberMembership'] = None
-    status: str = 'pending_verification'  # pending_verification | active | error
+    status: str = 'PENDING_VERIFICATION'  # PENDING_VERIFICATION | ACTIVE | ERROR
 
 
 class MembershipActivationService:
@@ -39,11 +39,11 @@ class MembershipActivationService:
     - suspended: Account suspended, plan not usable
     """
 
-    STATUS_PENDING_VERIFICATION = 'pending_verification'
-    STATUS_ACTIVE = 'active'
-    STATUS_EXPIRED = 'expired'
-    STATUS_CANCELLED = 'cancelled'
-    STATUS_SUSPENDED = 'suspended'
+    STATUS_PENDING_VERIFICATION = 'PENDING_VERIFICATION'
+    STATUS_ACTIVE = 'ACTIVE'
+    STATUS_EXPIRED = 'EXPIRED'
+    STATUS_CANCELLED = 'CANCELLED'
+    STATUS_SUSPENDED = 'SUSPENDED'
 
     @staticmethod
     @transaction.atomic
@@ -175,6 +175,10 @@ class MembershipActivationService:
         pending.end_date = end_date
         pending.save(update_fields=['status', 'is_active', 'start_date', 'end_date', 'updated_at'])
 
+        # Update member's premium status
+        member.is_premium = True
+        member.save(update_fields=['is_premium', 'updated_at'])
+
         return MembershipActivationResult(
             success=True,
             message=f'{pending.plan.display_name} membership activated successfully!',
@@ -257,6 +261,10 @@ class MembershipActivationService:
             end_date=end_date
         )
 
+        # Update member's premium status
+        member.is_premium = True
+        member.save(update_fields=['is_premium', 'updated_at'])
+
         return MembershipActivationResult(
             success=True,
             message=f'{plan.display_name} membership activated successfully!',
@@ -320,6 +328,10 @@ class MembershipActivationService:
         membership.status = MembershipActivationService.STATUS_CANCELLED
         membership.is_active = False
         membership.save(update_fields=['status', 'is_active', 'updated_at'])
+
+        # Update member's premium status
+        member.is_premium = False
+        member.save(update_fields=['is_premium', 'updated_at'])
 
         return True, 'Membership deactivated'
 

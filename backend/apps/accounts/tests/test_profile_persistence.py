@@ -132,10 +132,11 @@ def test_unknown_profile_field_is_rejected_with_400(member, super_admin):
         format='json',
     )
     assert bad.status_code == 400, bad.content
-    # DRF may return the field errors directly or wrapped under 'detail'.
     errors = bad.data
     error_keys = set(errors.keys()) if isinstance(errors, dict) else set()
-    if 'detail' in error_keys and isinstance(errors['detail'], dict):
+    if 'errors' in error_keys and isinstance(errors['errors'], dict):
+        error_keys = set(errors['errors'].keys())
+    elif 'detail' in error_keys and isinstance(errors['detail'], dict):
         error_keys = set(errors['detail'].keys())
     # The offending keys must be reported so the client knows they were dropped.
     assert 'not_a_real_field' in error_keys or 'bogus_payload' in error_keys
