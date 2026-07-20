@@ -682,6 +682,20 @@ class SupportTicketReply(models.Model):
         blank=True,
         related_name='support_replies',
     )
+    admin_sender = models.ForeignKey(
+        'accounts.Admin',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='support_replies',
+    )
+    super_admin_sender = models.ForeignKey(
+        'accounts.SuperAdmin',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='support_replies',
+    )
     message = models.TextField()
     is_public = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -693,8 +707,10 @@ class SupportTicketReply(models.Model):
         constraints = [
             models.CheckConstraint(
                 check=(
-                    Q(member_sender__isnull=False, support_sender__isnull=True)
-                    | Q(member_sender__isnull=True, support_sender__isnull=False)
+                    Q(member_sender__isnull=False, support_sender__isnull=True, admin_sender__isnull=True, super_admin_sender__isnull=True)
+                    | Q(member_sender__isnull=True, support_sender__isnull=False, admin_sender__isnull=True, super_admin_sender__isnull=True)
+                    | Q(member_sender__isnull=True, support_sender__isnull=True, admin_sender__isnull=False, super_admin_sender__isnull=True)
+                    | Q(member_sender__isnull=True, support_sender__isnull=True, admin_sender__isnull=True, super_admin_sender__isnull=False)
                 ),
                 name='support_reply_exactly_one_sender',
             ),
@@ -840,6 +856,20 @@ class SupportTicketAttachment(models.Model):
         blank=True,
         related_name='support_attachments',
     )
+    uploaded_by_admin = models.ForeignKey(
+        'accounts.Admin',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='support_attachments',
+    )
+    uploaded_by_super_admin = models.ForeignKey(
+        'accounts.SuperAdmin',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='support_attachments',
+    )
     file_path = models.FileField(
         upload_to='support_attachments/',
         storage=private_media_storage,
@@ -854,8 +884,10 @@ class SupportTicketAttachment(models.Model):
         constraints = [
             models.CheckConstraint(
                 check=(
-                    Q(uploaded_by_member__isnull=False, uploaded_by_support__isnull=True)
-                    | Q(uploaded_by_member__isnull=True, uploaded_by_support__isnull=False)
+                    Q(uploaded_by_member__isnull=False, uploaded_by_support__isnull=True, uploaded_by_admin__isnull=True, uploaded_by_super_admin__isnull=True)
+                    | Q(uploaded_by_member__isnull=True, uploaded_by_support__isnull=False, uploaded_by_admin__isnull=True, uploaded_by_super_admin__isnull=True)
+                    | Q(uploaded_by_member__isnull=True, uploaded_by_support__isnull=True, uploaded_by_admin__isnull=False, uploaded_by_super_admin__isnull=True)
+                    | Q(uploaded_by_member__isnull=True, uploaded_by_support__isnull=True, uploaded_by_admin__isnull=True, uploaded_by_super_admin__isnull=False)
                 ),
                 name='support_attachment_exactly_one_uploader',
             ),

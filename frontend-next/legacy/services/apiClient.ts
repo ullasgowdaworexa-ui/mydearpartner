@@ -142,12 +142,16 @@ function unwrapPayload(payload: unknown) {
 function proxyUrl(endpoint: string, params?: FetchOptions['params']) {
   const [path, existingQuery = ''] = endpoint.split('?', 2);
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // Strip a trailing slash so Next.js does not issue a 308 redirect. A 308 on a
+  // POST can drop the body/method and break mutating requests. The Django proxy
+  // (django-proxy.ts -> targetUrl) re-appends the slash before forwarding.
+  const cleanPath = normalizedPath.replace(/\/+$/, '') || '/';
   const search = new URLSearchParams(existingQuery);
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
   }
   const query = search.toString();
-  return `/api/proxy${normalizedPath}${query ? `?${query}` : ''}`;
+  return `/api/proxy${cleanPath}${query ? `?${query}` : ''}`;
 }
 
 interface FetchOptions extends RequestInit {

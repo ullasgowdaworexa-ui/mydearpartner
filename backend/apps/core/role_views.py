@@ -44,7 +44,7 @@ from apps.accounts.serializers import MemberSerializer, administrative_account_p
 from apps.accounts.services import permanently_delete_member
 from apps.accounts.verification_service import AccountVerificationService
 
-from .api_utils import audit, bad_request, create_ticket_attachment, notify, paginated_response
+from .api_utils import audit, bad_request, create_notification, create_ticket_attachment, notify, paginated_response
 from .models import (
     PaymentOrder,
     PaymentTransaction,
@@ -1518,6 +1518,7 @@ def _verification_actor_kwargs(actor):
 class AdminTicketDetailView(ScopedAPIView):
     allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
     required_permission = 'tickets.view_all'
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     def _ticket(self, ticket_id, lock=False):
         queryset = SupportTicket.objects.select_related('member', 'category', 'current_assignee')
@@ -1625,9 +1626,67 @@ class AdminTicketDetailView(ScopedAPIView):
 
     @transaction.atomic
     def post(self, request, ticket_id):
+        action = request.query_params.get('action') or request.data.get('action')
+        ticket = self._ticket(ticket_id, lock=True)
+        if action == 'reply':
+            return self._reply(request, ticket)
+        return self._note(request, ticket)
+
+    def _reply(self, request, ticket):
+        if not request.user.has_admin_permission('tickets.reply'):
+            raise PermissionDenied('Ticket reply permission is required.')
+        serializer = TicketReplyInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reply_values = {
+            'ticket': ticket,
+            'message': serializer.validated_data['message'],
+            'is_public': True,
+        }
+        if str(request.user.account_type) == AccountType.SUPER_ADMIN:
+            reply_values['super_admin_sender'] = request.user
+        else:
+            reply_values['admin_sender'] = request.user
+        reply = SupportTicketReply.objects.create(**reply_values)
+        attachment = serializer.validated_data.get('attachment')
+        if attachment:
+            if str(request.user.account_type) == AccountType.SUPER_ADMIN:
+                create_ticket_attachment(
+                    ticket=ticket, reply=reply, upload=attachment, super_admin=request.user
+                )
+            else:
+                create_ticket_attachment(
+                    ticket=ticket, reply=reply, upload=attachment, admin=request.user
+                )
+        now = timezone.now()
+        if ticket.first_response_at is None:
+            ticket.first_response_at = now
+        ticket.last_reply_at = now
+        old_status = ticket.status
+        ticket.status = SupportTicket.Status.WAITING_FOR_MEMBER
+        ticket.save(update_fields=('first_response_at', 'last_reply_at', 'status', 'updated_at'))
+        if old_status != ticket.status:
+            TicketStatusHistory.objects.create(
+                ticket=ticket, old_status=old_status, new_status=ticket.status,
+                reason='Admin replied', **_ticket_actor_kwargs(request.user),
+            )
+        if ticket.member_id:
+            notify(
+                ticket.member, notification_type='TICKET_REPLIED',
+                title=f'New reply on {ticket.ticket_number}', message=ticket.subject,
+                related_object=ticket, priority=ticket.priority,
+            )
+        audit(
+            request, request.user, action='TICKET_REPLIED', module='tickets',
+            target_type='SUPPORT_TICKET', target_id=ticket.pk,
+        )
+        return ApiResponse(
+            data=SupportTicketReplySerializer(reply).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _note(self, request, ticket):
         if not request.user.has_admin_permission('tickets.note'):
             raise PermissionDenied('Internal-note permission is required.')
-        ticket = self._ticket(ticket_id, lock=True)
         note = str(request.data.get('note', '')).strip()
         if not note:
             return bad_request('note is required.')
@@ -2789,6 +2848,36 @@ class _MembershipWireSerializer(serializers.Serializer):
         }
 
 
+class AdminMemberSearchView(ScopedAPIView):
+    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
+    required_permission = 'members.manage'
+
+    def get(self, request):
+        from apps.accounts.models import Member
+        from django.db.models import Q
+
+        q = request.query_params.get('q', '').strip()
+        queryset = Member.objects.filter(deleted_at__isnull=True)
+        if q:
+            queryset = queryset.filter(
+                Q(email__icontains=q)
+                | Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+            )
+        queryset = queryset.order_by('first_name')[:10]
+        results = [
+            {
+                'id': str(m.pk),
+                'full_name': m.get_full_name() or m.email,
+                'email': m.email,
+                'is_premium': m.is_premium,
+                'account_status': m.account_status,
+            }
+            for m in queryset
+        ]
+        return ApiResponse(data={'results': results})
+
+
 class AdminMembershipListView(ScopedAPIView):
     allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
     required_permission = 'members.view'
@@ -2954,18 +3043,36 @@ class AdminDirectMembershipView(ScopedAPIView):
         plan_slug = request.data.get('plan_slug')
         action = request.data.get('action') # activate, extend, cancel
         duration_days = request.data.get('duration_days')
-        
+
         if not user_id or not action:
-            return ApiResponse(success=False, message="user_id and action are required.", status=status.HTTP_400_BAD_REQUEST)
-            
-        target_user = get_object_or_404(Member.objects.select_for_update(), pk=user_id)
+            return ApiResponse(
+                success=False,
+                message=f"user_id and action are required. (received user_id={user_id!r}, action={action!r}, plan_slug={plan_slug!r})",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            target_user = Member.objects.select_for_update().get(pk=user_id)
+        except (Member.DoesNotExist, ValueError):
+            return ApiResponse(
+                success=False,
+                message=f"No member found for user_id '{user_id}'.",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         actor = request.user
         now = timezone.now()
-        
+
         if action == 'activate':
             if not plan_slug:
                 return ApiResponse(success=False, message="plan_slug is required for activation.", status=status.HTTP_400_BAD_REQUEST)
-            plan = get_object_or_404(MembershipPlan, slug=plan_slug)
+            try:
+                plan = MembershipPlan.objects.get(slug=plan_slug)
+            except (MembershipPlan.DoesNotExist, ValueError):
+                return ApiResponse(
+                    success=False,
+                    message=f"No membership plan found for plan_slug '{plan_slug}'.",
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             
             # Deactivate previous active memberships
             MemberMembership.objects.filter(member=target_user, is_active=True).update(is_active=False)
@@ -3006,7 +3113,15 @@ class AdminDirectMembershipView(ScopedAPIView):
                 target_type='MEMBER', target_id=target_user.pk,
                 new_data={'plan_slug': plan.slug, 'duration_days': days}
             )
-            
+
+            create_notification(
+                recipient=target_user,
+                type='MEMBERSHIP_ACTIVATED',
+                title='Membership Activated',
+                body=f'Your {plan.name} membership has been activated by an administrator. Enjoy your premium benefits!',
+                link_url='/settings/payments',
+            )
+
             return ApiResponse(message=f"Plan '{plan.name}' activated directly for user.")
             
         elif action == 'extend':
@@ -3030,7 +3145,15 @@ class AdminDirectMembershipView(ScopedAPIView):
                 target_type='MEMBER', target_id=target_user.pk,
                 new_data={'extended_days': days, 'new_end_date': str(membership.end_date)}
             )
-            
+
+            create_notification(
+                recipient=target_user,
+                type='MEMBERSHIP_EXTENDED',
+                title='Membership Extended',
+                body=f'Your membership has been extended by {days} days by an administrator. New expiry: {membership.end_date.strftime("%B %d, %Y") if membership.end_date else "lifetime"}.',
+                link_url='/settings/payments',
+            )
+
             return ApiResponse(message=f"Membership extended by {days} days.")
             
         elif action == 'cancel':
@@ -3047,7 +3170,15 @@ class AdminDirectMembershipView(ScopedAPIView):
                 target_type='MEMBER', target_id=target_user.pk,
                 new_data={}
             )
-            
+
+            create_notification(
+                recipient=target_user,
+                type='MEMBERSHIP_CANCELLED',
+                title='Membership Cancelled',
+                body='Your membership has been cancelled by an administrator. Your premium benefits have ended.',
+                link_url='/settings/payments',
+            )
+
             return ApiResponse(message="Membership cancelled successfully.")
             
         else:

@@ -18,6 +18,7 @@ const Profiles = load(() => import('@/legacy/pages/admin/AdminProfileApprovalsPa
 const Photos = load(() => import('@/legacy/pages/admin/AdminPhotoApprovalsPage'));
 const Documents = load(() => import('@/legacy/pages/admin/AdminDocumentVerificationPage'));
 const Memberships = load(() => import('@/legacy/pages/admin/AdminMembershipsPage'));
+const MembershipPlans = load(() => import('@/legacy/pages/admin/AdminMembershipPlansPage'));
 const Complaints = load(() => import('@/legacy/pages/admin/AdminComplaintsPage'));
 const ReportedProfiles = load(() => import('@/legacy/pages/admin/AdminReportedProfilesPage'));
 const Stories = load(() => import('@/legacy/pages/admin/AdminSuccessStoriesPage'));
@@ -49,7 +50,7 @@ const routes: Record<string, RouteEntry> = {
   documents: { component: Documents, permission: 'verification.view_all' },
   'document-verifications': { component: Documents, permission: 'verification.view_all' },
   memberships: { component: Memberships, permission: 'memberships.view' },
-  'membership-plans': { component: Memberships, permission: 'memberships.view', props: { defaultTab: 'plans' } },
+  'membership-plans': { component: MembershipPlans, permission: 'memberships.view' },
   tickets: { component: Tickets, permission: 'tickets.view_all' },
   'support-tickets': { component: Tickets, permission: 'tickets.view_all' },
   'contact-enquiries': { component: Enquiries, permission: 'tickets.view_all' },

@@ -167,12 +167,14 @@ def paginated_response(request, queryset, serializer_class, *, context=None, mes
     return ApiResponse(data=payload, message=message)
 
 
-def create_ticket_attachment(*, ticket, upload, member=None, support=None, reply=None):
+def create_ticket_attachment(*, ticket, upload, member=None, support=None, admin=None, super_admin=None, reply=None):
     return SupportTicketAttachment.objects.create(
         ticket=ticket,
         reply=reply,
         uploaded_by_member=member,
         uploaded_by_support=support,
+        uploaded_by_admin=admin,
+        uploaded_by_super_admin=super_admin,
         file_path=upload,
         original_filename=upload.name[:255],
         mime_type=(getattr(upload, 'content_type', '') or 'application/octet-stream')[:100],

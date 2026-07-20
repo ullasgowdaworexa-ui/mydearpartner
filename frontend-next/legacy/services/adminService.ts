@@ -539,11 +539,30 @@ export const updateAdminTicket = (ticketId: string, input: UpdateSupportTicketIn
 export const deleteAdminTicket = (ticketId: string) =>
   fetchApi<void>(`/admin/tickets/${ticketId}/`, { method: 'DELETE' });
 
-export const replyToAdminTicket = (ticketId: string, input: ReplyToTicketInput) =>
-  fetchApi<SupportTicketReply>(`/admin/tickets/${ticketId}/reply/`, {
+export interface ReplyToTicketInput {
+  message: string;
+  is_internal_note?: boolean;
+  attachment?: File;
+}
+
+export const replyToAdminTicket = (
+  ticketId: string,
+  input: ReplyToTicketInput,
+): Promise<SupportTicketReply> => {
+  const isNote = input.is_internal_note ?? false;
+  const formData = new FormData();
+  if (isNote) {
+    formData.append('note', input.message);
+  } else {
+    formData.append('message', input.message);
+    if (input.attachment) formData.append('attachment', input.attachment);
+  }
+  return fetchApi<SupportTicketReply>(`/admin/tickets/${ticketId}/`, {
     method: 'POST',
-    body: JSON.stringify({ ...input, is_internal_note: input.is_internal_note ?? false }),
+    params: { action: isNote ? 'note' : 'reply' },
+    body: formData,
   });
+};
 
 export const replyToTicket = replyToAdminTicket;
 

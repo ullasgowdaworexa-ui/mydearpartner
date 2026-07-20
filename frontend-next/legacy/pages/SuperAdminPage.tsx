@@ -8,6 +8,7 @@ import AdminProfileApprovalsPage from './admin/AdminProfileApprovalsPage';
 import AdminPhotoApprovalsPage from './admin/AdminPhotoApprovalsPage';
 import AdminDocumentVerificationPage from './admin/AdminDocumentVerificationPage';
 import AdminMembershipsPage from './admin/AdminMembershipsPage';
+import AdminMembershipPlansPage from './admin/AdminMembershipPlansPage';
 import AdminPaymentsPage from './admin/AdminPaymentsPage';
 import AdminRefundsPage from './admin/AdminRefundsPage';
 import AdminTicketsPage from './admin/AdminTicketsPage';
@@ -55,7 +56,7 @@ export default function SuperAdminPage() {
         <Route path="memberships/subscriptions" element={<AdminMembershipsPage />} />
         <Route path="memberships/payments" element={<AdminPaymentsPage />} />
         <Route path="memberships/refunds" element={<AdminRefundsPage />} />
-        <Route path="membership-plans" element={<AdminMembershipsPage defaultTab="plans" />} />
+        <Route path="membership-plans" element={<AdminMembershipPlansPage />} />
 
         {/* Support */}
         <Route path="support-tickets" element={<AdminTicketsPage />} />

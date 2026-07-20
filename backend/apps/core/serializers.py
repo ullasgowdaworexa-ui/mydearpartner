@@ -393,6 +393,10 @@ class SupportTicketReplySerializer(serializers.ModelSerializer):
     def get_author(self, obj):
         if obj.member_sender_id:
             return member_summary(obj.member_sender)
+        if obj.admin_sender_id:
+            return administrative_summary(obj.admin_sender)
+        if obj.super_admin_sender_id:
+            return administrative_summary(obj.super_admin_sender)
         return administrative_summary(obj.support_sender)
 
     def get_sender(self, obj):

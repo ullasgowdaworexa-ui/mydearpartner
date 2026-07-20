@@ -58,12 +58,16 @@ function AttachmentPreview({ url, filename, mimeType }: { url?: string | null; f
 }
 // ────────────────────────────────────────────────────────────────────────────
 
+// Values MUST match the seeded SupportCategory.code values in backend
+// apps/core/baseline.py (GENERAL, PAYMENTS, PROFILE_VERIFICATION, TECHNICAL,
+// REFUNDS, SAFETY). Sending any other value returns "Choose a valid support category."
 const CATEGORY_OPTIONS: { value: string; label: string; icon: string; blurb: string; subjectHint: string }[] = [
-  { value: 'PAYMENT', label: 'Payments & Plans', icon: '💳', blurb: 'Refunds, plan unlocks, billing queries.', subjectHint: 'Issue with my plan / payment' },
-  { value: 'ACCOUNT', label: 'Account & Verification', icon: '🪪', blurb: 'Profile, login, KYC document checks.', subjectHint: 'Need help with verification' },
-  { value: 'REPORT_PROFILE', label: 'Report a Profile', icon: '🚩', blurb: 'Flag fake, duplicate or abusive members.', subjectHint: 'Report a suspicious profile' },
+  { value: 'PAYMENTS', label: 'Payments & Plans', icon: '💳', blurb: 'Plan unlocks, billing and subscription queries.', subjectHint: 'Issue with my plan / payment' },
+  { value: 'REFUNDS', label: 'Refunds', icon: '💰', blurb: 'Request a refund for a completed payment.', subjectHint: 'Refund request for my order' },
+  { value: 'PROFILE_VERIFICATION', label: 'Account & Verification', icon: '🪪', blurb: 'Profile, login and KYC document checks.', subjectHint: 'Need help with verification' },
+  { value: 'SAFETY', label: 'Report a Profile', icon: '🚩', blurb: 'Flag fake, duplicate or abusive members.', subjectHint: 'Report a suspicious profile' },
   { value: 'TECHNICAL', label: 'Technical Issue', icon: '🛠️', blurb: 'Site or app bugs, upload failures.', subjectHint: 'Something is not working' },
-  { value: 'OTHER', label: 'General Enquiry', icon: '💬', blurb: 'Anything else we can help with.', subjectHint: 'General question' },
+  { value: 'GENERAL', label: 'General Enquiry', icon: '💬', blurb: 'Anything else we can help with.', subjectHint: 'General question' },
 ];
 
 const PRIORITY_OPTIONS = [
@@ -101,6 +105,9 @@ export default function SupportPage() {
   const [newCategory, setNewCategory] = useState<string>('OTHER');
   const [newPriority, setNewPriority] = useState<string>('NORMAL');
   const [newAttachment, setNewAttachment] = useState<File | undefined>(undefined);
+  const [newAttachmentPreview, setNewAttachmentPreview] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
   // Reply & Feedback states
@@ -178,14 +185,48 @@ export default function SupportPage() {
     }
   };
 
-  const openCreateModal = (presetCategory = 'OTHER') => {
+  const openCreateModal = (presetCategory = 'GENERAL') => {
     setNewCategory(presetCategory);
     setNewSubject(categoryMeta(presetCategory).subjectHint);
     setNewPriority('NORMAL');
     setNewDescription('');
     setNewAttachment(undefined);
+    if (newAttachmentPreview) URL.revokeObjectURL(newAttachmentPreview);
+    setNewAttachmentPreview(null);
+    setAttachmentError(null);
+    setCreateError(null);
     setValidationErrors({});
     setIsModalOpen(true);
+  };
+
+  const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+  const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAttachmentError(null);
+    if (newAttachmentPreview) {
+      URL.revokeObjectURL(newAttachmentPreview);
+      setNewAttachmentPreview(null);
+    }
+    const file = e.target.files?.[0];
+    if (!file) {
+      setNewAttachment(undefined);
+      return;
+    }
+    if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) {
+      setAttachmentError('Only JPG, PNG, WEBP or PDF files are supported.');
+      setNewAttachment(undefined);
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setAttachmentError('File is too large. Maximum size is 5MB.');
+      setNewAttachment(undefined);
+      return;
+    }
+    setNewAttachment(file);
+    if (file.type.startsWith('image/')) {
+      setNewAttachmentPreview(URL.createObjectURL(file));
+    }
   };
 
   const validateTicketForm = (): boolean => {
@@ -209,6 +250,7 @@ export default function SupportPage() {
     if (!validateTicketForm()) return;
 
     setSubmitLoading(true);
+    setCreateError(null);
     setErrorMsg(null);
     try {
       const created = await supportService.createTicket(
@@ -222,14 +264,18 @@ export default function SupportPage() {
       setIsModalOpen(false);
       setNewSubject('');
       setNewDescription('');
-      setNewCategory('OTHER');
+      setNewCategory('GENERAL');
       setNewPriority('NORMAL');
       setNewAttachment(undefined);
+      if (newAttachmentPreview) {
+        URL.revokeObjectURL(newAttachmentPreview);
+        setNewAttachmentPreview(null);
+      }
       setValidationErrors({});
       handleSelectTicket(created);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Failed to create support ticket.');
+      setCreateError(err?.message || 'Failed to create support ticket. Please try again.');
     } finally {
       setSubmitLoading(false);
     }
@@ -730,7 +776,7 @@ export default function SupportPage() {
               <button
                 type="button"
                 className="btn-primary py-3 px-8 text-base shadow-lg mt-8"
-                onClick={() => openCreateModal('OTHER')}
+                onClick={() => openCreateModal('GENERAL')}
               >
                 <Plus className="w-5 h-5 mr-1 inline" /> Raise a Ticket
               </button>
@@ -749,13 +795,18 @@ export default function SupportPage() {
               <button
                 type="button"
                 className="close-btn"
-                onClick={() => { setIsModalOpen(false); setValidationErrors({}); }}
+                onClick={() => { setIsModalOpen(false); setValidationErrors({}); setCreateError(null); if (newAttachmentPreview) { URL.revokeObjectURL(newAttachmentPreview); setNewAttachmentPreview(null); } }}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateTicket} className="space-y-4">
+              {createError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {createError}
+                </div>
+              )}
               <div className="form-group">
                 <label>What is it about?</label>
                 <div className="support-category-chips">
@@ -767,7 +818,6 @@ export default function SupportPage() {
                       onClick={() => {
                         setNewCategory(cat.value);
                         setNewSubject(cat.subjectHint);
-                        if (!['PAYMENT', 'ACCOUNT', 'REPORT_PROFILE'].includes(cat.value)) setNewPriority('NORMAL');
                       }}
                     >
                       <span aria-hidden>{cat.icon}</span> {cat.label}
@@ -830,22 +880,35 @@ export default function SupportPage() {
                 <div className="relative flex items-center justify-center border-2 border-dashed border-gray-200 hover:border-[var(--theme-primary-500)] rounded-xl py-6 transition-colors">
                   <input
                     type="file"
-                    accept=".jpeg,.jpg,.png,.webp,.pdf"
-                    onChange={(e) => setNewAttachment(e.target.files?.[0])}
+                    accept=".jpeg,.jpg,.png,.webp,.pdf,image/*,application/pdf"
+                    onChange={handleAttachmentChange}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
                   <div className="text-center text-xs text-gray-500">
                     <Upload className="w-6 h-6 mx-auto mb-1 text-gray-400" />
-                    <span>{newAttachment ? `Selected: ${newAttachment.name}` : 'Click to upload a screenshot'}</span>
+                    <span>{newAttachment ? `Selected: ${newAttachment.name}` : 'Click to upload a screenshot or document'}</span>
                   </div>
                 </div>
+                {newAttachmentPreview && (
+                  <div className="mt-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={newAttachmentPreview}
+                      alt="Attachment preview"
+                      className="max-h-44 w-auto rounded-lg border border-gray-200 object-contain"
+                    />
+                  </div>
+                )}
+                {attachmentError && (
+                  <p className="text-red-500 text-xs font-bold mt-1">✕ {attachmentError}</p>
+                )}
               </div>
 
               <div className="form-actions border-t border-gray-100 pt-4 flex gap-3">
                 <button
                   type="button"
                   className="btn-secondary py-2.5 px-6 text-sm"
-                  onClick={() => { setIsModalOpen(false); setValidationErrors({}); }}
+                  onClick={() => { setIsModalOpen(false); setValidationErrors({}); setCreateError(null); if (newAttachmentPreview) { URL.revokeObjectURL(newAttachmentPreview); setNewAttachmentPreview(null); } }}
                 >
                   Cancel
                 </button>

@@ -438,6 +438,7 @@
 .admin-ticket-list > button > div { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
 .admin-ticket-list time, .admin-enquiry-list time { color: #9a9096; font-size: 8px; }
 .admin-ticket-detail, .admin-enquiry-detail { min-width: 0; padding: 24px; background: #fff; }
+.admin-ticket-people { display: grid; grid-template-columns: 1fr 1fr; }
 .admin-ticket-detail > header, .admin-enquiry-detail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding-bottom: 18px; border-bottom: 1px solid var(--admin-line); }
 .admin-ticket-detail h2, .admin-enquiry-detail h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
 .admin-ticket-detail header span:not(.admin-status), .admin-enquiry-detail header span:not(.admin-status) { display: block; margin-top: 6px; color: var(--admin-muted); font-size: 9px; }
@@ -627,7 +628,7 @@
   .admin-action-menu-wrap { position: static; }
   .admin-action-menu { top: auto !important; right: 13px; bottom: 10px !important; }
   .admin-ticket-detail, .admin-enquiry-detail { padding: 18px; }
-  .admin-ticket-people { align-items: stretch; flex-direction: column; }
+  .admin-ticket-people { display: grid; grid-template-columns: 1fr; }
   .admin-ticket-people > svg { transform: rotate(90deg); align-self: center; }
   .admin-form-grid { grid-template-columns: 1fr; }
   .admin-modal-backdrop { align-items: end; padding: 0; }

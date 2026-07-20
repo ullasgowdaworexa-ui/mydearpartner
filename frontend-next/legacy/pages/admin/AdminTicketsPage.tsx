@@ -8,7 +8,7 @@ import {
   PhoneCall, FileText, ShieldCheck, ShieldAlert, Crown, Star
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { fetchApi, getAccessToken, extractErrorMessage } from '../../services/apiClient';
+import { fetchApi, getAccessToken } from '../../services/apiClient';
 import {
   getAdminAssignees, getAdminTickets, replyToAdminTicket, updateAdminTicket,
   getAdminSupportDashboard, createPhoneTicket,
@@ -144,6 +144,20 @@ export default function AdminTicketsPage() {
   };
 
   const loadInFlightRef = useRef(false);
+  const selectedRef = useRef<SupportTicket | null>(null);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+
+  // Load the full ticket detail (with the complete message thread + internal
+  // notes + member contact) so the admin can see and reply to everything.
+  const loadTicketDetail = useCallback(async (ticketId: string) => {
+    try {
+      const data = await fetchApi<SupportTicket>(`/admin/tickets/${ticketId}`);
+      setSelected((current) => (current && current.id === ticketId ? data : current));
+    } catch {
+      /* keep the list-row selection if the detail call fails */
+    }
+  }, []);
+
   const load = useCallback(async () => {
     if (loadInFlightRef.current) return;
     loadInFlightRef.current = true;
@@ -167,19 +181,22 @@ export default function AdminTicketsPage() {
 
       setTickets(result.results);
       setCount(result.count);
-      
+
       // Auto-select first ticket if none selected
-      setSelected((current) => result.results.find((item) => item.id === routeTicketId)
-        || result.results.find((item) => item.id === current?.id)
+      const chosen =
+        result.results.find((item) => item.id === routeTicketId)
+        || result.results.find((item) => item.id === (selectedRef.current?.id))
         || result.results[0]
-        || null);
+        || null;
+      setSelected(chosen);
+      if (chosen) loadTicketDetail(chosen.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Support tickets could not be loaded.');
     } finally {
       setLoading(false);
       loadInFlightRef.current = false;
     }
-  }, [page, priority, category, source, assignedStaff, overdueOnly, unassignedOnly, startDate, endDate, search, status, routeTicketId]);
+  }, [page, priority, category, source, assignedStaff, overdueOnly, unassignedOnly, startDate, endDate, search, status, routeTicketId, loadTicketDetail]);
 
   useEffect(() => {
     load();
@@ -237,11 +254,11 @@ export default function AdminTicketsPage() {
   const updateStatus = async (ticket: SupportTicket, nextStatus: TicketStatus) => {
     setBusy(true);
     try {
-      const updated = await updateAdminTicket(ticket.id, { status: nextStatus } as any);
-      setTickets((rows) => rows.map((item) => item.id === updated.id ? updated : item));
-      setSelected(updated);
+      await updateAdminTicket(ticket.id, { status: nextStatus } as any);
+      setTickets((rows) => rows.map((item) => item.id === ticket.id ? { ...item, status: nextStatus } : item));
       setToast({ message: `${ticket.ticket_number} moved to ${String(nextStatus).replaceAll('_', ' ').toLowerCase()}.`, tone: 'success' });
       loadDashboard();
+      await loadTicketDetail(ticket.id);
     } catch (err) {
       setToast({ message: err instanceof Error ? err.message : 'Ticket status could not be updated.', tone: 'error' });
     } finally {
@@ -252,11 +269,10 @@ export default function AdminTicketsPage() {
   const updateAssignment = async (ticket: SupportTicket, assignedTo: string | null) => {
     setBusy(true);
     try {
-      const updated = await updateAdminTicket(ticket.id, { assigned_to: assignedTo } as any);
-      setTickets((rows) => rows.map((item) => item.id === updated.id ? updated : item));
-      setSelected(updated);
+      await updateAdminTicket(ticket.id, { assigned_to: assignedTo } as any);
       setToast({ message: assignedTo ? `${ticket.ticket_number} was assigned.` : `${ticket.ticket_number} returned to the shared queue.`, tone: 'success' });
       loadDashboard();
+      await loadTicketDetail(ticket.id);
     } catch (err) {
       setToast({ message: err instanceof Error ? err.message : 'Ticket assignment could not be updated.', tone: 'error' });
     } finally {
@@ -267,11 +283,11 @@ export default function AdminTicketsPage() {
   const updatePriority = async (ticket: SupportTicket, nextPriority: TicketPriority) => {
     setBusy(true);
     try {
-      const updated = await updateAdminTicket(ticket.id, { priority: nextPriority } as any);
-      setTickets((rows) => rows.map((item) => item.id === updated.id ? updated : item));
-      setSelected(updated);
+      await updateAdminTicket(ticket.id, { priority: nextPriority } as any);
+      setTickets((rows) => rows.map((item) => item.id === ticket.id ? { ...item, priority: nextPriority } : item));
       setToast({ message: `Priority of ${ticket.ticket_number} changed to ${nextPriority}.`, tone: 'success' });
       loadDashboard();
+      await loadTicketDetail(ticket.id);
     } catch (err) {
       setToast({ message: err instanceof Error ? err.message : 'Ticket priority could not be updated.', tone: 'error' });
     } finally {
@@ -282,10 +298,10 @@ export default function AdminTicketsPage() {
   const updateCategory = async (ticket: SupportTicket, nextCategory: string) => {
     setBusy(true);
     try {
-      const updated = await updateAdminTicket(ticket.id, { category: nextCategory } as any);
-      setTickets((rows) => rows.map((item) => item.id === updated.id ? updated : item));
-      setSelected(updated);
+      await updateAdminTicket(ticket.id, { category: nextCategory } as any);
+      setTickets((rows) => rows.map((item) => item.id === ticket.id ? { ...item, category: nextCategory } : item));
       setToast({ message: `Category of ${ticket.ticket_number} changed to ${nextCategory}.`, tone: 'success' });
+      await loadTicketDetail(ticket.id);
     } catch (err) {
       setToast({ message: err instanceof Error ? err.message : 'Ticket category could not be updated.', tone: 'error' });
     } finally {
@@ -298,81 +314,18 @@ export default function AdminTicketsPage() {
     if (!selected || !reply.trim()) return;
     setBusy(true);
     try {
-      // If we have an attachment, we will use FormData. Since we hit the same backend, let's parse reply attachment
-      let createdReply;
-      if (replyAttachment) {
-        const formData = new FormData();
-        formData.append('message', reply.trim());
-        formData.append('is_internal_note', String(internalNote));
-        formData.append('attachment', replyAttachment);
+      await replyToAdminTicket(selected.id, {
+        message: reply.trim(),
+        is_internal_note: internalNote,
+        attachment: replyAttachment,
+      });
 
-        // Fetch api manually with boundary
-        const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL as string) || 'http://localhost:8000/api/v1';
-        const headers = new Headers();
-        const accessToken = getAccessToken();
-        if (accessToken) {
-          headers.set('Authorization', `Bearer ${accessToken}`);
-        }
-        const endpoint = internalNote 
-          ? `/admin/support/tickets/${selected.id}/internal-notes/`
-          : `/admin/support/tickets/${selected.id}/replies/`;
-        
-        const res = await fetch(`${baseUrl}${endpoint}`, {
-          method: 'POST',
-          headers,
-          body: formData
-        });
-
-        let apiRes;
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          try {
-            apiRes = await res.json();
-          } catch {
-            apiRes = await res.text().catch(() => '');
-          }
-        } else {
-          apiRes = await res.text().catch(() => '');
-        }
-
-        if (!res.ok) {
-          throw new Error(extractErrorMessage(apiRes, res.status));
-        }
-
-        const unwrappedData = apiRes && typeof apiRes === 'object' && 'success' in apiRes ? apiRes.data : apiRes;
-        createdReply = unwrappedData;
-      } else {
-        // Normal JSON reply
-        const endpoint = internalNote
-          ? `/admin/support/tickets/${selected.id}/internal-notes/`
-          : `/admin/support/tickets/${selected.id}/replies/`;
-        
-        const res = await fetchApi<any>(endpoint, {
-          method: 'POST',
-          body: JSON.stringify({
-            message: reply.trim(),
-            is_internal_note: internalNote
-          })
-        });
-        createdReply = res;
-      }
-
-      const updatedReplies = [...(selected.replies || []), createdReply];
-      const updated = {
-        ...selected,
-        reply_count: selected.reply_count + 1,
-        replies: updatedReplies,
-        updated_at: createdReply.created_at,
-        status: !internalNote ? 'WAITING_FOR_USER' : selected.status
-      };
-      
-      setTickets((rows) => rows.map((item) => item.id === selected.id ? updated : item));
-      setSelected(updated);
       setReply('');
       setReplyAttachment(undefined);
       setInternalNote(false);
-      setToast({ message: internalNote ? 'Internal note added.' : 'Reply sent to the ticket.', tone: 'success' });
+      setToast({ message: internalNote ? 'Internal note added.' : 'Reply sent to the member.', tone: 'success' });
       loadDashboard();
+      await loadTicketDetail(selected.id);
     } catch (err) {
       setToast({ message: err instanceof Error ? err.message : 'Your reply could not be sent.', tone: 'error' });
     } finally {
@@ -570,6 +523,7 @@ export default function AdminTicketsPage() {
               {tickets.map((ticket) => (
                 <button type="button" key={ticket.id} className={selected?.id === ticket.id ? 'active' : ''} onClick={() => {
                   setSelected(ticket);
+                  loadTicketDetail(ticket.id);
                   const root = location.pathname.startsWith('/super-admin') ? '/super-admin/tickets' : '/admin/tickets';
                   navigate(`${root}/${ticket.id}`, { preventScrollReset: true });
                 }}>
@@ -623,7 +577,7 @@ export default function AdminTicketsPage() {
                 )}
 
                 {/* Rich member + assignee card */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div className="admin-ticket-people" style={{ gap: '12px', marginBottom: '16px' }}>
                   {/* Left column: identity */}
                   <div style={{ padding: '14px', background: 'linear-gradient(135deg,#fff9f8,#fff5f3)', borderRadius: '12px', border: '1px solid rgba(142,61,88,0.1)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -673,24 +627,40 @@ export default function AdminTicketsPage() {
                     : <AttachmentPreview url={selected.attachment} />}
                 </div>
 
-                {/* Conversation Log replies */}
-                {selected.replies?.length ? (
-                  <div className="admin-ticket-replies">
-                    {selected.replies.map((item) => (
-                      <div key={item.id} className={item.is_internal_note ? 'internal' : ''}>
-                        <span>{item.is_internal_note ? <MessageSquarePlus /> : <UserRound />}</span>
-                        <p>
-                          <strong>{item.author?.full_name || (item.is_internal_note ? 'Internal Note' : 'Member')}</strong>
-                          <small>{formatAdminDate(item.created_at, true)}</small>
-                          {item.message}
-                          {(item as any).attachments?.length
-                            ? (item as any).attachments.map((att: any) => <AttachmentPreview key={att.id} url={att.download_url} filename={att.original_filename} mimeType={att.mime_type} />)
-                            : <AttachmentPreview url={item.attachment} />}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                {/* Conversation Log — public replies + internal notes, oldest first */}
+                {(() => {
+                  const replies = (selected.replies || []).map((r) => ({ ...r, is_internal_note: false }));
+                  const notes = ((selected as any).internal_notes || []).map((n: any) => ({
+                    id: n.id,
+                    message: n.note,
+                    author: n.author,
+                    created_at: n.created_at,
+                    is_internal_note: true,
+                    attachments: [],
+                    attachment: null,
+                  }));
+                  const thread = [...replies, ...notes].sort(
+                    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+                  );
+                  if (!thread.length) return null;
+                  return (
+                    <div className="admin-ticket-replies">
+                      {thread.map((item) => (
+                        <div key={item.id} className={item.is_internal_note ? 'internal' : ''}>
+                          <span>{item.is_internal_note ? <MessageSquarePlus /> : <UserRound />}</span>
+                          <p>
+                            <strong>{item.author?.full_name || (item.is_internal_note ? 'Internal Note' : 'Member')}</strong>
+                            <small>{formatAdminDate(item.created_at, true)}</small>
+                            {item.message}
+                            {(item as any).attachments?.length
+                              ? (item as any).attachments.map((att: any) => <AttachmentPreview key={att.id} url={att.download_url} filename={att.original_filename} mimeType={att.mime_type} />)
+                              : <AttachmentPreview url={item.attachment} />}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Ticket actions */}
                 <div className="admin-ticket-controls" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', padding: '16px', background: '#faf8f5', borderRadius: '12px', marginTop: '20px' }}>
@@ -845,8 +815,7 @@ export default function AdminTicketsPage() {
           onSuccess={() => {
             load();
             if (selected) {
-              // Reload details
-              fetchApi<SupportTicket>(`/admin/support/tickets/${selected.id}/`).then(setSelected).catch(() => {});
+              loadTicketDetail(selected.id);
             }
           }}
         />
