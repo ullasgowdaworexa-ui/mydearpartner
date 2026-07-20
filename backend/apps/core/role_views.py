@@ -2435,11 +2435,14 @@ class AdminPaymentListView(ScopedAPIView):
                     'internal_order_number': obj.internal_order_number,
                     'razorpay_order_id': obj.razorpay_order_id,
                     'receipt': obj.receipt,
+                    'date': obj.created_at.isoformat(),
                     'created_at': obj.created_at.isoformat(),
-                    'updated_at': obj.updated_at.isoformat()
+                    'updated_at': obj.updated_at.isoformat(),
+                    'gateway': 'Razorpay' if obj.razorpay_order_id else 'Manual',
+                    'reference': obj.razorpay_order_id or obj.internal_order_number,
                 }
                 if not is_limited:
-                    rep['notes'] = obj.notes
+                    rep['notes'] = getattr(obj, 'notes', None)
                 return rep
 
         return paginated_response(request, queryset, PaymentOrderWireSerializer)
@@ -2523,7 +2526,7 @@ class AdminPaymentDetailView(ScopedAPIView):
 
 class AdminPaymentRefundView(ScopedAPIView):
     allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
-    required_permission = 'payments.refund.issue'
+    required_permission = 'payments.refund'
 
     def post(self, request, id):
         from apps.core.services.razorpay_memberships import RazorpayMembershipService, RazorpayGatewayError
@@ -2531,9 +2534,19 @@ class AdminPaymentRefundView(ScopedAPIView):
         import uuid
 
         # 1. Fetch transaction and validate status (No DB lock open during network call)
-        tx = get_object_or_404(PaymentTransaction, pk=id)
-        order = tx.payment_order
-        
+        # The admin list exposes PaymentOrder ids, so resolve the captured transaction
+        # from the order when a transaction id is not supplied directly.
+        tx = PaymentTransaction.objects.filter(pk=id).first()
+        if tx is None:
+            order = get_object_or_404(PaymentOrder, pk=id)
+            tx = PaymentTransaction.objects.filter(
+                payment_order=order, status='captured'
+            ).order_by('-created_at').first()
+            if tx is None:
+                return bad_request('This payment has no captured transaction to refund.')
+        else:
+            order = tx.payment_order
+
         if tx.status != 'captured':
             return bad_request('Only captured transactions can be refunded.')
             
@@ -2648,7 +2661,7 @@ class AdminPaymentRefundView(ScopedAPIView):
 
 class AdminRefundRequestApproveRejectView(ScopedAPIView):
     allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
-    required_permission = 'payments.refund.approve'
+    required_permission = 'payments.refund'
 
     @transaction.atomic
     def post(self, request, id, action):

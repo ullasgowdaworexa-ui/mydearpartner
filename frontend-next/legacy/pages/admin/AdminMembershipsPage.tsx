@@ -997,269 +997,264 @@ export default function AdminMembershipsPage({ defaultTab }: { defaultTab?: 'rec
         title={editingPlan ? 'Edit Membership Plan' : 'Create Membership Plan'}
         onClose={() => setPlanFormOpen(false)}
       >
-        <div className="admin-form-body max-h-[75vh] overflow-y-auto pr-2">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <label className="admin-form-field">
-              <span>Plan Name *</span>
-              <input
-                type="text"
-                value={planForm.name}
-                onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Gold"
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Maximum photos</span>
-              <input
-                type="number"
-                min="1"
-                value={planForm.max_photos}
-                onChange={(e) => setPlanForm((f) => ({ ...f, max_photos: e.target.value }))}
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Slug *</span>
-              <input
-                type="text"
-                value={planForm.slug}
-                onChange={(e) => setPlanForm((f) => ({ ...f, slug: e.target.value.toLowerCase() }))}
-                placeholder="e.g. gold"
-                disabled={Boolean(editingPlan) || !canEdit}
-              />
-            </label>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <label className="admin-form-field">
-              <span>Price *</span>
-              <input
-                type="number"
-                value={planForm.price}
-                onChange={(e) => setPlanForm((f) => ({ ...f, price: e.target.value }))}
-                placeholder="e.g. 2999"
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Currency</span>
-              <input
-                type="text"
-                value={planForm.currency}
-                onChange={(e) => setPlanForm((f) => ({ ...f, currency: e.target.value }))}
-                placeholder="INR"
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Duration label *</span>
-              <input
-                type="text"
-                value={planForm.duration}
-                onChange={(e) => setPlanForm((f) => ({ ...f, duration: e.target.value }))}
-                placeholder="e.g. 3 Months"
-                disabled={!canEdit}
-              />
-            </label>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <label className="admin-form-field">
-              <span>Duration in Days *</span>
-              <input
-                type="number"
-                value={planForm.duration_days}
-                onChange={(e) => setPlanForm((f) => ({ ...f, duration_days: e.target.value }))}
-                placeholder="90"
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Display Order</span>
-              <input
-                type="number"
-                value={planForm.display_order}
-                onChange={(e) => setPlanForm((f) => ({ ...f, display_order: e.target.value }))}
-                placeholder="1"
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Ribbon Badge</span>
-              <input
-                type="text"
-                value={planForm.badge}
-                onChange={(e) => setPlanForm((f) => ({ ...f, badge: e.target.value }))}
-                placeholder="e.g. âœ¦ Most Popular"
-                disabled={!canEdit}
-              />
-            </label>
-          </div>
-
-          <label className="admin-form-field" style={{ marginTop: '1rem' }}>
-            <span>Description</span>
-            <input
-              type="text"
-              value={planForm.description}
-              onChange={(e) => setPlanForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="e.g. Premium match features"
-              disabled={!canEdit}
-            />
-          </label>
-
-          <h4 className="font-bold text-sm text-gray-900 border-b pb-1 mt-4">Entitlements & Daily Limits</h4>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <label className="admin-form-field">
-              <span>Daily Profile Views</span>
-              <input
-                type="number"
-                value={planForm.profile_view_limit_daily}
-                onChange={(e) => setPlanForm((f) => ({ ...f, profile_view_limit_daily: e.target.value }))}
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Daily Interests</span>
-              <input
-                type="number"
-                value={planForm.interest_limit_daily}
-                onChange={(e) => setPlanForm((f) => ({ ...f, interest_limit_daily: e.target.value }))}
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="admin-form-field">
-              <span>Daily Messages</span>
-              <input
-                type="number"
-                value={planForm.message_limit_daily}
-                onChange={(e) => setPlanForm((f) => ({ ...f, message_limit_daily: e.target.value }))}
-                disabled={!canEdit}
-              />
-            </label>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <label className="admin-form-field">
-              <span>Contact Access Mode</span>
-              <select
-                value={planForm.contact_access_mode}
-                onChange={(e) => setPlanForm((f) => ({ ...f, contact_access_mode: e.target.value as any }))}
-                disabled={!canEdit}
-              >
-                <option value="NONE">None</option>
-                <option value="MUTUAL_ONLY">Mutual Accepted Only</option>
-                <option value="FULL">Full Access</option>
-              </select>
-            </label>
-            <label className="admin-form-field">
-              <span>Photo Access Mode</span>
-              <select
-                value={planForm.photo_access_mode}
-                onChange={(e) => setPlanForm((f) => ({ ...f, photo_access_mode: e.target.value as any }))}
-                disabled={!canEdit}
-              >
-                <option value="PRIMARY_ONLY">Primary Photo Only</option>
-                <option value="ALL_APPROVED">All Approved Photos</option>
-              </select>
-            </label>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <label className="admin-form-field">
-              <span>Profile Boost Level</span>
-              <select
-                value={planForm.profile_boost_level}
-                onChange={(e) => setPlanForm((f) => ({ ...f, profile_boost_level: e.target.value }))}
-                disabled={!canEdit}
-              >
-                <option value="NONE">None</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="STRONG">Strong</option>
-              </select>
-            </label>
-            <label className="admin-form-field">
-              <span>Support Priority</span>
-              <select
-                value={planForm.support_priority}
-                onChange={(e) => setPlanForm((f) => ({ ...f, support_priority: e.target.value }))}
-                disabled={!canEdit}
-              >
-                <option value="STANDARD">Standard</option>
-                <option value="HIGH">High</option>
-              </select>
-            </label>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="can-message"
-                checked={planForm.can_message}
-                onChange={(e) => setPlanForm((f) => ({ ...f, can_message: e.target.checked }))}
-                disabled={!canEdit}
-              />
-              <label htmlFor="can-message" className="text-xs font-semibold cursor-pointer">Allow messaging</label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="can-use-advanced-search"
-                checked={planForm.can_use_advanced_search}
-                onChange={(e) => setPlanForm((f) => ({ ...f, can_use_advanced_search: e.target.checked }))}
-                disabled={!canEdit}
-              />
-              <label htmlFor="can-use-advanced-search" className="text-xs font-semibold cursor-pointer">Advanced search</label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="can-use-horoscope"
-                checked={planForm.can_use_horoscope}
-                onChange={(e) => setPlanForm((f) => ({ ...f, can_use_horoscope: e.target.checked }))}
-                disabled={!canEdit}
-              />
-              <label htmlFor="can-use-horoscope" className="text-xs font-semibold cursor-pointer">Horoscope compatibility</label>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            {[
-              ['can-view-profile-visitors', 'Show profile visitors', 'can_view_profile_visitors'],
-              ['can-view-private-photos', 'View private photos', 'can_view_private_photos'],
-              ['can-view-received-interests', 'View received interests', 'can_view_received_interests'],
-              ['can-get-priority-listing', 'Priority listing', 'can_get_priority_listing'],
-              ['can-use-profile-boost', 'Profile boost', 'can_use_profile_boost'],
-            ].map(([id, label, field]) => (
-              <div className="flex items-center gap-2" key={id}>
+        <div className="admin-plan-form">
+          <section className="admin-form-section">
+            <header className="admin-form-section__head">
+              <h3>Core Details</h3>
+              <p>Identity and pricing for this membership tier.</p>
+            </header>
+            <div className="admin-form-grid admin-form-grid--2">
+              <label className="admin-form-field">
+                <span>Plan Name <em>*</em></span>
                 <input
-                  type="checkbox"
-                  id={id}
-                  checked={Boolean(planForm[field as keyof typeof planForm])}
-                  onChange={(e) => setPlanForm((form) => ({ ...form, [field]: e.target.checked }))}
+                  type="text"
+                  value={planForm.name}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Gold"
                   disabled={!canEdit}
                 />
-                <label htmlFor={id} className="text-xs font-semibold cursor-pointer">{label}</label>
-              </div>
-            ))}
-          </div>
+              </label>
+              <label className="admin-form-field">
+                <span>Slug <em>*</em></span>
+                <input
+                  type="text"
+                  value={planForm.slug}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, slug: e.target.value.toLowerCase() }))}
+                  placeholder="e.g. gold"
+                  disabled={Boolean(editingPlan) || !canEdit}
+                />
+                <small>Unique URL key. Cannot be changed after creation.</small>
+              </label>
+              <label className="admin-form-field">
+                <span>Maximum photos</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={planForm.max_photos}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, max_photos: e.target.value }))}
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Ribbon Badge</span>
+                <input
+                  type="text"
+                  value={planForm.badge}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, badge: e.target.value }))}
+                  placeholder="e.g. ✦ Most Popular"
+                  disabled={!canEdit}
+                />
+              </label>
+            </div>
+          </section>
 
-          <h4 className="font-bold text-sm text-gray-900 border-b pb-1 mt-4">Visual Theme & Highlights</h4>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <label className="admin-form-field">
-              <span>Gradient CSS Theme Classes</span>
+          <section className="admin-form-section">
+            <header className="admin-form-section__head">
+              <h3>Pricing & Duration</h3>
+              <p>Billing amount and how long the plan stays active.</p>
+            </header>
+            <div className="admin-form-grid admin-form-grid--3">
+              <label className="admin-form-field">
+                <span>Price <em>*</em></span>
+                <input
+                  type="number"
+                  value={planForm.price}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, price: e.target.value }))}
+                  placeholder="e.g. 2999"
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Currency</span>
+                <input
+                  type="text"
+                  value={planForm.currency}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, currency: e.target.value }))}
+                  placeholder="INR"
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Display Order</span>
+                <input
+                  type="number"
+                  value={planForm.display_order}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, display_order: e.target.value }))}
+                  placeholder="1"
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Duration label <em>*</em></span>
+                <input
+                  type="text"
+                  value={planForm.duration}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, duration: e.target.value }))}
+                  placeholder="e.g. 3 Months"
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Duration in Days <em>*</em></span>
+                <input
+                  type="number"
+                  value={planForm.duration_days}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, duration_days: e.target.value }))}
+                  placeholder="90"
+                  disabled={!canEdit}
+                />
+                <small>Use 36500 for an unlimited plan.</small>
+              </label>
+            </div>
+            <label className="admin-form-field admin-form-field--full">
+              <span>Description</span>
               <input
                 type="text"
-                value={planForm.color}
-                onChange={(e) => setPlanForm((f) => ({ ...f, color: e.target.value }))}
-                placeholder="e.g. from-amber-500 to-yellow-600"
+                value={planForm.description}
+                onChange={(e) => setPlanForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="e.g. Premium match features"
                 disabled={!canEdit}
               />
             </label>
-            <div className="flex items-center gap-2 mt-4">
+          </section>
+
+          <section className="admin-form-section">
+            <header className="admin-form-section__head">
+              <h3>Entitlements & Daily Limits</h3>
+              <p>Defines what subscribers can do and how often, per day.</p>
+            </header>
+            <div className="admin-form-grid admin-form-grid--3">
+              <label className="admin-form-field">
+                <span>Daily Profile Views</span>
+                <input
+                  type="number"
+                  value={planForm.profile_view_limit_daily}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, profile_view_limit_daily: e.target.value }))}
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Daily Interests</span>
+                <input
+                  type="number"
+                  value={planForm.interest_limit_daily}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, interest_limit_daily: e.target.value }))}
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Daily Messages</span>
+                <input
+                  type="number"
+                  value={planForm.message_limit_daily}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, message_limit_daily: e.target.value }))}
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="admin-form-field">
+                <span>Contact Access Mode</span>
+                <select
+                  value={planForm.contact_access_mode}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, contact_access_mode: e.target.value as any }))}
+                  disabled={!canEdit}
+                >
+                  <option value="NONE">None</option>
+                  <option value="MUTUAL_ONLY">Mutual Accepted Only</option>
+                  <option value="FULL">Full Access</option>
+                </select>
+              </label>
+              <label className="admin-form-field">
+                <span>Photo Access Mode</span>
+                <select
+                  value={planForm.photo_access_mode}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, photo_access_mode: e.target.value as any }))}
+                  disabled={!canEdit}
+                >
+                  <option value="PRIMARY_ONLY">Primary Photo Only</option>
+                  <option value="ALL_APPROVED">All Approved Photos</option>
+                </select>
+              </label>
+              <label className="admin-form-field">
+                <span>Profile Boost Level</span>
+                <select
+                  value={planForm.profile_boost_level}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, profile_boost_level: e.target.value }))}
+                  disabled={!canEdit}
+                >
+                  <option value="NONE">None</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="STRONG">Strong</option>
+                </select>
+              </label>
+              <label className="admin-form-field">
+                <span>Support Priority</span>
+                <select
+                  value={planForm.support_priority}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, support_priority: e.target.value }))}
+                  disabled={!canEdit}
+                >
+                  <option value="STANDARD">Standard</option>
+                  <option value="HIGH">High</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="admin-form-toggles">
+              {[
+                ['can-message', 'Allow messaging', 'can_message'],
+                ['can-use-advanced-search', 'Advanced search', 'can_use_advanced_search'],
+                ['can-use-horoscope', 'Horoscope compatibility', 'can_use_horoscope'],
+                ['can-view-profile-visitors', 'Show profile visitors', 'can_view_profile_visitors'],
+                ['can-view-private-photos', 'View private photos', 'can_view_private_photos'],
+                ['can-view-received-interests', 'View received interests', 'can_view_received_interests'],
+                ['can-get-priority-listing', 'Priority listing', 'can_get_priority_listing'],
+                ['can-use-profile-boost', 'Profile boost', 'can_use_profile_boost'],
+              ].map(([id, label, field]) => (
+                <label className="admin-toggle" key={id}>
+                  <input
+                    type="checkbox"
+                    id={id}
+                    checked={Boolean(planForm[field as keyof typeof planForm])}
+                    onChange={(e) => setPlanForm((form) => ({ ...form, [field]: e.target.checked }))}
+                    disabled={!canEdit}
+                  />
+                  <span className="admin-toggle__track" aria-hidden="true"><span className="admin-toggle__thumb" /></span>
+                  <span className="admin-toggle__label">{label}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="admin-form-section">
+            <header className="admin-form-section__head">
+              <h3>Visual Theme & Highlights</h3>
+              <p>Controls how this plan appears on the public membership page.</p>
+            </header>
+            <div className="admin-form-grid admin-form-grid--2">
+              <label className="admin-form-field">
+                <span>Gradient CSS Theme Classes</span>
+                <input
+                  type="text"
+                  value={planForm.color}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, color: e.target.value }))}
+                  placeholder="e.g. from-amber-500 to-yellow-600"
+                  disabled={!canEdit}
+                />
+                <small>Tailwind gradient classes applied to the plan card.</small>
+              </label>
+              <label className="admin-form-field">
+                <span>Plan Features Summary</span>
+                <textarea
+                  value={planForm.featuresText}
+                  onChange={(e) => setPlanForm((f) => ({ ...f, featuresText: e.target.value }))}
+                  placeholder={'One feature per line&#10;Unlimited interests&#10;Advanced search filters&#10;Direct messaging'}
+                  rows={4}
+                  disabled={!canEdit}
+                />
+                <small>Each line becomes a bullet point on the plan card.</small>
+              </label>
+            </div>
+            <label className="admin-toggle admin-toggle--inline">
               <input
                 type="checkbox"
                 id="plan-highlighted"
@@ -1267,22 +1262,12 @@ export default function AdminMembershipsPage({ defaultTab }: { defaultTab?: 'rec
                 onChange={(e) => setPlanForm((f) => ({ ...f, highlighted: e.target.checked }))}
                 disabled={!canEdit}
               />
-              <label htmlFor="plan-highlighted" className="text-xs font-semibold cursor-pointer">Highlight plan card</label>
-            </div>
-          </div>
+              <span className="admin-toggle__track" aria-hidden="true"><span className="admin-toggle__thumb" /></span>
+              <span className="admin-toggle__label">Highlight plan card</span>
+            </label>
+          </section>
 
-          <label className="admin-form-field" style={{ marginTop: '1rem' }}>
-            <span>Plan Features Summary Bulletpoints (one per line)</span>
-            <textarea
-              value={planForm.featuresText}
-              onChange={(e) => setPlanForm((f) => ({ ...f, featuresText: e.target.value }))}
-              placeholder="e.g.&#10;Unlimited interests&#10;Advanced search filters&#10;Direct messaging"
-              rows={5}
-              disabled={!canEdit}
-            />
-          </label>
-
-          <div className="admin-form-actions" style={{ marginTop: '1.5rem' }}>
+          <div className="admin-form-actions">
             <button type="button" className="admin-btn admin-btn-secondary" onClick={() => setPlanFormOpen(false)}>
               Cancel
             </button>
