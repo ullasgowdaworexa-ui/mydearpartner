@@ -85,7 +85,12 @@ export default function AdminRefundsPage() {
   };
 
   const isSuperAdmin = currentUser?.admin_role === 'SUPER_ADMIN';
-  const canRefund = isSuperAdmin && hasAdminPermission('payments.refund');
+  const canRefund = isSuperAdmin || hasAdminPermission('payments.refund');
+
+  const isRefundable = (status?: string) => {
+    const s = (status || '').toUpperCase();
+    return ['SUCCESS', 'PAID', 'CAPTURED', 'PARTIALLY_REFUNDED'].includes(s);
+  };
 
   if (loading && !items.length) return <AdminLoading label="Loading payment recordsâ€¦" />;
   if (error && !items.length) return <AdminErrorState message={error} onRetry={load} />;
@@ -106,10 +111,11 @@ export default function AdminRefundsPage() {
             <label><Filter />
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="">All payments</option>
-                <option value="SUCCESS">Successful</option>
-                <option value="REFUNDED">Refunded</option>
-                <option value="PARTIALLY_REFUNDED">Partially refunded</option>
-                <option value="FAILED">Failed</option>
+                <option value="paid">Paid</option>
+                <option value="captured">Captured</option>
+                <option value="refunded">Refunded</option>
+                <option value="partially_refunded">Partially refunded</option>
+                <option value="failed">Failed</option>
               </select>
             </label>
           </div>
@@ -142,7 +148,7 @@ export default function AdminRefundsPage() {
                     <td data-label="Date"><span className="admin-muted-cell">{formatAdminDate(item.date)}</span></td>
                     {canRefund && (
                       <td className="admin-row-actions" data-label="Actions">
-                        {(item.status === 'SUCCESS' || item.status === 'PARTIALLY_REFUNDED') ? (
+                        {isRefundable(item.status) ? (
                           <button type="button" className="admin-btn admin-btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
                             onClick={() => openRefund(item)}>
                             <Download /> Refund

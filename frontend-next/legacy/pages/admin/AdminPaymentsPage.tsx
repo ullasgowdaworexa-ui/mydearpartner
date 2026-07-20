@@ -81,7 +81,7 @@ export default function AdminPaymentsPage() {
       <AdminPanel className="admin-table-panel">
         <div className="admin-table-toolbar">
           <div className="admin-search-field"><Search /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search member, plan or reference" /></div>
-          <div className="admin-filter-row"><label><Filter /><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="PAID">Paid</option><option value="PENDING">Pending</option><option value="FAILED">Failed</option><option value="EXPIRED">Expired</option></select></label></div>
+          <div className="admin-filter-row"><label><Filter /><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All statuses</option><option value="paid">Paid</option><option value="captured">Captured</option><option value="created">Created</option><option value="authorized">Authorized</option><option value="failed">Failed</option><option value="refunded">Refunded</option><option value="partially_refunded">Partially refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></label></div>
         </div>
         {error && <div className="admin-inline-error">{error}</div>}
         {transactions.length ? (
