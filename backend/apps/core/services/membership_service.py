@@ -14,7 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 
-from apps.core.models import MembershipPlan, MemberMembership, MembershipRequest
+from apps.core.models import MembershipPlan, MemberMembership, MembershipRequest, MembershipPurchase, PaymentTransaction
 from apps.accounts.models import Member
 
 
@@ -63,11 +63,17 @@ class MembershipService:
         # Lock the member record
         member = Member.objects.select_for_update().get(pk=member.pk)
         
-        # Deactivate any existing active membership
+        # Deactivate any existing active membership in MemberMembership
         MemberMembership.objects.filter(
             member=member,
             is_active=True
-        ).update(is_active=False)
+        ).update(is_active=False, status=MemberMembership.MembershipStatus.EXPIRED)
+
+        # Deactivate any existing active membership in MembershipPurchase
+        MembershipPurchase.objects.filter(
+            user=member,
+            status='active'
+        ).update(status='expired', expires_at=timezone.now())
         
         # Calculate start and end dates
         start_date = timezone.now()
@@ -84,6 +90,19 @@ class MembershipService:
             expires_at=end_date,
             is_active=True,
             status=MemberMembership.MembershipStatus.ACTIVE,
+        )
+
+        # Create MembershipPurchase record
+        MembershipPurchase.objects.create(
+            user=member,
+            membership_plan=plan,
+            price_snapshot=plan.price,
+            currency=plan.currency,
+            duration_days_snapshot=duration_days,
+            starts_at=start_date,
+            expires_at=end_date,
+            status='active',
+            activated_at=start_date,
         )
         
         # Update member's premium status
@@ -148,10 +167,16 @@ class MembershipService:
             is_active=True
         )
         
-        if not active_memberships.exists():
+        active_purchases = MembershipPurchase.objects.filter(
+            user=member,
+            status='active'
+        )
+        
+        if not active_memberships.exists() and not active_purchases.exists():
             return False, 'No active membership to deactivate.'
         
-        count = active_memberships.update(is_active=False)
+        count = active_memberships.update(is_active=False, status=MemberMembership.MembershipStatus.EXPIRED)
+        active_purchases.update(status='cancelled', cancelled_at=timezone.now(), cancellation_reason=reason)
         
         # Update member's premium status
         member.is_premium = False
@@ -177,14 +202,21 @@ class MembershipService:
     @staticmethod
     def get_active_membership(member):
         """
-        Get the member's active membership.
+        Get the member's active membership (primary MembershipPurchase, fallback MemberMembership).
         
         Args:
             member: Member instance
             
         Returns:
-            MemberMembership or None
+            MembershipPurchase/MemberMembership or None
         """
+        purchase = MembershipPurchase.objects.select_related('membership_plan').filter(
+            user=member,
+            status='active',
+        ).order_by('-starts_at', '-created_at').first()
+        if purchase:
+            return purchase
+            
         return MemberMembership.objects.select_related('plan').filter(
             member=member,
             is_active=True,
@@ -204,11 +236,20 @@ class MembershipService:
         """
         membership = MembershipService.get_active_membership(member)
         
-        if not membership or not membership.plan_id:
+        if not membership:
+            return None
+            
+        plan = None
+        if isinstance(membership, MembershipPurchase):
+            plan = membership.membership_plan
+        else:
+            plan = membership.plan
+        
+        if not plan:
             return None
         
         # Check if membership has expired
-        expiry = membership.expires_at or membership.end_date
+        expiry = membership.expires_at if hasattr(membership, 'expires_at') else (membership.end_date if hasattr(membership, 'end_date') else None)
         if expiry and expiry <= timezone.now():
             return None
         
@@ -216,7 +257,7 @@ class MembershipService:
         if member.account_status != Member.AccountStatus.ACTIVE or not member.is_active:
             return None
         
-        return membership.plan
+        return plan
     
     @staticmethod
     def check_membership_expiry(member):
@@ -229,24 +270,41 @@ class MembershipService:
         Returns:
             bool: True if expired and updated, False otherwise
         """
-        membership = MembershipService.get_active_membership(member)
+        # Expire MembershipPurchase records
+        purchase = MembershipPurchase.objects.filter(
+            user=member,
+            status='active'
+        ).order_by('-starts_at', '-created_at').first()
         
-        if not membership:
-            return False
-        
-        expiry = membership.expires_at or membership.end_date
-        if expiry and expiry <= timezone.now():
-            membership.is_active = False
-            membership.status = MemberMembership.MembershipStatus.EXPIRED
-            membership.end_date = expiry
-            membership.expires_at = expiry
-            membership.save(update_fields=['is_active', 'status', 'end_date', 'expires_at', 'updated_at'])
+        purchase_expired = False
+        if purchase and purchase.expires_at and purchase.expires_at <= timezone.now():
+            purchase.status = 'expired'
+            purchase.save(update_fields=['status', 'updated_at'])
+            purchase_expired = True
             
+        # Expire MemberMembership records
+        membership = MemberMembership.objects.filter(
+            member=member,
+            is_active=True,
+            status=MemberMembership.MembershipStatus.ACTIVE,
+        ).order_by('-started_at', '-created_at').first()
+        
+        mem_expired = False
+        if membership and (membership.expires_at or membership.end_date):
+            expiry = membership.expires_at or membership.end_date
+            if expiry <= timezone.now():
+                membership.is_active = False
+                membership.status = MemberMembership.MembershipStatus.EXPIRED
+                membership.end_date = expiry
+                membership.expires_at = expiry
+                membership.save(update_fields=['is_active', 'status', 'end_date', 'expires_at', 'updated_at'])
+                mem_expired = True
+
+        if purchase_expired or mem_expired:
             member.is_premium = False
             member.save(update_fields=['is_premium', 'updated_at'])
-            
             return True
-        
+            
         return False
     
     @staticmethod

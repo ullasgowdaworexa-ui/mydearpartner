@@ -18,7 +18,7 @@ from .models import (
     MemberMembership,
     MembershipPlan,
     Notification,
-    Payment,
+    PaymentTransaction,
     ProfileReport,
     ProfileVerificationAssignment,
     ProfileVerificationHistory,
@@ -477,14 +477,15 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    plan_name = serializers.CharField(source='plan.name', read_only=True)
+    plan_name = serializers.CharField(source='payment_order.membership_plan.name', read_only=True)
+    client_reference = serializers.CharField(source='payment_order.internal_order_number', read_only=True)
+    gateway_reference = serializers.CharField(source='razorpay_payment_id', read_only=True)
 
     class Meta:
-        model = Payment
+        model = PaymentTransaction
         fields = (
-            'id', 'plan_id', 'plan_name', 'client_reference', 'amount', 'currency',
-            'status', 'gateway', 'gateway_reference', 'refund_status',
-            'refunded_amount', 'created_at', 'updated_at',
+            'id', 'plan_name', 'client_reference', 'amount', 'currency',
+            'status', 'gateway_reference', 'created_at', 'updated_at',
         )
 
 

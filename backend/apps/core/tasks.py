@@ -73,3 +73,22 @@ def process_sla_escalations():
                         priority='URGENT',
                     )
     return overdue_count
+
+
+@shared_task(name='apps.core.tasks.process_webhook_event_task', bind=True, max_retries=3, default_retry_delay=10)
+def process_webhook_event_task(self, event_id):
+    """Processes Razorpay Webhook Event with Celery retry mechanism."""
+    from apps.core.models import RazorpayWebhookEvent
+    from apps.core.services.razorpay_memberships import RazorpayMembershipService
+    try:
+        evt = RazorpayWebhookEvent.objects.get(pk=event_id)
+        RazorpayMembershipService.process_webhook_event(evt)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+@shared_task(name='apps.core.tasks.reconcile_razorpay_payments_task')
+def reconcile_razorpay_payments_task(minutes=60):
+    """Reconciles payment records with Razorpay gateway periodically."""
+    from django.core.management import call_command
+    call_command('reconcile_razorpay_payments', minutes=minutes)

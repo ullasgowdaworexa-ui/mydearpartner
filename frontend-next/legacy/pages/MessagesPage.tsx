@@ -30,6 +30,7 @@ export default function MessagesPage() {
   const [conversationsList, setConversationsList] = useState<any[]>([]);
   const [activeConversation, setActiveConversation] = useState<any>(null);
   const [messagesList, setMessagesList] = useState<any[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [loadingChats, setLoadingChats] = useState(true);
@@ -82,14 +83,42 @@ export default function MessagesPage() {
 
   // E2EE cryptographic states
   const [activeSharedKey, setActiveSharedKey] = useState<CryptoKey | null>(null);
+  const [e2eeAvailable, setE2eeAvailable] = useState(false);
   const [derivingKey, setDerivingKey] = useState(false);
+
+  // Best-effort decrypt: try the current ECDH shared key first (live messages),
+  // then the deterministic PBKDF2 fallback key derived from the conversation id
+  // (used by older messages encrypted before ECDH keys were fully synced).
+  const tryDecrypt = useCallback(async (text: string): Promise<string> => {
+    if (typeof text !== 'string' || !text.startsWith('__E2EE__:')) return text;
+
+    const attempt = async (key: CryptoKey | null): Promise<string | null> => {
+      if (!key) return null;
+      try {
+        const out = await decryptMessage(text, key);
+        return out.startsWith('🔒') ? null : out;
+      } catch {
+        return null;
+      }
+    };
+
+    const e2ee = await attempt(activeSharedKey);
+    if (e2ee) return e2ee;
+
+    if (activeConversation?.id) {
+      const fallbackKey = await deriveFallbackKey(activeConversation.id).catch(() => null);
+      const recovered = await attempt(fallbackKey);
+      if (recovered) return recovered;
+    }
+
+    return '🔒 Encrypted message (sent earlier)';
+  }, [activeSharedKey, activeConversation?.id]);
 
   const handleSocketMessage = useCallback(async (data: any) => {
     if (!activeConversation || !user) return;
     let decryptedText = data.text;
     if (typeof data.text === 'string' && data.text.startsWith('__E2EE__:')) {
-      if (activeSharedKey) decryptedText = await decryptMessage(data.text, activeSharedKey);
-      else decryptedText = await decryptMessage(data.text, await deriveFallbackKey(activeConversation.id));
+      decryptedText = await tryDecrypt(data.text);
     }
     const formatted = {
       id: data.id,
@@ -158,6 +187,7 @@ export default function MessagesPage() {
 
     const prepareSharedKey = async () => {
       setDerivingKey(true);
+      setE2eeAvailable(false);
       const myPrivateKey = localStorage.getItem('mdp.e2e.private_key');
       const partnerPublicKey = activeConversation.profile?.chat_public_key;
 
@@ -165,22 +195,18 @@ export default function MessagesPage() {
         try {
           const derived = await deriveSharedKey(myPrivateKey, partnerPublicKey);
           setActiveSharedKey(derived);
+          setE2eeAvailable(true);
+          setDerivingKey(false);
           return;
         } catch (err) {
-          console.warn('ECDH shared key derivation failed, using fallback key:', err);
+          console.warn('ECDH shared key derivation failed:', err);
         }
       }
 
-      // Fallback PBKDF2 derived from conversation ID
-      try {
-        const fallback = await deriveFallbackKey(activeConversation.id);
-        setActiveSharedKey(fallback);
-      } catch (err) {
-        console.error('Fallback key agreement failed:', err);
-        setActiveSharedKey(null);
-      } finally {
-        setDerivingKey(false);
-      }
+      // No usable partner key: don't fall back to a divergent key (that would
+      // make messages undecryptable on the other side). Send plaintext instead.
+      setActiveSharedKey(null);
+      setDerivingKey(false);
     };
 
     void prepareSharedKey();
@@ -211,15 +237,7 @@ export default function MessagesPage() {
         .then(async (data) => {
           if (user) {
             const formatted = await Promise.all(data.map(async (msg: any) => {
-              let decryptedText = msg.text;
-              if (msg.text.startsWith('__E2EE__:')) {
-                if (activeSharedKey) {
-                  decryptedText = await decryptMessage(msg.text, activeSharedKey);
-                } else {
-                  const fallback = await deriveFallbackKey(activeConversation.id);
-                  decryptedText = await decryptMessage(msg.text, fallback);
-                }
-              }
+              const decryptedText = await tryDecrypt(msg.text);
               const senderId = msg.sender_id ?? msg.sender?.id;
               return {
                 id: msg.id,
@@ -256,11 +274,12 @@ export default function MessagesPage() {
       setError('');
 
       let encryptedText = textToSend;
-      if (activeSharedKey) {
+      if (e2eeAvailable && activeSharedKey) {
         try {
           encryptedText = await encryptMessage(textToSend, activeSharedKey);
         } catch (err) {
-          console.error('Encryption failed:', err);
+          console.error('Encryption failed, sending plaintext:', err);
+          encryptedText = textToSend;
         }
       }
 
@@ -305,6 +324,12 @@ export default function MessagesPage() {
       setNewMessage(originalText);
     }
   };
+
+  // Auto-scroll to the latest message whenever the conversation or its
+  // messages change, so the user always sees the newest content.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messagesList, activeConversation?.id]);
 
   if (isMember && messagingMembershipEnabled === null) {
     return <div className="min-h-screen pt-32 text-center text-sm text-slate-500">Checking messaging access…</div>;
@@ -512,6 +537,7 @@ export default function MessagesPage() {
                         </motion.div>
                       );
                     })}
+                    <div ref={messagesEndRef} />
                   </div>
 
                   {/* Message Input */}

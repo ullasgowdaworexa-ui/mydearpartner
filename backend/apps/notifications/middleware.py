@@ -27,16 +27,53 @@ def token_from_query_string(scope):
     return token
 
 
+SUBPROTOCOL_SCHEMES = ("access_token", "jwt", "bearer")
+
+
 def token_from_subprotocols(scope):
-    """Extract JWT from WebSocket subprotocol headers."""
-    for proto in (scope.get("subprotocols") or ()):
+    """
+    Extract a JWT from WebSocket subprotocol headers.
+
+    Supports two client conventions:
+
+    1. A single subprotocol that embeds the token after a separator, e.g.
+       ``access_token.<JWT>`` / ``jwt.<JWT>`` / ``bearer.<JWT>``.
+    2. A subprotocol pair ``['access_token', '<JWT>']`` where the first entry
+       names the scheme and the second carries the raw token (the convention
+       used by the Next.js client).
+
+    Returns a ``(token_or_None, subprotocol_or_None)`` tuple. The second
+    element is the negotiated scheme name (without a trailing dot) whenever a
+    recognised scheme is declared, even if no token was supplied, so callers
+    can tell whether a subprotocol auth scheme was attempted.
+    """
+    if isinstance(scope, dict):
+        subprotocols = list(scope.get("subprotocols") or ())
+    else:
+        subprotocols = list(scope or ())
+    scheme = None
+
+    for index, proto in enumerate(subprotocols):
         lowered = str(proto).lower()
         for prefix in ("access_token.", "jwt.", "bearer."):
             if lowered.startswith(prefix):
+                scheme = prefix.rstrip(".")
                 token = str(proto)[len(prefix):]
                 if token and len(token) <= MAX_TOKEN_LENGTH:
-                    return token
-    return None
+                    return token, scheme
+                return None, scheme
+        if lowered in SUBPROTOCOL_SCHEMES:
+            scheme = lowered
+            if index + 1 < len(subprotocols):
+                token = str(subprotocols[index + 1])
+                if token and len(token) <= MAX_TOKEN_LENGTH:
+                    return token, scheme
+                return None, scheme
+
+    if scheme is not None:
+        return None, scheme
+
+    return None, None
 
 
 @sync_to_async
@@ -63,14 +100,20 @@ class JwtAuthMiddleware(BaseMiddleware):
     """
 
     async def __call__(self, scope, receive, send):
-        raw_token = token_from_subprotocols(scope)
+        raw_token, scheme = token_from_subprotocols(scope)
 
         if raw_token is None:
-            raw_token = token_from_query_string(scope)
+            # Fall back to a query-string token only when the client did not
+            # declare a subprotocol auth scheme. If a scheme was declared but
+            # carried no token, we must not silently downgrade to the query
+            # string (the client explicitly chose subprotocol auth).
+            if scheme is None:
+                raw_token = token_from_query_string(scope)
 
         if raw_token:
             scope["user"] = await authenticate_token(raw_token)
         else:
             scope["user"] = AnonymousUser()
 
+        scope["jwt_subprotocol"] = scheme
         return await super().__call__(scope, receive, send)

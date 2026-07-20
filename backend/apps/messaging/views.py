@@ -114,6 +114,7 @@ class ConversationListView(APIView):
                             else None
                         ),
                         'gender': partner.gender,
+                        'chat_public_key': getattr(partner, 'chat_public_key', None) or '',
                     },
                     'last_message': {
                         'id': str(last_message.id),

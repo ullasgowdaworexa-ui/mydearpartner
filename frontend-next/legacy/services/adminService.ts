@@ -509,14 +509,14 @@ export function updateAdminUser(
 }
 
 export const getAdminTransactions = async (params: AdminListParams = {}): Promise<AdminTransaction[]> => {
-  const data = await fetchApi<AdminTransaction[] | PaginatedResult<AdminTransaction>>('/admin/transactions/', {
+  const data = await fetchApi<AdminTransaction[] | PaginatedResult<AdminTransaction>>('/admin/payments/', {
     params: toQueryParams(params),
   });
   return Array.isArray(data) ? data : data.results;
 };
 
 export const getAdminTransactionsPage = (params: AdminListParams = {}) =>
-  getPaged<AdminTransaction>('/admin/transactions/', params);
+  getPaged<AdminTransaction>('/admin/payments/', params);
 
 export const getAdminTickets = (params: AdminListParams = {}) =>
   getPaged<SupportTicket>('/admin/tickets/', params);

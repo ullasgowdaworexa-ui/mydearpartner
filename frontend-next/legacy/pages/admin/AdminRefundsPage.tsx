@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { Download, Filter, LoaderCircle, RefreshCw, Search } from 'lucide-react';
@@ -68,7 +68,7 @@ export default function AdminRefundsPage() {
     if (!refundTarget) return;
     setBusy(true);
     try {
-      await fetchApi(`/admin/transactions/${refundTarget.id}/refund/`, {
+      await fetchApi(`/admin/payments/${refundTarget.id}/refund/`, {
         method: 'POST',
         body: JSON.stringify({ amount: parseFloat(refundForm.amount), reason: refundForm.reason }),
       });

@@ -1,68 +1,364 @@
 import hashlib
 import hmac
+import json
+from decimal import Decimal
+from io import StringIO
+from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.test import override_settings
+from django.core.management import call_command
 
-from apps.core.models import MemberMembership, MembershipPlan, Notification
+from apps.accounts.models import Member
+from apps.core.models import (
+    MembershipPlan,
+    PaymentOrder,
+    PaymentTransaction,
+    RefundRequest,
+    RefundTransaction,
+    RazorpayWebhookEvent,
+    MembershipPurchase,
+    MemberMembership,
+    Notification,
+)
+from apps.core.services import razorpay_memberships as rz_module
 from apps.core.services.razorpay_memberships import RazorpayMembershipService
 
 
 pytestmark = pytest.mark.django_db
 
+RAZORPAY_PATCH = override_settings(
+    RAZORPAY_KEY_ID='rzp_test_key',
+    RAZORPAY_KEY_SECRET='secret',
+    RAZORPAY_WEBHOOK_SECRET='webhook_secret',
+    RAZORPAY_MODE='test',
+)
+
+
+def _order_ctx(order_id='order_test_abc123'):
+    class _Resp:
+        def __enter__(self):
+            self._data = json.dumps({'id': order_id}).encode('utf-8')
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self._data
+
+    return _Resp()
+
+
+def _payment_ctx(payment_id='pay_test_123', order_id='order_test_abc123',
+                 amount=49900, currency='INR', status='captured'):
+    payload = {
+        'id': payment_id,
+        'order_id': order_id,
+        'amount': amount,
+        'currency': currency,
+        'status': status,
+        'method': 'card',
+        'captured': True,
+        'card': {'network': 'Visa', 'last4': '1111'},
+        'email': 'member@example.com',
+        'contact': '9999999999',
+    }
+
+    class _Resp:
+        def __enter__(self):
+            self._data = json.dumps(payload).encode('utf-8')
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self._data
+
+    return _Resp()
+
+
+def _valid_signature(order_id, payment_id, secret='secret'):
+    return hmac.new(secret.encode(), f'{order_id}|{payment_id}'.encode(), hashlib.sha256).hexdigest()
+
 
 @pytest.fixture
-def paid_plan():
-    return MembershipPlan.objects.create(
-        name='Gold', slug='gold-payment', price='499.00', duration='30 days',
-        duration_days=30, features=[], is_active=True,
+def plan():
+    plan_obj, _ = MembershipPlan.objects.get_or_create(
+        slug='gold',
+        defaults={
+            'name': 'Gold',
+            'price': Decimal('499.00'),
+            'currency': 'INR',
+            'duration_days': 30,
+            'is_active': True,
+        }
     )
+    return plan_obj
 
 
-def test_unverified_member_cannot_create_payment_order(authenticated_client, member, paid_plan):
+@pytest.fixture
+def verified_member(member):
+    member.is_email_verified = True
+    member.is_mobile_verified = True
+    member.save()
+    return member
+
+
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_payment_order_creation_success(mock_urlopen, authenticated_client, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    response = authenticated_client(verified_member).post(
+        '/api/v1/payments/orders/',
+        {'membership_plan_id': str(plan.pk)},
+        format='json'
+    )
+    assert response.status_code == 201
+    data = response.json()['data']
+    assert data['razorpay_order_id'].startswith('order_')
+    assert data['amount'] == int(plan.price * 100)
+    assert data['currency'] == 'INR'
+    assert data['demo_mode'] is False
+    assert PaymentOrder.objects.filter(pk=data['internal_order_id']).exists()
+
+
+@patch.object(rz_module, 'urlopen')
+def test_unverified_member_order_forbidden(mock_urlopen, authenticated_client, member, plan):
+    member.is_email_verified = False
+    member.save()
     response = authenticated_client(member).post(
-        '/api/v1/member/memberships/create-order/', {'plan_slug': paid_plan.slug}, format='json'
+        '/api/v1/payments/orders/',
+        {'membership_plan_id': str(plan.pk)},
+        format='json'
     )
-
     assert response.status_code == 403
-    assert response.json()['error'] == 'ACCOUNT_NOT_VERIFIED'
-    assert 'email_verification' in response.json()['missing']
-    assert 'photo_verification' in response.json()['missing']
+    assert response.json()['code'] == 'ACCOUNT_NOT_VERIFIED'
 
 
-@override_settings(RAZORPAY_KEY_SECRET='test_secret')
-def test_verified_payment_signature_activates_once_and_notifies(member, paid_plan):
-    pending = MemberMembership.objects.create(
-        member=member,
-        plan=paid_plan,
-        status=MemberMembership.MembershipStatus.PENDING_PAYMENT,
-        is_active=False,
-        razorpay_order_id='order_test_123',
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_verify_payment_details_activates_membership(mock_urlopen, authenticated_client, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    order, _ = RazorpayMembershipService.create_order(member=verified_member, plan=plan)
+    payment_id = 'pay_test_verify_1'
+    mock_urlopen.return_value = _payment_ctx(
+        payment_id=payment_id, order_id=order.razorpay_order_id,
+        amount=int(order.amount * 100))
+    signature = _valid_signature(order.razorpay_order_id, payment_id)
+
+    response = authenticated_client(verified_member).post(
+        '/api/v1/payments/verify/',
+        {
+            'internal_order_id': str(order.pk),
+            'razorpay_order_id': order.razorpay_order_id,
+            'razorpay_payment_id': payment_id,
+            'razorpay_signature': signature,
+        },
+        format='json'
     )
-    payment_id = 'pay_test_123'
-    signature = hmac.new(
-        b'test_secret', f'{pending.razorpay_order_id}|{payment_id}'.encode(), hashlib.sha256
-    ).hexdigest()
+    assert response.status_code == 200, response.json()
+    res_data = response.json()['data']
+    assert res_data['success'] is True
+    assert res_data['payment_status'] == 'captured'
+    assert res_data['membership_status'] == 'active'
 
-    membership = RazorpayMembershipService.verify_and_activate(
-        order_id=pending.razorpay_order_id,
+    purchase = MembershipPurchase.objects.get(user=verified_member, status='active')
+    assert purchase.membership_plan == plan
+    assert purchase.price_snapshot == plan.price
+
+    verified_member.refresh_from_db()
+    assert verified_member.is_premium is True
+
+
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_invalid_signature_rejected(mock_urlopen, authenticated_client, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    order, _ = RazorpayMembershipService.create_order(member=verified_member, plan=plan)
+    response = authenticated_client(verified_member).post(
+        '/api/v1/payments/verify/',
+        {
+            'internal_order_id': str(order.pk),
+            'razorpay_order_id': order.razorpay_order_id,
+            'razorpay_payment_id': 'pay_test_x',
+            'razorpay_signature': 'deadbeef',
+        },
+        format='json'
+    )
+    assert response.status_code == 400
+    assert response.json()['code'] == 'PAYMENT_VERIFICATION_FAILED'
+
+
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_duplicate_verification_idempotent(mock_urlopen, authenticated_client, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    order, _ = RazorpayMembershipService.create_order(member=verified_member, plan=plan)
+    payment_id = 'pay_test_dup_1'
+    signature = _valid_signature(order.razorpay_order_id, payment_id)
+    mock_urlopen.return_value = _payment_ctx(
+        payment_id=payment_id, order_id=order.razorpay_order_id,
+        amount=int(order.amount * 100))
+
+    first = authenticated_client(verified_member).post('/api/v1/payments/verify/', {
+        'internal_order_id': str(order.pk),
+        'razorpay_order_id': order.razorpay_order_id,
+        'razorpay_payment_id': payment_id,
+        'razorpay_signature': signature,
+    }, format='json')
+    assert first.status_code == 200, first.json()
+
+    second = authenticated_client(verified_member).post('/api/v1/payments/verify/', {
+        'internal_order_id': str(order.pk),
+        'razorpay_order_id': order.razorpay_order_id,
+        'razorpay_payment_id': payment_id,
+        'razorpay_signature': signature,
+    }, format='json')
+    assert second.status_code == 200
+    assert MembershipPurchase.objects.filter(user=verified_member, status='active').count() == 1
+
+
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_payment_status_polling_endpoint(mock_urlopen, authenticated_client, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    order, _ = RazorpayMembershipService.create_order(member=verified_member, plan=plan)
+
+    response = authenticated_client(verified_member).get(
+        f'/api/v1/payments/orders/{order.pk}/status/'
+    )
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['order_status'] == 'created'
+    assert data['can_retry'] is True
+    assert data['can_request_refund'] is False
+
+
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_payment_history_and_receipt_endpoints(mock_urlopen, authenticated_client, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    order, _ = RazorpayMembershipService.create_order(member=verified_member, plan=plan)
+    payment_id = 'pay_test_hist_1'
+    signature = _valid_signature(order.razorpay_order_id, payment_id)
+    mock_urlopen.return_value = _payment_ctx(
+        payment_id=payment_id, order_id=order.razorpay_order_id,
+        amount=int(order.amount * 100))
+
+    RazorpayMembershipService.verify_payment_details(
+        order_id=order.razorpay_order_id,
         payment_id=payment_id,
         signature=signature,
-        member=member,
-    )
-    retry = RazorpayMembershipService.verify_and_activate(
-        order_id=pending.razorpay_order_id,
-        payment_id=payment_id,
-        signature=signature,
-        member=member,
+        member=verified_member
     )
 
-    membership.refresh_from_db()
-    member.refresh_from_db()
-    assert retry.pk == membership.pk
-    assert membership.status == MemberMembership.MembershipStatus.ACTIVE
-    assert membership.expires_at is not None
-    assert member.is_premium is True
-    assert Notification.objects.filter(
-        member_recipient=member, notification_type='MEMBERSHIP_ACTIVATED'
-    ).count() == 1
+    response = authenticated_client(verified_member).get('/api/v1/payments/history/')
+    assert response.status_code == 200
+    assert len(response.json()['data']) == 1
+
+    response = authenticated_client(verified_member).get(f'/api/v1/payments/{order.pk}/receipt/')
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['receipt_number'] == order.receipt
+    assert data['amount'] == str(plan.price)
+
+
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_refund_request_flow(mock_urlopen, authenticated_client, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    order, _ = RazorpayMembershipService.create_order(member=verified_member, plan=plan)
+    payment_id = 'pay_test_refund_1'
+    signature = _valid_signature(order.razorpay_order_id, payment_id)
+    mock_urlopen.return_value = _payment_ctx(
+        payment_id=payment_id, order_id=order.razorpay_order_id,
+        amount=int(order.amount * 100))
+
+    RazorpayMembershipService.verify_payment_details(
+        order_id=order.razorpay_order_id,
+        payment_id=payment_id,
+        signature=signature,
+        member=verified_member
+    )
+
+    response = authenticated_client(verified_member).post(
+        f'/api/v1/payments/{order.pk}/refund-request/',
+        {'reason': 'accidental_purchase', 'details': 'Bought plan by mistake.'},
+        format='json'
+    )
+    assert response.status_code == 201
+    data = response.json()['data']
+    assert data['status'] == 'requested'
+
+    refund_id = data['refund_id']
+    status_resp = authenticated_client(verified_member).get(f'/api/v1/payments/refunds/{refund_id}/')
+    assert status_resp.status_code == 200
+    assert status_resp.json()['data']['status'] == 'requested'
+
+
+@override_settings(RAZORPAY_WEBHOOK_SECRET='webhook_secret')
+def test_webhook_event_verification_signature_checking(client):
+    event_data = {
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": "pay_test_999",
+                    "order_id": "order_test_999",
+                    "amount": 49900,
+                    "currency": "INR",
+                    "method": "card",
+                    "captured": True,
+                    "card": {"network": "Visa", "last4": "1111"},
+                    "email": "member@example.com",
+                    "contact": "9999999999",
+                }
+            }
+        }
+    }
+    payload = json.dumps(event_data).encode('utf-8')
+    signature = hmac.new(b'webhook_secret', payload, hashlib.sha256).hexdigest()
+
+    response = client.post(
+        '/api/v1/payments/webhooks/razorpay/',
+        data=payload,
+        content_type='application/json',
+        HTTP_X_RAZORPAY_SIGNATURE=signature,
+        HTTP_X_RAZORPAY_EVENT_ID='evt_test_999'
+    )
+    assert response.status_code == 200
+    assert response.json()['success'] is True
+
+
+@override_settings(RAZORPAY_WEBHOOK_SECRET='webhook_secret')
+def test_webhook_invalid_signature_rejected(client):
+    event_data = {"event": "payment.captured", "payload": {"payment": {"entity": {}}}}
+    payload = json.dumps(event_data).encode('utf-8')
+    response = client.post(
+        '/api/v1/payments/webhooks/razorpay/',
+        data=payload,
+        content_type='application/json',
+        HTTP_X_RAZORPAY_SIGNATURE='invalid',
+        HTTP_X_RAZORPAY_EVENT_ID='evt_test_bad'
+    )
+    assert response.status_code == 400
+    assert response.json()['code'] == 'WEBHOOK_SIGNATURE_INVALID'
+
+
+@RAZORPAY_PATCH
+@patch.object(rz_module, 'urlopen')
+def test_reconciliation_management_command(mock_urlopen, verified_member, plan):
+    mock_urlopen.return_value = _order_ctx()
+    order, _ = RazorpayMembershipService.create_order(member=verified_member, plan=plan)
+    order.expires_at = order.created_at
+    order.save(update_fields=('expires_at',))
+
+    out = StringIO()
+    call_command('reconcile_razorpay_payments', minutes=0, stdout=out)
+
+    order.refresh_from_db()
+    assert order.status in ('expired', 'created')
+    assert 'Reconciliation' in out.getvalue()

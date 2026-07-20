@@ -50,6 +50,13 @@ from apps.core.views.membership_views import (
     MembershipSummaryView,
     MembershipDeactivateView,
 )
+from apps.core.views.lifecycle_views import (
+    MembershipUpgradeView,
+    AvailableUpgradesView,
+    ActivateFreePlanView,
+    CancelMembershipView,
+    MembershipStatusDetailView,
+)
 
 
 app_name = 'member_auth'
@@ -77,6 +84,11 @@ urlpatterns = [
     # Membership management endpoints
     path('membership/summary/', MembershipSummaryView.as_view(), name='membership_summary'),
     path('membership/deactivate/', MembershipDeactivateView.as_view(), name='membership_deactivate'),
+    path('membership/upgrade/', MembershipUpgradeView.as_view(), name='membership_upgrade'),
+    path('membership/available-upgrades/', AvailableUpgradesView.as_view(), name='membership_available_upgrades'),
+    path('membership/activate-free/', ActivateFreePlanView.as_view(), name='membership_activate_free'),
+    path('membership/cancel/', CancelMembershipView.as_view(), name='membership_cancel'),
+    path('membership/status/', MembershipStatusDetailView.as_view(), name='membership_status_detail'),
     
     # Verification endpoints - Member
     path('verification/status/', MemberVerificationStatusView.as_view(), name='verification_status'),

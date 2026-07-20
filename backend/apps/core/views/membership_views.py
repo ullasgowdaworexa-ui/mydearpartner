@@ -12,19 +12,30 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.utils import timezone
+import hashlib
+import hmac
 
+from django.shortcuts import get_object_or_404
 from apps.accounts.permissions import IsMember
 from apps.accounts.verification_service import AccountVerificationService
-from apps.core.responses import ApiResponse
+from apps.core.responses import ApiResponse, ApiErrorResponse
 from apps.core.membership_activation_service import MembershipActivationService
 from apps.core.services.membership_service import MembershipService
-from apps.core.models import MemberMembership, MembershipPlan
+from django.db import transaction
+from rest_framework.throttling import UserRateThrottle
+import uuid
+from apps.core.models import MemberMembership, MembershipPlan, PaymentOrder, PaymentTransaction, RefundRequest, RefundTransaction, MembershipPurchase, RazorpayWebhookEvent
 from apps.core.services.razorpay_memberships import (
     RazorpayGatewayError,
     RazorpayMembershipService,
     missing_verification_checks,
 )
+from apps.core.api_utils import audit
+from apps.core.services.razorpay_memberships import _mask_key_id as _mask_rp_key
 
+import logging
+logger = logging.getLogger(__name__)
 
 class MembershipEntitlementsView(APIView):
     """Return the resolved, typed entitlement set and today's shared usage."""
@@ -275,96 +286,446 @@ class MembershipDeactivateView(APIView):
         )
 
 
-class MembershipCreateOrderView(APIView):
-    """Create a Razorpay test-mode order after enforcing the full member gate."""
-
+class PaymentOrderCreateView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_classes = (UserRateThrottle,)
 
     def post(self, request):
         missing = missing_verification_checks(request.user)
         if missing:
-            return ApiResponse(
-                success=False,
+            return ApiErrorResponse(
                 code='ACCOUNT_NOT_VERIFIED',
                 message='Your account must be fully verified before purchasing a membership.',
                 errors={'missing': missing},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        plan_id = request.data.get('plan_id')
-        plan_slug = str(request.data.get('plan_slug') or '').strip().lower()
-        queryset = MembershipPlan.objects.filter(is_active=True)
-        if plan_id:
-            queryset = queryset.filter(pk=plan_id)
-        elif plan_slug:
-            queryset = queryset.filter(slug=plan_slug)
-        else:
-            return JsonResponse({'error': 'PLAN_REQUIRED', 'message': 'plan_id or plan_slug is required.'}, status=400)
-        plan = queryset.first()
+        
+        plan_id = request.data.get('membership_plan_id')
+        if not plan_id:
+            return ApiErrorResponse(
+                code='PLAN_REQUIRED',
+                message='membership_plan_id is required.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        plan = MembershipPlan.objects.filter(pk=plan_id, is_active=True).first()
         if not plan:
-            return JsonResponse({'error': 'PLAN_NOT_FOUND', 'message': 'The selected membership plan is unavailable.'}, status=404)
+            return ApiErrorResponse(
+                code='PLAN_NOT_FOUND',
+                message='The selected membership plan is unavailable.',
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
         if plan.price <= 0:
-            return JsonResponse({'error': 'PAID_PLAN_REQUIRED', 'message': 'Free plans do not require checkout.'}, status=400)
+            return ApiErrorResponse(
+                code='PAID_PLAN_REQUIRED',
+                message='Free plans do not require checkout.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         try:
-            membership, _missing = RazorpayMembershipService.create_order(member=request.user, plan=plan)
+            order, _ = RazorpayMembershipService.create_order(member=request.user, plan=plan)
         except RazorpayGatewayError as error:
-            return JsonResponse({'error': 'PAYMENT_GATEWAY_ERROR', 'message': str(error)}, status=502)
-        return JsonResponse({
-            'order_id': membership.razorpay_order_id,
-            'amount': int(plan.price * 100),
-            'currency': plan.currency,
-            'key_id': settings.RAZORPAY_KEY_ID,
-            'demo_mode': settings.RAZORPAY_DEMO_MODE,
-            'plan': {'id': str(plan.pk), 'name': plan.name, 'duration_days': plan.duration_days},
-        }, status=201)
+            logger.warning(
+                'PaymentOrderCreate FAILED member=%s plan=%s key=%s exception=%s',
+                request.user.pk, plan.pk, _mask_rp_key(settings.RAZORPAY_KEY_ID),
+                error.__class__.__name__,
+            )
+            return ApiErrorResponse(
+                code='ORDER_CREATION_FAILED',
+                message=str(error),
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        # Validate the Razorpay order response
+        rp_order_id = order.razorpay_order_id or ''
+        if not rp_order_id.startswith('order_'):
+            logger.error(
+                'PaymentOrderCreate INVALID_ORDER_ID internal_order=%s razorpay_order=%s',
+                order.internal_order_number, rp_order_id,
+            )
+            return ApiErrorResponse(
+                code='ORDER_CREATION_FAILED',
+                message='The payment gateway returned an invalid order reference.',
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        logger.info(
+            'PaymentOrderCreate SUCCESS internal_order=%s razorpay_order=%s '
+            'key=%s mode=%s amount=%s currency=%s',
+            order.internal_order_number, rp_order_id,
+            _mask_rp_key(settings.RAZORPAY_KEY_ID),
+            settings.RAZORPAY_MODE, order.amount_subunits, order.currency,
+        )
+
+        # Format the response
+        contact = request.user.mobile_number or ''
+        masked_contact = contact[:3] + '*****' + contact[-2:] if len(contact) >= 5 else contact
+
+        return ApiResponse(
+            data={
+                'internal_order_id': str(order.pk),
+                'razorpay_order_id': rp_order_id,
+                'key_id': settings.RAZORPAY_KEY_ID,
+                'amount': order.amount_subunits,
+                'currency': order.currency,
+                'mode': settings.RAZORPAY_MODE,
+                'demo_mode': False,
+                'plan': {
+                    'id': str(plan.pk),
+                    'name': plan.name,
+                    'duration_days': plan.duration_days
+                },
+                'prefill': {
+                    'name': request.user.get_full_name() or request.user.email,
+                    'email': request.user.email,
+                    'contact': request.user.mobile_number or ''
+                }
+            },
+            status=status.HTTP_201_CREATED
+        )
 
 
-class MembershipVerifyPaymentView(APIView):
+class PaymentVerifyView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_classes = (UserRateThrottle,)
 
     def post(self, request):
-        order_id = str(request.data.get('razorpay_order_id') or '')
-        payment_id = str(request.data.get('razorpay_payment_id') or '')
-        signature = str(request.data.get('razorpay_signature') or '')
-        if not order_id or (not settings.RAZORPAY_DEMO_MODE and not all((payment_id, signature))):
-            return JsonResponse({'error': 'PAYMENT_DETAILS_REQUIRED', 'message': 'Razorpay payment details are required.'}, status=400)
-        try:
-            membership = RazorpayMembershipService.verify_and_activate(
-                order_id=order_id, payment_id=payment_id, signature=signature, member=request.user
+        internal_order_id = request.data.get('internal_order_id')
+        payment_id = request.data.get('razorpay_payment_id')
+        order_id = request.data.get('razorpay_order_id')
+        signature = request.data.get('razorpay_signature')
+
+        if not internal_order_id or not order_id or not all((payment_id, signature)):
+            return ApiErrorResponse(
+                code='PAYMENT_DETAILS_REQUIRED',
+                message='Payment details are required.',
+                status=status.HTTP_400_BAD_REQUEST
             )
-        except MemberMembership.DoesNotExist:
-            return JsonResponse({'error': 'ORDER_NOT_FOUND', 'message': 'The Razorpay order was not found.'}, status=404)
+
+        try:
+            order = PaymentOrder.objects.get(pk=internal_order_id)
+            if order.user != request.user:
+                return ApiErrorResponse(
+                    code='UNAUTHORIZED',
+                    message='You are not authorized to verify this payment.',
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            if order.status in ('paid', 'captured'):
+                # Already paid, find corresponding purchase
+                tx = PaymentTransaction.objects.filter(payment_order=order, status='captured').first()
+                purchase = MembershipPurchase.objects.filter(payment_transaction=tx).first() if tx else None
+                if purchase:
+                    return ApiResponse(
+                        data={
+                            'success': True,
+                            'payment_status': 'captured',
+                            'membership_status': 'active',
+                            'membership': {
+                                'plan_name': purchase.membership_plan.name,
+                                'starts_at': purchase.starts_at.isoformat(),
+                                'expires_at': purchase.expires_at.isoformat(),
+                            }
+                        }
+                    )
+
+            purchase = RazorpayMembershipService.verify_payment_details(
+                order_id=order_id,
+                payment_id=payment_id,
+                signature=signature,
+                member=request.user
+            )
+        except PaymentOrder.DoesNotExist:
+            return ApiErrorResponse(
+                code='ORDER_NOT_FOUND',
+                message='The payment order was not found.',
+                status=status.HTTP_404_NOT_FOUND
+            )
         except ValueError as error:
-            return JsonResponse({'error': 'PAYMENT_VERIFICATION_FAILED', 'message': str(error)}, status=400)
-        return JsonResponse({
-            'membership': {
-                'id': str(membership.pk), 'status': membership.status,
-                'plan_name': membership.plan.name, 'expires_at': membership.expires_at.isoformat(),
+            return ApiErrorResponse(
+                code='PAYMENT_VERIFICATION_FAILED',
+                message=str(error),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except RazorpayGatewayError as error:
+            return ApiErrorResponse(
+                code='PAYMENT_VERIFICATION_FAILED',
+                message=str(error),
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        return ApiResponse(
+            data={
+                'success': True,
+                'payment_status': 'captured',
+                'membership_status': 'active',
+                'membership': {
+                    'plan_name': purchase.membership_plan.name,
+                    'starts_at': purchase.starts_at.isoformat(),
+                    'expires_at': purchase.expires_at.isoformat(),
+                }
             }
-        })
+        )
+
+
+class PaymentOrderStatusView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+
+    def get(self, request, id):
+        order = get_object_or_404(PaymentOrder, pk=id)
+        if order.user != request.user and not request.user.is_staff:
+            return ApiErrorResponse(
+                code='UNAUTHORIZED',
+                message='You are not authorized to view this status.',
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        tx = PaymentTransaction.objects.filter(payment_order=order, status='captured').first()
+        purchase = MembershipPurchase.objects.filter(payment_transaction=tx).first() if tx else None
+
+        refund_status = None
+        ref = RefundRequest.objects.filter(payment_transaction=tx).first() if tx else None
+        if ref:
+            refund_status = ref.status
+
+        # can_retry if failed or created and not captured
+        can_retry = order.status in ('created', 'failed', 'cancelled')
+        can_request_refund = order.status == 'paid' and (not ref or ref.status == 'failed')
+
+        return ApiResponse(
+            data={
+                'order_status': order.status,
+                'payment_status': tx.status if tx else None,
+                'membership_status': purchase.status if purchase else None,
+                'refund_status': refund_status,
+                'can_retry': can_retry,
+                'can_request_refund': can_request_refund
+            }
+        )
+
+
+class PaymentHistoryView(APIView):
+    permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_classes = (UserRateThrottle,)
+
+    def get(self, request):
+        purchases = MembershipPurchase.objects.filter(user=request.user).select_related('membership_plan', 'payment_transaction').order_by('-created_at')
+        results = []
+        for p in purchases:
+            results.append({
+                'id': str(p.pk),
+                'plan_name': p.membership_plan.name,
+                'amount': str(p.price_snapshot),
+                'currency': p.currency,
+                'status': p.status,
+                'starts_at': p.starts_at.isoformat(),
+                'expires_at': p.expires_at.isoformat(),
+                'payment_id': p.payment_transaction.razorpay_payment_id if p.payment_transaction else None,
+                'created_at': p.created_at.isoformat()
+            })
+        return ApiResponse(data=results)
+
+
+class PaymentReceiptView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+
+    def get(self, request, id):
+        order = get_object_or_404(PaymentOrder, pk=id)
+        if order.user != request.user and not request.user.is_staff:
+            return ApiErrorResponse(
+                code='UNAUTHORIZED',
+                message='You are not authorized to view this receipt.',
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        tx = PaymentTransaction.objects.filter(payment_order=order, status='captured').first()
+        if not tx:
+            return ApiErrorResponse(
+                code='RECEIPT_UNAVAILABLE',
+                message='Receipt is only available for paid orders.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        purchase = MembershipPurchase.objects.filter(payment_transaction=tx).first()
+
+        return ApiResponse(
+            data={
+                'receipt_number': order.receipt,
+                'payment_id': tx.razorpay_payment_id,
+                'order_id': order.razorpay_order_id,
+                'member_name': order.user.get_full_name() or order.user.email,
+                'plan_name': order.membership_plan.name,
+                'amount': str(tx.amount),
+                'currency': tx.currency,
+                'payment_date': tx.captured_at.isoformat() if tx.captured_at else tx.created_at.isoformat(),
+                'membership_start': purchase.starts_at.isoformat() if purchase else None,
+                'membership_expiry': purchase.expires_at.isoformat() if purchase else None,
+                'platform_details': {
+                    'name': 'My Dear Partner',
+                    'support_email': 'support@mydearpartner.com'
+                }
+            }
+        )
+
+
+class PaymentRefundRequestView(APIView):
+    permission_classes = (permissions.IsAuthenticated, IsMember)
+    throttle_classes = (UserRateThrottle,)
+
+    def post(self, request, id):
+        order = get_object_or_404(PaymentOrder, pk=id)
+        if order.user != request.user:
+            return ApiErrorResponse(
+                code='UNAUTHORIZED',
+                message='You are not authorized to request a refund for this order.',
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        tx = PaymentTransaction.objects.filter(payment_order=order, status='captured').first()
+        if not tx:
+            return ApiErrorResponse(
+                code='REFUND_NOT_ALLOWED',
+                message='Only paid transactions can be refunded.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check existing refund request
+        existing_ref = RefundRequest.objects.filter(payment_transaction=tx).first()
+        if existing_ref:
+            return ApiErrorResponse(
+                code='REFUND_ALREADY_PROCESSED',
+                message=f'A refund request with status {existing_ref.status} already exists.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        reason = request.data.get('reason', 'User requested refund')
+        customer_note = request.data.get('details', '')
+
+        refund = RefundRequest.objects.create(
+            payment_transaction=tx,
+            user=request.user,
+            requested_amount=tx.amount,
+            reason=reason,
+            details=customer_note,
+            status='requested'
+        )
+
+        audit(
+            request, request.user, action='REFUND_REQUEST_INITIATED', module='payments',
+            target_type='REFUND_REQUEST', target_id=refund.pk,
+            new_data={'amount': str(tx.amount), 'reason': reason}
+        )
+
+        return ApiResponse(
+            data={
+                'refund_id': str(refund.pk),
+                'refund_number': f'REQ-{refund.pk.hex[:8].upper()}',
+                'status': refund.status,
+                'amount': str(refund.requested_amount)
+            },
+            message='Refund request submitted successfully. Waiting for admin approval.',
+            status=status.HTTP_201_CREATED
+        )
+
+
+class PaymentRefundStatusView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+
+    def get(self, request, id):
+        refund = get_object_or_404(RefundRequest, pk=id)
+        if refund.payment_transaction.user != request.user and not request.user.is_staff:
+            return ApiErrorResponse(
+                code='UNAUTHORIZED',
+                message='You are not authorized to view this refund status.',
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        tx_ref = refund.transactions.first()
+
+        return ApiResponse(
+            data={
+                'refund_number': f'REQ-{refund.pk.hex[:8].upper()}',
+                'amount': str(refund.requested_amount),
+                'currency': refund.payment_transaction.currency,
+                'status': refund.status,
+                'requested_at': refund.requested_at.isoformat(),
+                'processed_at': tx_ref.processed_at.isoformat() if tx_ref and tx_ref.processed_at else None,
+                'tracking_reference': tx_ref.razorpay_refund_id if tx_ref else None
+            }
+        )
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RazorpayWebhookView(APIView):
-    """Idempotent fallback activation for a captured Razorpay payment."""
-
     permission_classes = (permissions.AllowAny,)
     authentication_classes = ()
 
     def post(self, request):
-        if not RazorpayMembershipService.verify_webhook_signature(
-            payload=request.body, signature=request.headers.get('X-Razorpay-Signature', '')
-        ):
-            return JsonResponse({'error': 'INVALID_WEBHOOK_SIGNATURE'}, status=400)
-        try:
-            event = request.data
-            if event.get('event') != 'payment.captured':
-                return JsonResponse({'status': 'ignored'})
-            payment = event['payload']['payment']['entity']
-            membership = RazorpayMembershipService.activate_order(
-                order_id=payment['order_id'], payment_id=payment['id']
+        signature = request.headers.get('X-Razorpay-Signature', '')
+
+        # 1. Verify webhook signature using raw body bytes (untouched raw request body).
+        # Signature verification is mandatory in BOTH test and live modes — never skipped.
+        webhook_secret = getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '') or getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+        if not webhook_secret:
+            return ApiErrorResponse(
+                code='WEBHOOK_SECRET_NOT_CONFIGURED',
+                message='Webhook secret is not configured.',
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        except (KeyError, TypeError, MemberMembership.DoesNotExist):
-            return JsonResponse({'error': 'ORDER_NOT_FOUND'}, status=404)
-        except ValueError as error:
-            return JsonResponse({'error': 'PAYMENT_VERIFICATION_FAILED', 'message': str(error)}, status=400)
-        return JsonResponse({'status': membership.status.lower(), 'membership_id': str(membership.pk)})
+        expected = hmac.new(webhook_secret.encode('utf-8'), request.body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            return ApiErrorResponse(
+                code='WEBHOOK_SIGNATURE_INVALID',
+                message='Invalid signature.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Get event details
+        event_id = request.headers.get('X-Razorpay-Event-Id') or request.data.get('id')
+        event_type = request.data.get('event')
+        
+        if not event_type:
+            return ApiErrorResponse(
+                code='INVALID_PAYLOAD',
+                message='Missing event type.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not event_id:
+            # Deterministic fallback deduplication key using event type and payload hash
+            payload_hash = hashlib.sha256(request.body).hexdigest()
+            event_id = f"fallback_{event_type}_{payload_hash[:32]}"
+
+        # 3. Persist the webhook event durably first
+        with transaction.atomic():
+            evt, created = RazorpayWebhookEvent.objects.get_or_create(
+                razorpay_event_id=event_id,
+                defaults={
+                    'event_type': event_type,
+                    'signature': signature,
+                    'payload': request.data,
+                    'status': 'received',
+                }
+            )
+
+        # 4. Trigger Celery task for processing if it is a new event
+        if created:
+            try:
+                from apps.core.tasks import process_webhook_event_task
+                process_webhook_event_task.delay(str(evt.pk))
+            except Exception as error:
+                # If Celery is not configured or broker is down, log it but do not fail the webhook reception.
+                # The CLI reconciler can pick up unprocessed webhook logs.
+                evt.last_error = f"Celery dispatch failed: {str(error)}"
+                evt.save(update_fields=('last_error',))
+
+        # 5. Return HTTP 200 immediately
+        return ApiResponse(
+            success=True,
+            message='Webhook received and queued.',
+            status=status.HTTP_200_OK
+        )

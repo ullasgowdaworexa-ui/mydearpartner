@@ -37,7 +37,12 @@ MEMBERSHIP_ACTIVATION_MODE = config['MEMBERSHIP_ACTIVATION_MODE']
 RAZORPAY_KEY_ID = config['RAZORPAY_KEY_ID']
 RAZORPAY_KEY_SECRET = config['RAZORPAY_KEY_SECRET']
 RAZORPAY_WEBHOOK_SECRET = config['RAZORPAY_WEBHOOK_SECRET']
-RAZORPAY_DEMO_MODE = config['RAZORPAY_DEMO_MODE']
+RAZORPAY_MODE = config['RAZORPAY_MODE']
+# `RAZORPAY_DEMO_MODE` is retained only for backward compatibility with any
+# legacy references; it is derived from RAZORPAY_MODE and no longer enables a
+# payment bypass. The platform never activates memberships without a real,
+# signature-verified, captured Razorpay payment.
+RAZORPAY_DEMO_MODE = (RAZORPAY_MODE == 'test')
 REQUIRE_MEMBER_VERIFICATION = config['REQUIRE_MEMBER_VERIFICATION']
 ENABLE_ADMIN_PORTAL = config['ENABLE_ADMIN_PORTAL']
 

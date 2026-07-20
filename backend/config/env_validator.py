@@ -59,18 +59,67 @@ def get_list(key, default=None):
 # 2. Schema definition and validation
 errors = []
 PAYMENT_MODE = os.environ.get('PAYMENT_MODE', 'manual_approval').strip().lower()
-if PAYMENT_MODE != 'manual_approval':
+if PAYMENT_MODE not in ('manual_approval', 'razorpay'):
     errors.append(
-        "PAYMENT_MODE: Only 'manual_approval' is supported."
+        "PAYMENT_MODE: Only 'manual_approval' or 'razorpay' is supported."
     )
 
 MEMBERSHIP_ACTIVATION_MODE = os.environ.get(
     'MEMBERSHIP_ACTIVATION_MODE', 'manual_approval'
 ).strip().lower()
-if MEMBERSHIP_ACTIVATION_MODE != 'manual_approval':
+if MEMBERSHIP_ACTIVATION_MODE not in ('manual_approval', 'payment_verified', 'instant'):
     errors.append(
-        "MEMBERSHIP_ACTIVATION_MODE: Only 'manual_approval' is supported."
+        "MEMBERSHIP_ACTIVATION_MODE: Must be 'manual_approval', 'payment_verified', or 'instant'."
     )
+
+# Razorpay environment startup verification
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '').strip()
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '').strip()
+RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', '').strip()
+RAZORPAY_MODE = os.environ.get('RAZORPAY_MODE', 'test').strip().lower()
+
+if PAYMENT_MODE == 'razorpay' or RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET:
+    if not RAZORPAY_KEY_ID:
+        errors.append("RAZORPAY_KEY_ID: Required when payment mode is razorpay.")
+    if not RAZORPAY_KEY_SECRET:
+        errors.append("RAZORPAY_KEY_SECRET: Required when payment mode is razorpay.")
+    if not RAZORPAY_WEBHOOK_SECRET:
+        errors.append("RAZORPAY_WEBHOOK_SECRET: Required when payment mode is razorpay.")
+    if RAZORPAY_MODE not in ('test', 'live'):
+        errors.append("RAZORPAY_MODE: Must be 'test' or 'live'.")
+
+    # Reject whitespace-only or malformed values
+    if RAZORPAY_KEY_ID and RAZORPAY_KEY_ID.strip() == '':
+        errors.append("RAZORPAY_KEY_ID: Value is empty or contains only whitespace.")
+    if RAZORPAY_KEY_SECRET and RAZORPAY_KEY_SECRET.strip() == '':
+        errors.append("RAZORPAY_KEY_SECRET: Value is empty or contains only whitespace.")
+    # Reject accidentally quoted values (e.g. copied from .env with quotes)
+    if RAZORPAY_KEY_ID and (RAZORPAY_KEY_ID.startswith(("'", '"')) or RAZORPAY_KEY_ID.endswith(("'", '"'))):
+        errors.append("RAZORPAY_KEY_ID: Value contains surrounding quotes. Remove the quotes.")
+    if RAZORPAY_KEY_SECRET and (RAZORPAY_KEY_SECRET.startswith(("'", '"')) or RAZORPAY_KEY_SECRET.endswith(("'", '"'))):
+        errors.append("RAZORPAY_KEY_SECRET: Value contains surrounding quotes. Remove the quotes.")
+
+    # Validate key prefix matches configured mode
+    if RAZORPAY_KEY_ID:
+        if RAZORPAY_MODE == 'live' and not RAZORPAY_KEY_ID.startswith('rzp_live_'):
+            errors.append("RAZORPAY_KEY_ID: Must start with 'rzp_live_' when RAZORPAY_MODE is 'live'.")
+        if RAZORPAY_MODE == 'test' and not RAZORPAY_KEY_ID.startswith('rzp_test_'):
+            errors.append("RAZORPAY_KEY_ID: Must start with 'rzp_test_' when RAZORPAY_MODE is 'test'.")
+        if not RAZORPAY_KEY_ID.startswith(('rzp_test_', 'rzp_live_')):
+            errors.append("RAZORPAY_KEY_ID: Must start with 'rzp_test_' (test) or 'rzp_live_' (live).")
+
+    # Prevent accidental crossover between environment tiers
+    if DJANGO_ENV in ('staging', 'production'):
+        if RAZORPAY_MODE != 'live':
+            errors.append("RAZORPAY_MODE: Must be 'live' in production/staging environments to prevent test mode transactions.")
+        if RAZORPAY_KEY_ID and not RAZORPAY_KEY_ID.startswith('rzp_live_'):
+            errors.append("RAZORPAY_KEY_ID: Must start with 'rzp_live_' in production/staging environments.")
+    elif DJANGO_ENV == 'local':
+        # Allow demo keys or test keys in local mode
+        if RAZORPAY_MODE != 'test':
+            errors.append("RAZORPAY_MODE: Must be 'test' in local development environment.")
+        if RAZORPAY_KEY_ID and not RAZORPAY_KEY_ID.startswith('rzp_test_') and RAZORPAY_KEY_ID != 'rzp_test_replace_me':
+            errors.append("RAZORPAY_KEY_ID: Must start with 'rzp_test_' in local development.")
 
 PERMANENT_DELETE_DOCUMENT_POLICY = os.environ.get(
     'PERMANENT_DELETE_DOCUMENT_POLICY', 'delete_immediately'
@@ -167,6 +216,7 @@ config = {
     'RAZORPAY_KEY_ID': optional_env('RAZORPAY_KEY_ID', 'rzp_test_replace_me'),
     'RAZORPAY_KEY_SECRET': optional_env('RAZORPAY_KEY_SECRET', ''),
     'RAZORPAY_WEBHOOK_SECRET': optional_env('RAZORPAY_WEBHOOK_SECRET', ''),
+    'RAZORPAY_MODE': optional_env('RAZORPAY_MODE', 'test'),
     'RAZORPAY_DEMO_MODE': get_bool('RAZORPAY_DEMO_MODE', default=False),
     'PERMANENT_DELETE_DOCUMENT_POLICY': PERMANENT_DELETE_DOCUMENT_POLICY,
     # Temporary rollout controls.  The underlying verification and back-office

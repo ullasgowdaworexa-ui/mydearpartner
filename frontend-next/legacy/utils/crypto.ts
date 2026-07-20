@@ -51,12 +51,17 @@ export async function deriveSharedKey(
   const privateKeyJwk = JSON.parse(privateKeyJwkString);
   const partnerPublicKeyJwk = JSON.parse(partnerPublicKeyJwkString);
 
+  // Strip key_ops so import usages aren't constrained by the JWK's stored ops,
+  // which would otherwise cause a DataError ("key_ops ... must be a superset").
+  delete privateKeyJwk.key_ops;
+  delete partnerPublicKeyJwk.key_ops;
+
   const privateKey = await window.crypto.subtle.importKey(
     'jwk',
     privateKeyJwk,
     { name: 'ECDH', namedCurve: 'P-256' },
     true,
-    []
+    ['deriveKey']
   );
 
   const partnerPublicKey = await window.crypto.subtle.importKey(
@@ -64,7 +69,7 @@ export async function deriveSharedKey(
     partnerPublicKeyJwk,
     { name: 'ECDH', namedCurve: 'P-256' },
     true,
-    []
+    ['deriveKey']
   );
 
   return window.crypto.subtle.deriveKey(
@@ -128,7 +133,8 @@ export async function decryptMessage(encryptedPayloadString: string, cryptoKey: 
 
     return new TextDecoder().decode(decrypted);
   } catch (err) {
-    console.error('Decryption failed:', err);
+    // A mismatch (wrong key/IV or legacy ciphertext) is expected during
+    // best-effort decryption; callers handle the placeholder, so we stay quiet.
     return '🔒 [Decryption failed: Key mismatch or tampered payload]';
   }
 }

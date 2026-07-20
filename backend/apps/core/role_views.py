@@ -46,6 +46,12 @@ from apps.accounts.verification_service import AccountVerificationService
 
 from .api_utils import audit, bad_request, create_ticket_attachment, notify, paginated_response
 from .models import (
+    PaymentOrder,
+    PaymentTransaction,
+    RefundRequest,
+    RefundTransaction,
+    RazorpayWebhookEvent,
+    MembershipPurchase,
     BlogPost,
     BackupRecord,
     Complaint,
@@ -68,7 +74,6 @@ from .models import (
     TicketAssignment,
     TicketInternalNote,
     TicketStatusHistory,
-    RefundRequest,
 )
 from .responses import ApiResponse
 from .serializers import (
@@ -1077,17 +1082,17 @@ class AdminDashboardView(ScopedAPIView):
 
         # Payments
         from django.db.models import Q as DQ
-        total_revenue_val = Payment.objects.filter(
-            status=Payment.Status.SUCCESS
+        total_revenue_val = PaymentTransaction.objects.filter(
+            status='captured'
         ).aggregate(total=Sum('amount'))['total'] or 0
-        revenue_this_month_val = Payment.objects.filter(
-            status=Payment.Status.SUCCESS, created_at__gte=month_start
+        revenue_this_month_val = PaymentTransaction.objects.filter(
+            status='captured', created_at__gte=month_start
         ).aggregate(total=Sum('amount'))['total'] or 0
         total_revenue = str(total_revenue_val)
         revenue_this_month = str(revenue_this_month_val)
-        pending_payments = Payment.objects.filter(status=Payment.Status.PENDING).count()
-        successful_payments = Payment.objects.filter(status=Payment.Status.SUCCESS).count()
-        failed_payments = Payment.objects.filter(status=Payment.Status.FAILED).count()
+        pending_payments = PaymentOrder.objects.filter(status='created').count()
+        successful_payments = PaymentTransaction.objects.filter(status='captured').count()
+        failed_payments = PaymentTransaction.objects.filter(status='failed').count()
 
         # Support tickets
         pending_tickets = SupportTicket.objects.filter(status=SupportTicket.Status.UNASSIGNED).count()
@@ -1148,7 +1153,7 @@ class AdminDashboardView(ScopedAPIView):
         )
         recent_members = recent_member_qs.order_by('-created_at')[:5]
         recent_tickets = SupportTicket.objects.select_related('category', 'current_assignee').order_by('-created_at')[:5]
-        recent_payments = Payment.objects.select_related('plan').order_by('-created_at')[:5]
+        recent_payments = PaymentTransaction.objects.select_related('payment_order__membership_plan', 'user').order_by('-created_at')[:5]
 
         return ApiResponse(data={
             'role': request.user.admin_role_code,
@@ -2393,64 +2398,354 @@ class _PaymentWireSerializer(serializers.Serializer):
         }
 
 
-class AdminTransactionListView(ScopedAPIView):
-    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
+class AdminPaymentListView(ScopedAPIView):
+    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN, AccountType.STAFF, AccountType.CUSTOMER_SUPPORT)
     required_permission = 'payments.view'
 
     def get(self, request):
-        queryset = Payment.objects.select_related('member', 'plan')
-        requested_status = request.query_params.get('status', '').upper()
-        if requested_status:
-            queryset = queryset.filter(status=requested_status)
+        queryset = PaymentOrder.objects.select_related('user', 'membership_plan').order_by('-created_at')
+        
+        status_filter = request.query_params.get('status', '').strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+            
         search = request.query_params.get('search', '').strip()
         if search:
             queryset = queryset.filter(
-                Q(member__email__icontains=search)
-                | Q(member__first_name__icontains=search)
-                | Q(member__last_name__icontains=search)
-                | Q(gateway_reference__icontains=search)
+                Q(user__email__icontains=search)
+                | Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+                | Q(razorpay_order_id__icontains=search)
+                | Q(internal_order_number__icontains=search)
             )
-        return paginated_response(request, queryset, _PaymentWireSerializer)
+            
+        is_limited = request.user.account_type in (AccountType.STAFF, AccountType.CUSTOMER_SUPPORT)
+        
+        class PaymentOrderWireSerializer(serializers.Serializer):
+            def to_representation(self, obj):
+                member = obj.user
+                rep = {
+                    'id': str(obj.pk),
+                    'user': member.get_full_name() if member else 'Deleted user',
+                    'email': member.email if member else '',
+                    'plan': obj.membership_plan.name if obj.membership_plan else 'No plan',
+                    'amount': str(obj.amount),
+                    'currency': obj.currency,
+                    'status': obj.status,
+                    'internal_order_number': obj.internal_order_number,
+                    'razorpay_order_id': obj.razorpay_order_id,
+                    'receipt': obj.receipt,
+                    'created_at': obj.created_at.isoformat(),
+                    'updated_at': obj.updated_at.isoformat()
+                }
+                if not is_limited:
+                    rep['notes'] = obj.notes
+                return rep
+
+        return paginated_response(request, queryset, PaymentOrderWireSerializer)
+
+
+class AdminPaymentDetailView(ScopedAPIView):
+    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN, AccountType.STAFF, AccountType.CUSTOMER_SUPPORT)
+    required_permission = 'payments.view'
+
+    def get(self, request, id):
+        order = get_object_or_404(PaymentOrder.objects.select_related('user', 'membership_plan'), pk=id)
+        txs = PaymentTransaction.objects.filter(payment_order=order)
+        refunds = RefundRequest.objects.filter(payment_transaction__payment_order=order).prefetch_related('transactions')
+        
+        is_limited = request.user.account_type in (AccountType.STAFF, AccountType.CUSTOMER_SUPPORT)
+        
+        txs_serialized = []
+        for tx in txs:
+            t_data = {
+                'id': str(tx.pk),
+                'razorpay_payment_id': tx.razorpay_payment_id,
+                'amount': str(tx.amount),
+                'currency': tx.currency,
+                'method': tx.method,
+                'status': tx.status,
+                'bank': tx.bank,
+                'wallet': tx.wallet,
+                'card_network': tx.card_network,
+                'card_last4': tx.card_last4,
+                'created_at': tx.created_at.isoformat()
+            }
+            if not is_limited:
+                t_data['safe_metadata'] = tx.safe_metadata
+            txs_serialized.append(t_data)
+            
+        refunds_serialized = []
+        for r in refunds:
+            tx_ref = r.transactions.first()
+            refunds_serialized.append({
+                'id': str(r.pk),
+                'razorpay_refund_id': tx_ref.razorpay_refund_id if tx_ref else None,
+                'internal_refund_number': tx_ref.internal_refund_number if tx_ref else f'REQ-{r.pk.hex[:8].upper()}',
+                'amount': str(r.requested_amount),
+                'currency': order.currency,
+                'status': r.status,
+                'reason': r.reason,
+                'customer_note': r.details,
+                'admin_note': '' if is_limited else r.admin_note,
+                'created_at': r.requested_at.isoformat()
+            })
+
+        data = {
+            'id': str(order.pk),
+            'internal_order_number': order.internal_order_number,
+            'razorpay_order_id': order.razorpay_order_id,
+            'amount': str(order.amount),
+            'currency': order.currency,
+            'status': order.status,
+            'receipt': order.receipt,
+            'created_at': order.created_at.isoformat(),
+            'user': {
+                'id': str(order.user.pk) if order.user else None,
+                'full_name': order.user.get_full_name() if order.user else 'Deleted user',
+                'email': order.user.email if order.user else '',
+                'phone': order.user.mobile_number if order.user else ''
+            },
+            'plan': {
+                'id': str(order.membership_plan.pk) if order.membership_plan else None,
+                'name': order.membership_plan.name if order.membership_plan else 'No plan',
+                'price': str(order.membership_plan.price) if order.membership_plan else '0.00',
+                'duration_days': order.membership_plan.duration_days if order.membership_plan else 0
+            },
+            'transactions': txs_serialized,
+            'refunds': refunds_serialized
+        }
+        if not is_limited:
+            data['notes'] = {}
+            
+        return ApiResponse(data=data)
 
 
 class AdminPaymentRefundView(ScopedAPIView):
-    allowed_account_types = (AccountType.SUPER_ADMIN,)
-    required_permission = 'payments.refund'
+    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
+    required_permission = 'payments.refund.issue'
 
-    @transaction.atomic
-    def post(self, request, payment_id):
-        payment = get_object_or_404(Payment.objects.select_for_update(), pk=payment_id)
-        if payment.status != Payment.Status.SUCCESS:
-            return bad_request('Only a successful payment can be refunded.')
+    def post(self, request, id):
+        from apps.core.services.razorpay_memberships import RazorpayMembershipService, RazorpayGatewayError
+        from decimal import Decimal, ROUND_HALF_UP
+        import uuid
+
+        # 1. Fetch transaction and validate status (No DB lock open during network call)
+        tx = get_object_or_404(PaymentTransaction, pk=id)
+        order = tx.payment_order
+        
+        if tx.status != 'captured':
+            return bad_request('Only captured transactions can be refunded.')
+            
         try:
             requested_amount = serializers.DecimalField(max_digits=12, decimal_places=2).run_validation(
                 request.data.get('amount')
             )
         except serializers.ValidationError as exc:
             return bad_request('Enter a valid refund amount.', errors={'amount': exc.detail})
-        available = payment.amount - payment.refunded_amount
-        if requested_amount <= 0 or requested_amount > available:
-            return bad_request(f'Refund amount must be between 0 and {available}.')
-        refund = RefundRequest.objects.create(
-            payment=payment,
-            amount=requested_amount,
-            reason=str(request.data.get('reason', '')).strip(),
-            processed_by_super_admin=request.user,
-        )
-        payment.refund_status = Payment.RefundStatus.REQUESTED
-        payment.refund_requested_at = timezone.now()
-        payment.refund_reason = refund.reason
-        payment.save(update_fields=('refund_status', 'refund_requested_at', 'refund_reason', 'updated_at'))
+            
+        if requested_amount <= 0:
+            return bad_request('Refund amount must be greater than zero.')
+
+        # 2. Acquire a short DB lock to calculate the remaining balance
+        with transaction.atomic():
+            tx_locked = PaymentTransaction.objects.select_for_update().get(pk=tx.pk)
+            total_refunded = sum(rt.amount for rt in RefundTransaction.objects.filter(payment_transaction=tx_locked, status__in=('processed', 'processing')))
+            available = tx_locked.amount - total_refunded
+
+        if requested_amount > available:
+            return bad_request(f'Refund amount exceeds remaining refundable balance of {available}.')
+
+        reason = str(request.data.get('reason', '')).strip() or 'approved_customer_request'
+        customer_note = str(request.data.get('customer_note', '')).strip()
+        admin_note = str(request.data.get('admin_note', '')).strip()
+        speed = str(request.data.get('speed', 'normal')).strip()
+
+        # 3. Call Razorpay API OUTSIDE Django transaction
+        if settings.RAZORPAY_DEMO_MODE:
+            razorpay_refund_id = f'demo_ref_{uuid.uuid4().hex[:12]}'
+            status_val = 'processed'
+            gateway_res = {'id': razorpay_refund_id, 'status': 'processed'}
+        else:
+            try:
+                amount_in_cents = int((requested_amount * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+                gateway_res = RazorpayMembershipService.initiate_razorpay_refund(tx.razorpay_payment_id, amount_in_cents, speed)
+                razorpay_refund_id = gateway_res['id']
+                status_val = 'processed' if gateway_res.get('status') == 'processed' else 'processing'
+            except Exception as exc:
+                return bad_request(f'Failed to initiate refund on Razorpay: {str(exc)}')
+
+        # 4. Save results inside another short transaction
+        with transaction.atomic():
+            tx_locked = PaymentTransaction.objects.select_for_update().get(pk=tx.pk)
+            
+            # Link to an existing request or create a new approved one
+            rr = RefundRequest.objects.filter(payment_transaction=tx_locked, status='approved').first()
+            if not rr:
+                rr = RefundRequest.objects.create(
+                    payment_transaction=tx_locked,
+                    user=tx_locked.user,
+                    requested_amount=requested_amount,
+                    reason=reason,
+                    details=customer_note,
+                    status='approved',
+                    reviewed_at=timezone.now(),
+                    reviewed_by=request.user,
+                    admin_note=admin_note
+                )
+            else:
+                rr.reviewed_at = timezone.now()
+                rr.reviewed_by = request.user
+                rr.admin_note = admin_note
+                rr.save()
+
+            internal_ref_num = f'REF-{timezone.now().strftime("%Y%m%d")}-{uuid.uuid4().hex[:8].upper()}'
+            
+            # Create RefundTransaction
+            rt = RefundTransaction.objects.create(
+                refund_request=rr,
+                payment_transaction=tx_locked,
+                razorpay_refund_id=razorpay_refund_id,
+                internal_refund_number=internal_ref_num,
+                amount=requested_amount,
+                currency=tx_locked.currency,
+                status=status_val,
+                processed_at=timezone.now() if status_val == 'processed' else None,
+                safe_metadata=gateway_res
+            )
+
+            if status_val == 'processed':
+                rr.status = 'processed'
+                rr.save()
+
+                total_refunded_updated = sum(r.amount for r in RefundTransaction.objects.filter(payment_transaction=tx_locked, status='processed'))
+                if total_refunded_updated >= tx_locked.amount:
+                    order.status = 'refunded'
+                    order.save(update_fields=('status', 'updated_at'))
+                    MembershipPurchase.objects.filter(payment_transaction=tx_locked, status='active').update(status='refunded')
+                    MemberMembership.objects.filter(razorpay_payment_id=tx_locked.razorpay_payment_id).update(is_active=False, status=MemberMembership.MembershipStatus.EXPIRED)
+                    Member.objects.filter(pk=tx_locked.user_id).update(is_premium=False)
+                else:
+                    order.status = 'partially_refunded'
+                    order.save(update_fields=('status', 'updated_at'))
+                    MembershipPurchase.objects.filter(payment_transaction=tx_locked, status='active').update(status='partially_refunded')
+            else:
+                rr.status = 'processing'
+                rr.save()
+
         audit(
-            request, request.user, action='REFUND_REQUESTED', module='payments',
-            target_type='PAYMENT', target_id=payment.pk,
-            new_data={'amount': str(requested_amount), 'refund_request_id': str(refund.pk)},
+            request, request.user, action='REFUND_ISSUED', module='payments',
+            target_type='PAYMENT_TRANSACTION', target_id=tx.pk,
+            new_data={'amount': str(requested_amount), 'refund_id': str(rr.pk)},
         )
+        
         return ApiResponse(
-            data={'id': str(refund.pk), 'status': refund.status, 'amount': str(refund.amount)},
-            message='Refund request recorded for gateway processing.',
-            status=status.HTTP_202_ACCEPTED,
+            data={'id': str(rr.pk), 'status': rr.status, 'amount': str(rr.requested_amount)},
+            message='Refund initiated successfully.',
+            status=status.HTTP_201_CREATED,
         )
+
+
+class AdminRefundRequestApproveRejectView(ScopedAPIView):
+    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
+    required_permission = 'payments.refund.approve'
+
+    @transaction.atomic
+    def post(self, request, id, action):
+        refund = get_object_or_404(RefundRequest.objects.select_for_update(), pk=id)
+        if refund.status != 'requested':
+            return bad_request(f'Refund request is in status {refund.status} and cannot be processed.')
+            
+        admin_note = str(request.data.get('admin_note', '')).strip()
+        refund.reviewed_by = request.user
+        refund.reviewed_at = timezone.now()
+        refund.admin_note = admin_note
+        
+        if action == 'reject':
+            refund.status = 'rejected'
+            refund.save()
+            audit(
+                request, request.user, action='REFUND_REQUEST_REJECTED', module='payments',
+                target_type='REFUND_REQUEST', target_id=refund.pk,
+                new_data={'admin_note': admin_note}
+            )
+            return ApiResponse(message='Refund request rejected.')
+            
+        # Approval step ONLY. Execution is a separate step (triggered via Issue Refund)
+        refund.status = 'approved'
+        refund.save()
+
+        audit(
+            request, request.user, action='REFUND_REQUEST_APPROVED', module='payments',
+            target_type='REFUND_REQUEST', target_id=refund.pk,
+            new_data={'amount': str(refund.requested_amount)}
+        )
+        
+        return ApiResponse(
+            data={'id': str(refund.pk), 'status': refund.status, 'amount': str(refund.requested_amount)},
+            message='Refund request approved. Click Issue Refund to execute.',
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminPaymentReconcileView(ScopedAPIView):
+    allowed_account_types = (AccountType.SUPER_ADMIN, AccountType.ADMIN)
+    required_permission = 'payments.reconcile'
+
+    def post(self, request, id):
+        from apps.core.services.razorpay_memberships import RazorpayMembershipService
+        import base64
+        import json
+        from urllib.request import Request, urlopen
+        
+        order = get_object_or_404(PaymentOrder, pk=id)
+        fixes = []
+        
+        if settings.RAZORPAY_DEMO_MODE:
+            if order.status == 'created':
+                fixes.append("Order was in pending created state. No live Razorpay transaction found. Kept created.")
+            return ApiResponse(data={'status': 'completed', 'fixes': fixes})
+            
+        try:
+            if order.razorpay_order_id:
+                url = f'https://api.razorpay.com/v1/orders/{order.razorpay_order_id}/payments'
+                credentials = base64.b64encode(
+                    f'{settings.RAZORPAY_KEY_ID}:{settings.RAZORPAY_KEY_SECRET}'.encode('utf-8')
+                ).decode('ascii')
+                req = Request(
+                    url,
+                    headers={'Authorization': f'Basic {credentials}', 'Content-Type': 'application/json'},
+                    method='GET',
+                )
+                with urlopen(req, timeout=15) as res:
+                    payment_list = json.loads(res.read().decode('utf-8'))
+                    items = payment_list.get('items', [])
+                    
+                captured_pay = None
+                for pay in items:
+                    if pay.get('status') == 'captured':
+                        captured_pay = pay
+                        break
+                        
+                if captured_pay:
+                    payment_id = captured_pay['id']
+                    tx_exists = PaymentTransaction.objects.filter(razorpay_payment_id=payment_id).exists()
+                    if not tx_exists or order.status != 'paid':
+                        RazorpayMembershipService.activate_order_transactional(
+                            order_id=order.razorpay_order_id,
+                            payment_id=payment_id,
+                            raw_payload=captured_pay
+                        )
+                        fixes.append(f"Detected captured payment {payment_id} on Razorpay but local order was unpaid. Activated membership.")
+                else:
+                    if order.status == 'created' and order.expires_at and order.expires_at <= timezone.now():
+                        order.status = 'expired'
+                        order.save(update_fields=('status', 'updated_at'))
+                        fixes.append("Order expired.")
+        except Exception as exc:
+            return ApiResponse(success=False, message=f"Reconciliation failed: {str(exc)}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return ApiResponse(data={'status': 'completed', 'fixes': fixes})
 
 
 class _MembershipWireSerializer(serializers.Serializer):

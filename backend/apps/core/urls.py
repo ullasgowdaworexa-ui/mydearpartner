@@ -24,7 +24,11 @@ from .role_views import (
     AdminMembershipRequestDetailView,
     AdminDirectMembershipView,
     AdminNotificationListCreateView,
+    AdminPaymentListView,
+    AdminPaymentDetailView,
     AdminPaymentRefundView,
+    AdminRefundRequestApproveRejectView,
+    AdminPaymentReconcileView,
     AdminProfileReportDetailView,
     AdminProfileReportListView,
     AdminSettingsView,
@@ -36,7 +40,6 @@ from .role_views import (
     AdminTestimonialListCreateView,
     AdminTicketDetailView,
     AdminTicketListView,
-    AdminTransactionListView,
     AdminUserActionView,
     AdminUserListView,
     AdminVerificationDetailView,
@@ -139,7 +142,23 @@ from .views import (
     AdminMembershipPlanDetailView,
     AdminMembershipPlanToggleView,
 )
-from .views.membership_views import MembershipCreateOrderView, MembershipEntitlementsView, MembershipVerifyPaymentView, RazorpayWebhookView
+from .views.membership_views import (
+    PaymentOrderCreateView,
+    PaymentVerifyView,
+    PaymentOrderStatusView,
+    PaymentHistoryView,
+    PaymentReceiptView,
+    PaymentRefundRequestView,
+    PaymentRefundStatusView,
+    RazorpayWebhookView,
+    MembershipEntitlementsView,
+)
+from .views.admin_lifecycle_views import (
+    AdminExpiringMembersListView,
+    AdminContactExpiringMemberView,
+    AdminExpiringMembersDashboardView,
+    AdminNotificationDeliveryLogView,
+)
 
 
 urlpatterns = [
@@ -174,11 +193,16 @@ urlpatterns = [
     path('conversations/', ConversationListView.as_view(), name='conversations_list'),
     path('conversations/<uuid:user_id>/messages/', MessageHistoryView.as_view(), name='conversation_messages'),
 
+    # Razorpay Payment Gateway integration endpoints
+    path('payments/orders/', PaymentOrderCreateView.as_view(), name='payment_order_create'),
+    path('payments/verify/', PaymentVerifyView.as_view(), name='payment_verify'),
+    path('payments/orders/<uuid:id>/status/', PaymentOrderStatusView.as_view(), name='payment_order_status'),
     path('payments/history/', PaymentHistoryView.as_view(), name='payment_history'),
-    path('member/memberships/create-order/', MembershipCreateOrderView.as_view(), name='membership_create_order'),
+    path('payments/<uuid:id>/receipt/', PaymentReceiptView.as_view(), name='payment_receipt'),
+    path('payments/<uuid:id>/refund-request/', PaymentRefundRequestView.as_view(), name='payment_refund_request'),
+    path('payments/refunds/<uuid:id>/', PaymentRefundStatusView.as_view(), name='payment_refund_status'),
+    path('payments/webhooks/razorpay/', RazorpayWebhookView.as_view(), name='razorpay_webhook'),
     path('member/entitlements/', MembershipEntitlementsView.as_view(), name='member_entitlements'),
-    path('member/memberships/verify/', MembershipVerifyPaymentView.as_view(), name='membership_verify_payment'),
-    path('payments/webhook/', RazorpayWebhookView.as_view(), name='razorpay_webhook'),
     path('complaints/', MemberComplaintListCreateView.as_view(), name='member_complaints'),
     path('profile-reports/', MemberProfileReportCreateView.as_view(), name='member_profile_reports'),
 
@@ -231,8 +255,11 @@ urlpatterns = [
     path('admin/dashboard/', AdminDashboardView.as_view(), name='admin_dashboard'),
     path('admin/users/', AdminUserListView.as_view(), name='admin_users'),
     path('admin/users/<uuid:user_id>/', AdminUserActionView.as_view(), name='admin_user_action'),
-    path('admin/transactions/', AdminTransactionListView.as_view(), name='admin_transactions'),
-    path('admin/transactions/<uuid:payment_id>/refund/', AdminPaymentRefundView.as_view(), name='admin_payment_refund'),
+    path('admin/payments/', AdminPaymentListView.as_view(), name='admin_payments_list'),
+    path('admin/payments/<uuid:id>/', AdminPaymentDetailView.as_view(), name='admin_payment_detail'),
+    path('admin/payments/<uuid:id>/refund/', AdminPaymentRefundView.as_view(), name='admin_payment_refund'),
+    path('admin/refund-requests/<uuid:id>/<str:action>/', AdminRefundRequestApproveRejectView.as_view(), name='admin_refund_request_action'),
+    path('admin/payments/<uuid:id>/reconcile/', AdminPaymentReconcileView.as_view(), name='admin_payment_reconcile'),
     path('admin/memberships/', AdminMembershipListView.as_view(), name='admin_memberships'),
     path('admin/memberships/direct/', AdminDirectMembershipView.as_view(), name='admin_memberships_direct'),
     path('admin/membership-plans/', AdminMembershipPlanListCreateView.as_view(), name='admin_membership_plans'),
@@ -314,6 +341,12 @@ urlpatterns = [
     path('admin/support/reports/', AdminSupportReportsView.as_view(), name='admin_support_reports'),
     path('admin/support/tickets/', AdminTicketListView.as_view(), name='admin_support_tickets'),
     path('admin/support/tickets/<uuid:ticket_id>/', AdminTicketDetailView.as_view(), name='admin_support_ticket_detail'),
+
+    # Membership lifecycle admin endpoints
+    path('admin/memberships/expiring/', AdminExpiringMembersListView.as_view(), name='admin_memberships_expiring'),
+    path('admin/memberships/expiring/<uuid:membership_id>/contact/', AdminContactExpiringMemberView.as_view(), name='admin_memberships_expiring_contact'),
+    path('admin/memberships/expiring/dashboard/', AdminExpiringMembersDashboardView.as_view(), name='admin_memberships_expiring_dashboard'),
+    path('admin/memberships/notifications/', AdminNotificationDeliveryLogView.as_view(), name='admin_memberships_notifications'),
 ]
 
 router = DefaultRouter()

@@ -29,6 +29,7 @@ class MembershipPlan(models.Model):
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     display_order = models.IntegerField(default=0)
+    rank = models.IntegerField(default=99, help_text='Numeric rank for upgrade ordering (1=Free, 2=Gold, 3=Platinum, 4=Elite)')
     
     # Entitlement parameters (compat and detailed)
     profile_view_limit_daily = models.IntegerField(default=10)
@@ -76,6 +77,12 @@ class MembershipPlan(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
+    # Razorpay-specific and standard requested fields
+    direct_messaging_enabled = models.BooleanField(default=False)
+    contact_access_level = models.CharField(max_length=50, default='NONE')
+    advanced_search_enabled = models.BooleanField(default=False)
+    razorpay_plan_reference = models.CharField(max_length=100, null=True, blank=True)
+
     class Meta:
         db_table = 'membership_plans'
 
@@ -87,8 +94,10 @@ class MemberMembership(models.Model):
     class MembershipStatus(models.TextChoices):
         PENDING_PAYMENT = 'PENDING_PAYMENT', 'Pending Payment'
         ACTIVE = 'ACTIVE', 'Active'
+        EXPIRING_SOON = 'EXPIRING_SOON', 'Expiring Soon'
         EXPIRED = 'EXPIRED', 'Expired'
         CANCELLED = 'CANCELLED', 'Cancelled'
+        PAYMENT_FAILED = 'PAYMENT_FAILED', 'Payment Failed'
         FAILED = 'FAILED', 'Failed'
         # Legacy values remain readable for rows created before the payment
         # flow was restored. New code never creates them.
@@ -118,11 +127,57 @@ class MemberMembership(models.Model):
     razorpay_signature = models.CharField(max_length=255, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(max_length=255, blank=True)
+    auto_renew = models.BooleanField(default=False)
+    created_by = models.CharField(max_length=50, blank=True, help_text='Source of activation: member_request, admin_direct, payment_verified, free_activation, system')
+    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'member_memberships'
+
+
+class NotificationDeliveryLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    membership = models.ForeignKey(MemberMembership, on_delete=models.CASCADE, related_name='notification_logs')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notification_delivery_logs')
+    notification_type = models.CharField(max_length=50, db_index=True)
+    milestone = models.CharField(max_length=50, blank=True)
+    channel = models.CharField(max_length=30, default='in_app')
+    sent_at = models.DateTimeField(auto_now_add=True)
+    delivery_status = models.CharField(max_length=30, default='sent')
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'notification_delivery_logs'
+        ordering = ('-sent_at',)
+
+
+class SupportExpiringMembership(models.Model):
+    class ContactStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        CONTACTED = 'contacted', 'Contacted'
+        FOLLOW_UP = 'follow_up', 'Follow Up'
+        RESOLVED = 'resolved', 'Resolved'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    membership = models.OneToOneField(MemberMembership, on_delete=models.CASCADE, related_name='support_tracking')
+    contact_status = models.CharField(max_length=30, choices=ContactStatus.choices, default=ContactStatus.PENDING)
+    assigned_agent_id = models.UUIDField(null=True, blank=True)
+    assigned_agent_name = models.CharField(max_length=255, blank=True)
+    last_contacted_at = models.DateTimeField(null=True, blank=True)
+    follow_up_notes = models.TextField(blank=True)
+    contacted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'support_expiring_memberships'
+        ordering = ('-created_at',)
 
 
 class MembershipRequest(models.Model):
@@ -371,7 +426,7 @@ class Payment(models.Model):
         ordering = ('-created_at',)
 
 
-class RefundRequest(models.Model):
+class LegacyRefundRequest(models.Model):
     class Status(models.TextChoices):
         REQUESTED = 'REQUESTED', 'Requested'
         PROCESSING = 'PROCESSING', 'Processing'
@@ -1751,3 +1806,185 @@ class AssignmentAudit(models.Model):
     class Meta:
         db_table = 'assignment_audits'
         ordering = ('-created_at',)
+
+
+class PaymentOrder(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payment_orders')
+    membership_plan = models.ForeignKey(MembershipPlan, on_delete=models.CASCADE, related_name='payment_orders')
+    internal_order_number = models.CharField(max_length=100, unique=True)
+    razorpay_order_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_subunits = models.IntegerField()  # amount in paise
+    currency = models.CharField(max_length=10, default='INR')
+    plan_name_snapshot = models.CharField(max_length=255)
+    plan_price_snapshot = models.DecimalField(max_digits=12, decimal_places=2)
+    duration_days_snapshot = models.IntegerField()
+    receipt = models.CharField(max_length=100)
+    status = models.CharField(max_length=50, default='created')  # created, checkout_opened, attempted, authorized, captured, paid, failed, cancelled, expired, partially_refunded, refunded, disputed
+    attempt_number = models.IntegerField(default=1)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'payment_orders'
+        ordering = ('-created_at',)
+        constraints = [
+            models.CheckConstraint(check=models.Q(amount__gt=0), name='payment_order_amount_gt_zero')
+        ]
+
+    def __str__(self):
+        return f'{self.internal_order_number} ({self.status})'
+
+
+class PaymentTransaction(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payment_order = models.ForeignKey(PaymentOrder, on_delete=models.CASCADE, related_name='transactions')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payment_transactions')
+    razorpay_payment_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    razorpay_order_id = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=10, default='INR')
+    status = models.CharField(max_length=50)
+    method = models.CharField(max_length=50, null=True, blank=True)
+    bank = models.CharField(max_length=100, null=True, blank=True)
+    wallet = models.CharField(max_length=100, null=True, blank=True)
+    vpa_masked = models.CharField(max_length=100, null=True, blank=True)
+    card_network = models.CharField(max_length=50, null=True, blank=True)
+    card_last4 = models.CharField(max_length=10, null=True, blank=True)
+    error_code = models.CharField(max_length=100, null=True, blank=True)
+    error_description = models.TextField(null=True, blank=True)
+    error_source = models.CharField(max_length=100, null=True, blank=True)
+    error_step = models.CharField(max_length=100, null=True, blank=True)
+    error_reason = models.CharField(max_length=100, null=True, blank=True)
+    captured_at = models.DateTimeField(null=True, blank=True)
+    failed_at = models.DateTimeField(null=True, blank=True)
+    safe_metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'payment_transactions'
+        ordering = ('-created_at',)
+        constraints = [
+            models.CheckConstraint(check=models.Q(amount__gt=0), name='payment_transaction_amount_gt_zero')
+        ]
+
+    def __str__(self):
+        return f'{self.razorpay_payment_id or self.pk} ({self.status})'
+
+
+class RefundRequest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payment_transaction = models.ForeignKey(PaymentTransaction, on_delete=models.CASCADE, related_name='refund_requests')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payment_refund_requests')
+    requested_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.CharField(max_length=255)
+    details = models.TextField(blank=True)
+    status = models.CharField(max_length=50, default='requested')  # requested, approved, rejected, processing, processed, failed, cancelled
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_refunds')
+    admin_note = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'payment_refund_requests'
+        ordering = ('-requested_at',)
+        constraints = [
+            models.CheckConstraint(check=models.Q(requested_amount__gt=0), name='refund_request_amount_gt_zero')
+        ]
+
+    def __str__(self):
+        return f'Refund Request {self.id} ({self.status})'
+
+
+class RefundTransaction(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    refund_request = models.ForeignKey(RefundRequest, on_delete=models.CASCADE, related_name='transactions')
+    payment_transaction = models.ForeignKey(PaymentTransaction, on_delete=models.CASCADE, related_name='refund_transactions')
+    razorpay_refund_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    internal_refund_number = models.CharField(max_length=100, unique=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=10, default='INR')
+    status = models.CharField(max_length=50, default='processing')  # processing, processed, failed
+    failure_reason = models.TextField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    safe_metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'refund_transactions'
+        ordering = ('-created_at',)
+        constraints = [
+            models.CheckConstraint(check=models.Q(amount__gt=0), name='refund_transaction_amount_gt_zero')
+        ]
+
+    def __str__(self):
+        return f'{self.internal_refund_number} ({self.status})'
+
+
+class RazorpayWebhookEvent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    razorpay_event_id = models.CharField(max_length=100, unique=True)
+    event_type = models.CharField(max_length=100)
+    signature = models.CharField(max_length=255)
+    payload = models.JSONField()
+    status = models.CharField(max_length=50, default='received')  # received, processing, processed, ignored, failed
+    processing_attempts = models.IntegerField(default=0)
+    last_error = models.TextField(null=True, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'razorpay_webhook_events'
+        ordering = ('-received_at',)
+
+    def __str__(self):
+        return f'{self.razorpay_event_id} ({self.event_type})'
+
+
+class MembershipPurchase(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='membership_purchases')
+    membership_plan = models.ForeignKey(MembershipPlan, on_delete=models.CASCADE, related_name='membership_purchases')
+    payment_transaction = models.OneToOneField(PaymentTransaction, on_delete=models.SET_NULL, null=True, blank=True, related_name='membership_purchases')
+    price_snapshot = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=10, default='INR')
+    duration_days_snapshot = models.IntegerField()
+    starts_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+    status = models.CharField(max_length=50, default='pending')  # pending, active, expired, replaced, cancelled, partially_refunded, refunded
+    activated_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'membership_purchases'
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        return f'{self.user_id} - {self.membership_plan.name} ({self.status})'
+
+    @property
+    def plan(self):
+        return self.membership_plan
+
+    @property
+    def start_date(self):
+        return self.starts_at
+
+    @property
+    def end_date(self):
+        return self.expires_at
+
+    @property
+    def started_at(self):
+        return self.starts_at
+
+    @property
+    def is_active(self):
+        return self.status == 'active' and (self.expires_at is None or self.expires_at > timezone.now())

@@ -69,7 +69,12 @@ export const getFAQs = async (): Promise<any[]> => {
 
 export const getConversations = async (): Promise<Conversation[]> => {
   const rows = await fetchApi<Array<Record<string, any>>>('/conversations/');
-  return rows.map((row) => ({ ...row, profile: profileFromWire(row.profile) } as Conversation));
+  return rows.map((row) => {
+    // The backend nests the partner under `other_member`; map it to `profile`
+    // so chat_public_key (needed for E2EE) is available to the UI.
+    const partnerSource = row.other_member ?? row.profile;
+    return { ...row, profile: profileFromWire(partnerSource ?? {}) } as Conversation;
+  });
 };
 
 export const getMessages = async (userId: string): Promise<Message[]> => {

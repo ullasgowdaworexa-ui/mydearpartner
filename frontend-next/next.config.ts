@@ -35,7 +35,9 @@ const connectOrigins = [publicApi, publicWs]
 
 const isDev = process.env.NODE_ENV !== "production";
 
-const razorpayOrigins = "https://api.razorpay.com https://checkout.razorpay.com";
+const razorpayScriptOrigins = "https://checkout.razorpay.com https://cdn.razorpay.com";
+const razorpayConnectOrigins = "https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com https://cdn.razorpay.com";
+const razorpayFrameOrigins = "https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -43,12 +45,12 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} ${razorpayScriptOrigins}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "img-src 'self' data: blob: http://localhost:8000 https:",
-  `connect-src 'self' ${connectOrigins} ${razorpayOrigins}`,
-  "frame-src 'self' blob: https://api.razorpay.com https://checkout.razorpay.com",
+  `connect-src 'self' ${connectOrigins} ${razorpayConnectOrigins}`,
+  `frame-src 'self' blob: ${razorpayFrameOrigins}`,
   "media-src 'self' blob:",
   ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
@@ -104,7 +106,7 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: contentSecurityPolicy },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],

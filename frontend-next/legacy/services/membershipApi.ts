@@ -28,7 +28,8 @@ export interface MembershipPlan {
 }
 
 export interface RazorpayOrder {
-  order_id: string;
+  internal_order_id: string;
+  razorpay_order_id: string;
   amount: number;
   currency: string;
   key_id: string;
@@ -37,7 +38,16 @@ export interface RazorpayOrder {
 }
 
 export interface PaymentVerification {
-  membership: { id: string; status: string; plan_name: string; expires_at: string };
+  success: boolean;
+  payment_status: string;
+  membership_status: string;
+  membership: {
+    id?: string;
+    status?: string;
+    plan_name: string;
+    starts_at?: string;
+    expires_at: string;
+  };
 }
 
 /**
@@ -104,18 +114,18 @@ export const membershipApi = baseApi.injectEndpoints({
     }),
 
     createMembershipOrder: builder.mutation<RazorpayOrder, { plan_id: string }>({
-      query: (body) => ({
-        url: '/member/memberships/create-order/',
+      query: ({ plan_id }) => ({
+        url: '/payments/orders/',
         method: 'POST',
-        body,
+        body: { membership_plan_id: plan_id },
       }),
     }),
 
     verifyMembershipPayment: builder.mutation<PaymentVerification, {
-      razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string;
+      internal_order_id: string; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string;
     }>({
       query: (body) => ({
-        url: '/member/memberships/verify/',
+        url: '/payments/verify/',
         method: 'POST',
         body,
       }),
@@ -139,6 +149,84 @@ export const membershipApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['MembershipSummary'],
     }),
+
+    getPaymentOrderStatus: builder.query<{
+      order_status: string;
+      payment_status: string | null;
+      membership_status: string | null;
+      refund_status: string | null;
+      can_retry: boolean;
+      can_request_refund: boolean;
+    }, string>({
+      query: (id) => ({
+        url: `/payments/orders/${id}/status/`,
+        method: 'GET',
+      }),
+    }),
+
+    getPaymentHistory: builder.query<any[], void>({
+      query: () => ({
+        url: '/payments/history/',
+        method: 'GET',
+      }),
+    }),
+
+    requestRefund: builder.mutation<any, { orderId: string; reason: string; details?: string }>({
+      query: ({ orderId, ...body }) => ({
+        url: `/payments/${orderId}/refund-request/`,
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    getRefundStatus: builder.query<any, string>({
+      query: (id) => ({
+        url: `/payments/refunds/${id}/`,
+        method: 'GET',
+      }),
+    }),
+
+    getAvailableUpgrades: builder.query<{ plans: any[] }, void>({
+      query: () => ({
+        url: '/member-auth/membership/available-upgrades/',
+        method: 'GET',
+      }),
+      providesTags: ['MembershipSummary'],
+    }),
+
+    upgradeMembership: builder.mutation<{ message: string }, { plan_slug: string }>({
+      query: ({ plan_slug }) => ({
+        url: '/member-auth/membership/upgrade/',
+        method: 'POST',
+        body: { plan_slug },
+      }),
+      invalidatesTags: ['MembershipSummary'],
+    }),
+
+    activateFreePlan: builder.mutation<{ message: string }, void>({
+      query: () => ({
+        url: '/member-auth/membership/activate-free/',
+        method: 'POST',
+      }),
+      invalidatesTags: ['MembershipSummary'],
+    }),
+
+    cancelMembership: builder.mutation<{ message: string }, { reason?: string }>({
+      query: (body) => ({
+        url: '/member-auth/membership/cancel/',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['MembershipSummary'],
+    }),
+
+    getMembershipStatusDetail: builder.query<{ summary: any; current_plan_slug: string; available_upgrades: any[] }, void>({
+      query: () => ({
+        url: '/member-auth/membership/status/',
+        method: 'GET',
+      }),
+      providesTags: ['MembershipSummary'],
+    }),
   }),
 });
 
@@ -149,4 +237,13 @@ export const {
   useVerifyMembershipPaymentMutation,
   useGetMembershipSummaryQuery,
   useDeactivateMembershipMutation,
+  useGetPaymentOrderStatusQuery,
+  useGetPaymentHistoryQuery,
+  useRequestRefundMutation,
+  useGetRefundStatusQuery,
+  useGetAvailableUpgradesQuery,
+  useUpgradeMembershipMutation,
+  useActivateFreePlanMutation,
+  useCancelMembershipMutation,
+  useGetMembershipStatusDetailQuery,
 } = membershipApi;

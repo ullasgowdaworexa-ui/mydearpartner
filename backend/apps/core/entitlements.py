@@ -98,22 +98,36 @@ def _plan_values(plan):
 def get_active_entitlements(member) -> EntitlementSet:
     """Resolve a member's unexpired paid plan, otherwise the Free plan."""
     from apps.accounts.models import Member
-    from apps.core.models import MemberMembership, MembershipPlan
+    from apps.core.models import MemberMembership, MembershipPlan, MembershipPurchase
 
     if not isinstance(member, Member):
         member = Member.objects.filter(pk=getattr(member, 'pk', None)).first()
     paid_plan = None
     if member and member.is_active and member.account_status == Member.AccountStatus.ACTIVE:
-        membership = (
-            MemberMembership.objects.select_related('plan')
-            .filter(member=member, is_active=True, status=MemberMembership.MembershipStatus.ACTIVE)
-            .order_by('-started_at', '-created_at')
+        # Primary source of truth: MembershipPurchase record
+        purchase = (
+            MembershipPurchase.objects.select_related('membership_plan')
+            .filter(user=member, status='active')
+            .order_by('-starts_at', '-created_at')
             .first()
         )
-        if membership and membership.plan_id:
-            expiry = membership.expires_at or membership.end_date
+        if purchase and purchase.membership_plan_id:
+            expiry = purchase.expires_at
             if expiry is None or expiry > timezone.now():
-                paid_plan = membership.plan
+                paid_plan = purchase.membership_plan
+
+        # Fallback source: MemberMembership (for legacy/instant development setups)
+        if not paid_plan:
+            membership = (
+                MemberMembership.objects.select_related('plan')
+                .filter(member=member, is_active=True, status=MemberMembership.MembershipStatus.ACTIVE)
+                .order_by('-started_at', '-created_at')
+                .first()
+            )
+            if membership and membership.plan_id:
+                expiry = membership.expires_at or membership.end_date
+                if expiry is None or expiry > timezone.now():
+                    paid_plan = membership.plan
 
     plan = paid_plan or MembershipPlan.objects.filter(slug__iexact='free').first()
     if not plan:
