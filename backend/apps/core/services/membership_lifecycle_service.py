@@ -36,8 +36,14 @@ class MembershipLifecycleService:
 
     @classmethod
     def is_valid_upgrade(cls, current_plan_slug: str, target_plan_slug: str) -> bool:
+        """
+        Strict upgrade-only rule: Users can ONLY buy higher tier plans.
+        No downgrades allowed, including to free plan.
+        """
         current_rank = cls.get_plan_rank(current_plan_slug)
         target_rank = cls.get_plan_rank(target_plan_slug)
+        
+        # Only allow upgrades to higher tier plans - strict rule
         return target_rank > current_rank
 
     @classmethod
@@ -60,8 +66,13 @@ class MembershipLifecycleService:
         current_rank = cls.get_plan_rank(current_slug)
         plans = cls.get_sorted_plans()
         result = []
+        
         for plan in plans:
             plan_rank = plan.rank if plan.rank and plan.rank != 99 else cls.get_plan_rank(plan.slug)
+            is_upgrade = plan_rank > current_rank
+            is_downgrade = plan_rank < current_rank
+            is_current = plan.slug == current_slug
+            
             result.append({
                 'slug': plan.slug,
                 'name': plan.name,
@@ -69,9 +80,10 @@ class MembershipLifecycleService:
                 'currency': plan.currency,
                 'duration_days': plan.duration_days,
                 'is_featured': plan.is_featured,
-                'is_current': plan.slug == current_slug,
-                'is_upgrade': plan_rank > current_rank,
-                'is_downgrade': plan_rank < current_rank,
+                'is_current': is_current,
+                'is_upgrade': is_upgrade,
+                'is_downgrade': is_downgrade,
+                'is_purchasable': is_upgrade,  # Only upgrades are purchasable
                 'rank': plan_rank,
             })
         return result

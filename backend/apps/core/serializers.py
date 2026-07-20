@@ -56,7 +56,18 @@ def member_summary(member, *, include_contact=False):
         'last_name': member.last_name,
     }
     if include_contact:
-        result.update(email=member.email, mobile_number=member.mobile_number)
+        result.update(email=member.email, mobile_number=getattr(member, 'mobile_number', ''))
+        result['gender'] = getattr(member, 'gender', '')
+        result['is_premium'] = getattr(member, 'is_premium', False)
+        result['profile_status'] = getattr(member, 'profile_status', 'not_started')
+        result['photo_status'] = getattr(member, 'photo_status', 'not_started')
+        result['document_status'] = getattr(member, 'document_status', 'not_started')
+        try:
+            from apps.core.services.membership_service import MembershipService
+            plan = MembershipService.get_effective_plan(member)
+            result['active_plan'] = plan.name if plan else 'Free'
+        except Exception:
+            result['active_plan'] = 'Free'
     return result
 
 
@@ -349,14 +360,35 @@ class SupportCategorySerializer(serializers.ModelSerializer):
         fields = ('id', 'code', 'name', 'description')
 
 
+class SupportAttachmentSerializer(serializers.ModelSerializer):
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SupportTicketAttachment
+        fields = ('id', 'original_filename', 'mime_type', 'file_size', 'download_url', 'created_at')
+
+    def get_download_url(self, obj):
+        # Return a frontend-proxy path so the browser fetches it via Next.js,
+        # which injects the Bearer token automatically — avoids 401 on direct requests.
+        return f'/api/proxy/support/attachments/{obj.pk}/download/'
+
+
 class SupportTicketReplySerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     sender = serializers.SerializerMethodField()
     is_internal_note = serializers.SerializerMethodField()
+    attachments = SupportAttachmentSerializer(many=True, read_only=True)
+    attachment = serializers.SerializerMethodField()
 
     class Meta:
         model = SupportTicketReply
-        fields = ('id', 'author', 'sender', 'message', 'is_public', 'is_internal_note', 'created_at', 'updated_at')
+        fields = ('id', 'author', 'sender', 'message', 'is_public', 'is_internal_note', 'attachments', 'attachment', 'created_at', 'updated_at')
+
+    def get_attachment(self, obj):
+        first = obj.attachments.first()
+        if not first:
+            return None
+        return f'/api/proxy/support/attachments/{first.pk}/download/'
 
     def get_author(self, obj):
         if obj.member_sender_id:
@@ -408,6 +440,8 @@ class SupportTicketSerializer(serializers.ModelSerializer):
     reply_count = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
     status_history = TicketStatusHistorySerializer(many=True, read_only=True)
+    attachments = SupportAttachmentSerializer(many=True, read_only=True)
+    attachment = serializers.SerializerMethodField()
 
     class Meta:
         model = SupportTicket
@@ -417,8 +451,14 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             'assigned_to', 'current_assignee', 'created_by', 'related_payment_id',
             'related_profile_id', 'first_response_at', 'resolved_at', 'closed_at',
             'last_reply_at', 'reply_count', 'replies', 'status_history',
-            'created_at', 'updated_at',
+            'attachments', 'attachment', 'created_at', 'updated_at',
         )
+
+    def get_attachment(self, obj):
+        first = obj.attachments.filter(reply__isnull=True).first()
+        if not first:
+            return None
+        return f'/api/proxy/support/attachments/{first.pk}/download/'
 
     def get_user(self, obj):
         return member_summary(obj.member, include_contact=self.context.get('include_contact', False))
@@ -555,19 +595,6 @@ class ProfileVerificationSerializer(serializers.ModelSerializer):
 
         documents = [link.member_document for link in obj.verification_documents.select_related('member_document')]
         return MemberDocumentSerializer(documents, many=True, context=self.context).data
-
-
-class SupportAttachmentSerializer(serializers.ModelSerializer):
-    download_url = serializers.SerializerMethodField()
-
-    class Meta:
-        model = SupportTicketAttachment
-        fields = ('id', 'original_filename', 'mime_type', 'file_size', 'download_url', 'created_at')
-
-    def get_download_url(self, obj):
-        request = self.context.get('request')
-        path = f'/api/v1/support/attachments/{obj.pk}/download/'
-        return request.build_absolute_uri(path) if request else path
 
 
 class MemberComplaintSerializer(serializers.ModelSerializer):

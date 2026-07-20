@@ -16,6 +16,7 @@ interface AdminMembership {
   id: string;
   user: { id: string; full_name: string; email: string } | null;
   plan: { id: string; name: string; price: string } | null;
+  current_plan: { name: string; is_active: boolean; expires_at: string | null } | null;
   start_date: string;
   end_date: string | null;
   is_active: boolean;
@@ -693,7 +694,8 @@ export default function AdminMembershipsPage({ defaultTab }: { defaultTab?: 'rec
                   <thead>
                     <tr>
                       <th>Member</th>
-                      <th>Plan</th>
+                      <th>Record Plan</th>
+                      <th>Current Plan</th>
                       <th>Price</th>
                       <th>Status</th>
                       <th>Start date</th>
@@ -709,8 +711,20 @@ export default function AdminMembershipsPage({ defaultTab }: { defaultTab?: 'rec
                             <small>{item.user?.email || 'N/A'}</small>
                           </p>
                         </td>
-                        <td data-label="Plan">
-                          <span style={{ fontWeight: 600 }}>{item.plan?.name || 'No plan'}</span>
+                        <td data-label="Record Plan">
+                          <span style={{ fontWeight: 600, color: '#555' }}>{item.plan?.name || 'No plan'}</span>
+                        </td>
+                        <td data-label="Current Plan">
+                          <span style={{
+                            fontWeight: 700,
+                            padding: '2px 10px',
+                            borderRadius: '99px',
+                            fontSize: '0.78rem',
+                            background: item.current_plan?.is_active ? 'linear-gradient(135deg,#f59e0b,#d97706)' : '#f3f4f6',
+                            color: item.current_plan?.is_active ? 'white' : '#6b7280',
+                          }}>
+                            {(item.current_plan as any)?.name || 'Free'}
+                          </span>
                         </td>
                         <td data-label="Price">
                           <span style={{ fontFamily: 'monospace' }}>

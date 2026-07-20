@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from '@/lib/router-compat';
@@ -25,8 +25,38 @@ import {
   LifeBuoy,
   Send,
   Star,
-  Paperclip
+  Paperclip,
+  Image as ImageIcon
 } from 'lucide-react';
+
+// ─── Attachment Preview helper ──────────────────────────────────────────────
+function AttachmentPreview({ url, filename, mimeType }: { url?: string | null; filename?: string; mimeType?: string }) {
+  if (!url) return null;
+  const isImage = mimeType?.startsWith('image/') ||
+    /\.(jpe?g|png|webp|gif)$/i.test(filename || url);
+  if (isImage) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="block mt-2">
+        <img
+          src={url}
+          alt={filename || 'Attachment'}
+          className="max-h-52 rounded-xl border border-gray-100 shadow-sm object-cover hover:opacity-90 transition-opacity"
+          style={{ maxWidth: '100%' }}
+        />
+        <span className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+          <ImageIcon className="w-3 h-3" />{filename || 'View image'}
+        </span>
+      </a>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="attachment-badge-link mt-2 inline-flex">
+      {/\.pdf$/i.test(filename || url) ? <FileText className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />}
+      {filename || 'Download attachment'}
+    </a>
+  );
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 const CATEGORY_OPTIONS: { value: string; label: string; icon: string; blurb: string; subjectHint: string }[] = [
   { value: 'PAYMENT', label: 'Payments & Plans', icon: '💳', blurb: 'Refunds, plan unlocks, billing queries.', subjectHint: 'Issue with my plan / payment' },
@@ -110,7 +140,11 @@ export default function SupportPage() {
   }, [loadTickets]);
 
   useEffect(() => {
-    if (!routeTicketId) return;
+    if (!routeTicketId) {
+      setSelectedTicket(null);
+      setReplies([]);
+      return;
+    }
     supportService.getTicketDetails(routeTicketId)
       .then((details) => {
         setSelectedTicket(details);
@@ -538,11 +572,12 @@ export default function SupportPage() {
                     <span>{formatDate(selectedTicket.created_at)}</span>
                   </div>
                   <p className="description-detail-text">{selectedTicket.description}</p>
-                  {selectedTicket.attachment && (
-                    <a href={selectedTicket.attachment} target="_blank" rel="noreferrer" className="attachment-badge-link">
-                      <Download className="w-3.5 h-3.5" /> Download attachment
-                    </a>
-                  )}
+                  {(selectedTicket.attachments && selectedTicket.attachments.length > 0)
+                    ? selectedTicket.attachments.map((att: any) => (
+                        <AttachmentPreview key={att.id} url={att.download_url} filename={att.original_filename} mimeType={att.mime_type} />
+                      ))
+                    : <AttachmentPreview url={selectedTicket.attachment} />
+                  }
                 </div>
 
                 {/* Replies */}
@@ -562,16 +597,12 @@ export default function SupportPage() {
                           <span>{formatDate(reply.created_at)}</span>
                         </div>
                         <p className="chat-bubble-text text-sm leading-relaxed">{reply.message}</p>
-                        {reply.attachment && (
-                          <a
-                            href={reply.attachment}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="attachment-badge-link mt-2 inline-flex"
-                          >
-                            <Download className="w-3 h-3" /> View Attachment
-                          </a>
-                        )}
+                        {(reply.attachments && reply.attachments.length > 0)
+                          ? reply.attachments.map((att: any) => (
+                              <AttachmentPreview key={att.id} url={att.download_url} filename={att.original_filename} mimeType={att.mime_type} />
+                            ))
+                          : <AttachmentPreview url={reply.attachment} />
+                        }
                       </div>
                     </div>
                   );

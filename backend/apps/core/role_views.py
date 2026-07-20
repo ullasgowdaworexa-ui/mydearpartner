@@ -2750,6 +2750,12 @@ class AdminPaymentReconcileView(ScopedAPIView):
 
 class _MembershipWireSerializer(serializers.Serializer):
     def to_representation(self, membership):
+        # Check the member's current active plan (prefetched to avoid N+1)
+        prefetched = getattr(membership.member, '_active_memberships', None)
+        if prefetched is not None:
+            current = prefetched[0] if prefetched else None
+        else:
+            current = membership.member.memberships.filter(is_active=True).select_related('plan').first()
         return {
             'id': str(membership.pk),
             'user': member_summary(membership.member, include_contact=True),
@@ -2758,6 +2764,12 @@ class _MembershipWireSerializer(serializers.Serializer):
                 'name': membership.plan.name,
                 'price': str(membership.plan.price),
             } if membership.plan_id else None,
+            # current_plan reflects what the member has RIGHT NOW (may differ from this record's plan)
+            'current_plan': {
+                'name': current.plan.name if (current and current.plan) else 'Free',
+                'is_active': current.is_active if current else False,
+                'expires_at': current.end_date if current else None,
+            },
             'start_date': membership.start_date,
             'end_date': membership.end_date,
             'is_active': membership.is_active,
@@ -2769,7 +2781,12 @@ class AdminMembershipListView(ScopedAPIView):
     required_permission = 'members.view'
 
     def get(self, request):
-        queryset = MemberMembership.objects.select_related('member', 'plan')
+        from django.db.models import Prefetch
+        # Prefetch each member's current active plan to avoid N+1 queries
+        active_m_qs = MemberMembership.objects.filter(is_active=True).select_related('plan')
+        queryset = MemberMembership.objects.select_related('member', 'plan').prefetch_related(
+            Prefetch('member__memberships', queryset=active_m_qs, to_attr='_active_memberships')
+        )
         requested_status = request.query_params.get('status')
         if requested_status == 'active':
             queryset = queryset.filter(is_active=True)

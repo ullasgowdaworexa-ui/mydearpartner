@@ -1,10 +1,11 @@
-﻿'use client';
+'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from '@/lib/router-compat';
 import {
-  ArrowRight, CheckCircle2, Filter, LoaderCircle, MessageSquarePlus, Plus,
-  RefreshCw, Search, Send, TicketCheck, UserRound, AlertTriangle, Download, PhoneCall, Calendar
+  CheckCircle2, LoaderCircle, MessageSquarePlus, Plus,
+  RefreshCw, Search, Send, TicketCheck, UserRound, AlertTriangle, Download,
+  PhoneCall, FileText, ShieldCheck, ShieldAlert, Crown, Star
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchApi, getAccessToken, extractErrorMessage } from '../../services/apiClient';
@@ -21,6 +22,32 @@ import {
 } from '../../components/admin/AdminUI';
 import AdminAssignModal from '../../components/admin/AdminAssignModal';
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
+
+// Attachment Preview helper — images inline, docs as download badge
+function AttachmentPreview({ url, filename, mimeType }: { url?: string | null; filename?: string; mimeType?: string }) {
+  if (!url) return null;
+  const isImage = (mimeType?.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(filename || url));
+  if (isImage) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '8px' }}>
+        <img
+          src={url}
+          alt={filename || 'Attachment'}
+          style={{ maxHeight: '200px', maxWidth: '100%', borderRadius: '8px', border: '1px solid rgba(43,16,29,0.1)', objectFit: 'cover' }}
+        />
+        <span style={{ fontSize: '0.7rem', color: '#999', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+          {filename || 'View image'}
+        </span>
+      </a>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: '#8e3d58', textDecoration: 'none' }}>
+      {/\.pdf$/i.test(filename || url) ? <FileText size={13} /> : <Download size={13} />}
+      {filename || 'Download attachment'}
+    </a>
+  );
+}
 
 export default function AdminTicketsPage() {
   const location = useLocation();
@@ -83,13 +110,15 @@ export default function AdminTicketsPage() {
   const [phoneInternalNote, setPhoneInternalNote] = useState('');
 
   // Sync searchInput when URL search param changes (e.g. from global search)
+  // Guard: only update if the param value actually differs from committed search state
   useEffect(() => {
     const queryParam = searchParams.get('search') || '';
-    if (queryParam !== searchInput) {
+    if (queryParam !== search) {
       setSearchInput(queryParam);
       setSearch(queryParam);
     }
-  }, [searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('search')]);
 
   // Debounce searchInput to search state
   useEffect(() => {
@@ -144,27 +173,13 @@ export default function AdminTicketsPage() {
         || result.results.find((item) => item.id === current?.id)
         || result.results[0]
         || null);
-
-      const next = new URLSearchParams();
-      if (search) next.set('search', search);
-      if (status) next.set('status', status);
-      if (priority) next.set('priority', priority);
-      if (category) next.set('category', category);
-      if (source) next.set('source', source);
-      if (assignedStaff) next.set('assigned_staff', assignedStaff);
-      if (overdueOnly) next.set('overdue', 'true');
-      if (unassignedOnly) next.set('unassigned', 'true');
-      if (startDate) next.set('start_date', startDate);
-      if (endDate) next.set('end_date', endDate);
-      if (page > 1) next.set('page', String(page));
-      setSearchParams(next, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Support tickets could not be loaded.');
     } finally {
       setLoading(false);
       loadInFlightRef.current = false;
     }
-  }, [page, priority, category, source, assignedStaff, overdueOnly, unassignedOnly, startDate, endDate, search, setSearchParams, status]);
+  }, [page, priority, category, source, assignedStaff, overdueOnly, unassignedOnly, startDate, endDate, search, status, routeTicketId]);
 
   useEffect(() => {
     load();
@@ -192,7 +207,32 @@ export default function AdminTicketsPage() {
     }
   }, [canAssign]);
 
-  useEffect(() => { setPage(1); }, [search, status, priority, category, source, assignedStaff, overdueOnly, unassignedOnly, startDate, endDate]);
+  // Keep a stable ref to setSearchParams — its identity changes every render because
+  // useSearchParams() rebuilds it whenever params changes. Including it as a dep would
+  // cause: setSearchParams → URL update → new params ref → new setter ref → effect fires again → loop.
+  const setSearchParamsRef = useRef(setSearchParams);
+  useEffect(() => { setSearchParamsRef.current = setSearchParams; });
+
+  // Sync URL search params whenever filters change (separate from load to avoid loop)
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (search) next.set('search', search);
+    if (status) next.set('status', status);
+    if (priority) next.set('priority', priority);
+    if (category) next.set('category', category);
+    if (source) next.set('source', source);
+    if (assignedStaff) next.set('assigned_staff', assignedStaff);
+    if (overdueOnly) next.set('overdue', 'true');
+    if (unassignedOnly) next.set('unassigned', 'true');
+    if (startDate) next.set('start_date', startDate);
+    if (endDate) next.set('end_date', endDate);
+    if (page > 1) next.set('page', String(page));
+    setSearchParamsRef.current(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, status, priority, category, source, assignedStaff, overdueOnly, unassignedOnly, startDate, endDate, page]);
+
+
+  // ❌ Removed duplicate setPage(1) effect — already defined above at line 130
 
   const updateStatus = async (ticket: SupportTicket, nextStatus: TicketStatus) => {
     setBusy(true);
@@ -582,33 +622,55 @@ export default function AdminTicketsPage() {
                   </div>
                 )}
 
-                <div className="admin-ticket-people">
-                  <div>
-                    <span><UserRound /></span>
-                    <p>
-                      <small>Member Details</small>
-                      <strong>{selected.user?.full_name || 'System Alert'}</strong>
-                      <em>{selected.user?.email || 'N/A'}</em>
-                    </p>
+                {/* Rich member + assignee card */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                  {/* Left column: identity */}
+                  <div style={{ padding: '14px', background: 'linear-gradient(135deg,#fff9f8,#fff5f3)', borderRadius: '12px', border: '1px solid rgba(142,61,88,0.1)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg,#8e3d58,#4f192f)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800, fontSize: '0.95rem', flexShrink: 0 }}>
+                        {(selected.user?.full_name || 'M').slice(0,1).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#2b101d' }}>{selected.user?.full_name || 'System Alert'}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#8e3d58', fontWeight: 600 }}>{(selected.user as any)?.gender || ''}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#555', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span>Email: {selected.user?.email || 'N/A'}</span>
+                      <span>Phone: {(selected.user as any)?.mobile_number || 'N/A'}</span>
+                    </div>
                   </div>
-                  <ArrowRight />
-                  <div>
-                    <span><TicketCheck /></span>
-                    <p>
-                      <small>Assigned Staff</small>
-                      <strong>{selected.assigned_to?.full_name || 'Unassigned'}</strong>
-                      <em>{selected.assigned_to?.email || 'Awaiting assignment'}</em>
-                    </p>
+
+                  {/* Right column: plan & KYC badges + assignee */}
+                  <div style={{ padding: '14px', background: '#f9f7f5', borderRadius: '12px', border: '1px solid rgba(43,16,29,0.07)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 800, background: (selected.user as any)?.is_premium ? 'linear-gradient(135deg,#f59e0b,#d97706)' : '#f3f4f6', color: (selected.user as any)?.is_premium ? 'white' : '#6b7280', display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
+                      {(selected.user as any)?.is_premium ? <Crown size={11} /> : <Star size={11} />}
+                      {(selected.user as any)?.active_plan || 'Free'}
+                    </span>
+                    {(['profile_status','photo_status','document_status'] as const).map(key => {
+                      const val = (selected.user as any)?.[key];
+                      const ok = val === 'approved';
+                      return (
+                        <span key={key} style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: ok ? '#dcfce7' : '#fef9c3', color: ok ? '#166534' : '#854d0e', display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
+                          {ok ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />}
+                          {key.replace('_status','').charAt(0).toUpperCase() + key.replace('_status','').slice(1)}: {val || 'N/A'}
+                        </span>
+                      );
+                    })}
+                    <div style={{ marginTop: '6px', borderTop: '1px solid rgba(43,16,29,0.08)', paddingTop: '6px', fontSize: '0.77rem', color: '#555' }}>
+                      <TicketCheck size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                      <strong style={{ color: '#2b101d' }}>{selected.assigned_to?.full_name || 'Unassigned'}</strong>
+                      <div style={{ color: '#999', fontSize: '0.72rem' }}>{selected.assigned_to?.email || 'Awaiting assignment'}</div>
+                    </div>
                   </div>
                 </div>
 
+
                 <div className="admin-ticket-message">
                   <p style={{ whiteSpace: 'pre-wrap' }}>{selected.description || selected.message}</p>
-                  {selected.attachment && (
-                    <a href={selected.attachment} target="_blank" rel="noreferrer" className="attachment-link" style={{ marginTop: '12px', display: 'inline-flex' }}>
-                      ðŸ“Ž Download member attachment
-                    </a>
-                  )}
+                  {(selected as any).attachments?.length
+                    ? (selected as any).attachments.map((att: any) => <AttachmentPreview key={att.id} url={att.download_url} filename={att.original_filename} mimeType={att.mime_type} />)
+                    : <AttachmentPreview url={selected.attachment} />}
                 </div>
 
                 {/* Conversation Log replies */}
@@ -621,11 +683,9 @@ export default function AdminTicketsPage() {
                           <strong>{item.author?.full_name || (item.is_internal_note ? 'Internal Note' : 'Member')}</strong>
                           <small>{formatAdminDate(item.created_at, true)}</small>
                           {item.message}
-                          {item.attachment && (
-                            <a href={item.attachment} target="_blank" rel="noreferrer" className="attachment-link" style={{ marginTop: '6px', display: 'block', fontSize: '0.8rem', width: 'fit-content' }}>
-                              ðŸ“Ž View Attachment
-                            </a>
-                          )}
+                          {(item as any).attachments?.length
+                            ? (item as any).attachments.map((att: any) => <AttachmentPreview key={att.id} url={att.download_url} filename={att.original_filename} mimeType={att.mime_type} />)
+                            : <AttachmentPreview url={item.attachment} />}
                         </p>
                       </div>
                     ))}

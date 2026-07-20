@@ -14,6 +14,7 @@ export interface TicketReply {
   is_internal_note: boolean;
   created_at: string;
   attachment?: string | null;
+  attachments?: Array<{ id: string; download_url: string; original_filename: string; mime_type?: string }> | null;
 }
 
 export interface SupportTicket {
@@ -37,6 +38,7 @@ export interface SupportTicket {
   sla_escalated: boolean;
   replies?: TicketReply[];
   attachment?: string | null;
+  attachments?: Array<{ id: string; download_url: string; original_filename: string; mime_type?: string }> | null;
 }
 
 export interface TicketFeedback {

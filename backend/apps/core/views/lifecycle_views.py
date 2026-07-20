@@ -18,8 +18,14 @@ class MembershipUpgradeView(APIView):
             return ApiErrorResponse(code='PLAN_REQUIRED', message='plan_slug is required.', status=status.HTTP_400_BAD_REQUEST)
 
         current_slug = MembershipLifecycleService.get_current_plan_slug(request.user)
+        
+        # Strict upgrade-only validation
         if current_slug and not MembershipLifecycleService.is_valid_upgrade(current_slug, plan_slug):
-            return ApiErrorResponse(code='INVALID_UPGRADE', message='You can only upgrade to a higher-tier plan.', status=status.HTTP_400_BAD_REQUEST)
+            return ApiErrorResponse(
+                code='UPGRADE_ONLY_POLICY', 
+                message='You can only upgrade to a higher-tier plan. Downgrades are not allowed.',
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         activation_mode = MembershipService.get_activation_mode()
         if activation_mode == MembershipService.ACTIVATION_MODE_INSTANT:
@@ -46,21 +52,24 @@ class ActivateFreePlanView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsMember)
 
     def post(self, request):
-        success, message, _ = MembershipLifecycleService.activate_free_plan(request.user)
-        if not success:
-            return ApiResponse(success=False, message=message, status=status.HTTP_400_BAD_REQUEST)
-        return ApiResponse(success=True, message=message)
+        # Strict upgrade-only policy - no downgrades to free plan allowed
+        return ApiErrorResponse(
+            code='DOWNGRADE_NOT_ALLOWED',
+            message='Downgrades to free plan are not allowed. Contact support to cancel your membership.',
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class CancelMembershipView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsMember)
 
     def post(self, request):
-        reason = request.data.get('reason', 'member_requested')
-        success, message = MembershipLifecycleService.cancel_membership(request.user, reason)
-        if not success:
-            return ApiResponse(success=False, message=message, status=status.HTTP_400_BAD_REQUEST)
-        return ApiResponse(success=True, message=message)
+        # Strict upgrade-only policy - no self-service cancellation allowed
+        return ApiErrorResponse(
+            code='SELF_CANCEL_NOT_ALLOWED', 
+            message='Self-service cancellation is not available. Please contact support to cancel your membership.',
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class MembershipStatusDetailView(APIView):

@@ -66,8 +66,13 @@ function isProtectedDocumentPath(path: string) {
   return /verification\/documents\/[^/]+\/download\/?$/.test(path);
 }
 
+function isProtectedAttachmentPath(path: string) {
+  // Support ticket attachments: support/attachments/{uuid}/download/
+  return /support\/attachments\/[^/]+\/download\/?$/.test(path);
+}
+
 function isProtectedResourcePath(path: string) {
-  return isProtectedPhotoPath(path) || isProtectedDocumentPath(path);
+  return isProtectedPhotoPath(path) || isProtectedDocumentPath(path) || isProtectedAttachmentPath(path);
 }
 
 /**
