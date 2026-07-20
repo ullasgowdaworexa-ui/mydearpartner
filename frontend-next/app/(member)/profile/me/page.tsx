@@ -69,11 +69,18 @@ export default function MyProfilePage() {
   };
 
   useEffect(() => {
-    if (authLoading) return;
+    // Safety net: never allow this page to hang on the loading screen.
+    // If neither the profile nor an auth-resolved state arrives shortly,
+    // force the loading flag off so the page renders its fallback.
+    const safety = setTimeout(() => setLoading(false), 8000);
+
     if (!user) {
-      setLoading(false);
-      return;
+      // No user yet. Only stop loading if auth has definitively finished
+      // (otherwise wait for the user to populate).
+      if (!authLoading) setLoading(false);
+      return () => { clearTimeout(safety); };
     }
+
     let active = true;
     fetchApi<any>('/member-auth/me/')
       .then((data) => { if (active) { setProfile(data); setLoading(false); } })
@@ -83,10 +90,10 @@ export default function MyProfilePage() {
           setLoading(false);
         }
       });
-    return () => { active = false; };
+    return () => { active = false; clearTimeout(safety); };
   }, [user, authLoading]);
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 pt-20 pb-16">
         <div className="max-w-4xl mx-auto px-4">
@@ -120,10 +127,11 @@ export default function MyProfilePage() {
 
   const p = profile;
   const photos: MemberPhoto[] = p.photos || [];
-  const approvedPhotos = photos.filter((ph) => ph.status === 'approved');
+  const normStatus = (s: string) => String(s || '').toLowerCase();
+  const approvedPhotos = photos.filter((ph) => normStatus(ph.status) === 'approved');
   const primaryPhoto = approvedPhotos.find((ph) => ph.is_primary) || approvedPhotos[0];
-  const pendingPhotos = photos.filter((ph) => ph.status === 'pending');
-  const rejectedPhotos = photos.filter((ph) => ph.status === 'rejected');
+  const pendingPhotos = photos.filter((ph) => normStatus(ph.status) === 'pending');
+  const rejectedPhotos = photos.filter((ph) => normStatus(ph.status) === 'rejected');
   const completion = p.completion_percentage ?? 0;
 
   return (

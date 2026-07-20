@@ -135,7 +135,7 @@ const allowedPhotoTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'imag
 const allowedPhotoFilename = /\.(?:jpe?g|png|webp)$/i;
 
 export default function EditProfilePage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, loading: authLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const profile = user as ProfileUser | null;
@@ -145,6 +145,20 @@ export default function EditProfilePage() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+
+  // Refresh the authoritative profile in the background so member-level
+  // status (e.g. document_status after an admin approval) stays current
+  // across client-side navigation. This must NOT gate rendering: the cached
+  // auth user is already authoritative and complete, so the page renders
+  // immediately and simply adopts the fresher payload when it arrives.
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi<UserType>('/member-auth/me/')
+      .then((fresh) => { if (!cancelled) updateUser(fresh); })
+      .catch(() => { /* keep cached user on failure */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const { data: photosResponse, refetch: refetchPhotos } = useGetMyPhotosQuery();
   const [uploadManagedPhoto] = useUploadPhotoMutation();
   const [deleteManagedPhoto] = useDeletePhotoMutation();
@@ -171,14 +185,25 @@ export default function EditProfilePage() {
     return next;
   };
 
-  // Reset the form ONLY from authoritative server data (initial load or a
-  // successful save). Never overwrite a dirty form with stale local state.
+  // Adopt authoritative server data into the form on initial load and after
+  // a successful save. Never clobber a form the user has already edited: if
+  // there are unsaved changes, leave them intact and just refresh the
+  // pristine baseline so a later save still diffs correctly.
+  const isDirty = (source: FormState) => {
+    for (const key of Object.keys(initialForm)) {
+      if (source[key] !== initialForm[key]) return true;
+    }
+    return false;
+  };
   useEffect(() => {
     if (!profile) return;
     const next = mapApiToForm(profile);
+    if (isDirty(form)) {
+      setInitialForm(next);
+      return;
+    }
     setForm(next);
     setInitialForm(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, profileFields]);
 
   const setValue = (key: string, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -326,30 +351,6 @@ export default function EditProfilePage() {
     }
   };
 
-  const deleteDocument = async (docId: string, docStatus?: string) => {
-    let reason = '';
-    if (docStatus === 'APPROVED') {
-      reason = window.prompt('This document is approved. Please provide a reason for deletion:')?.trim() || '';
-      if (!reason) return;
-    }
-    if (!confirm('Delete this document?')) return;
-    setBusy(true);
-    setNotice(null);
-    try {
-      await fetchApi(`/member-auth/me/documents/${docId}/`, {
-        method: 'DELETE',
-        body: reason ? JSON.stringify({ reason }) : undefined,
-      });
-      const fresh = await fetchApi<UserType>('/member-auth/me/');
-      updateUser(fresh);
-      setNotice({ text: 'Document deleted.' });
-    } catch (error) {
-      setNotice({ text: messageFrom(error), error: true });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const [viewDoc, setViewDoc] = useState<{ id: string; type: string } | null>(null);
   const [verifyTarget, setVerifyTarget] = useState<'email' | 'mobile' | null>(null);
   const [otpCode, setOtpCode] = useState('');
@@ -398,11 +399,21 @@ export default function EditProfilePage() {
   };
 
   if (!profile) {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center pt-16">
+          <div className="animate-pulse text-center">
+            <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4" />
+            <div className="h-4 w-32 bg-gray-200 rounded mx-auto" />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex items-center justify-center pt-16">
-        <div className="animate-pulse text-center">
-          <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4" />
-          <div className="h-4 w-32 bg-gray-200 rounded mx-auto" />
+        <div className="text-center text-muted">
+          <p className="text-lg mb-2">Please sign in to edit your profile.</p>
+          <a href="/login" className="text-rose-500 underline">Go to login</a>
         </div>
       </div>
     );
@@ -511,7 +522,7 @@ export default function EditProfilePage() {
         </aside>
 
         {/* Content */}
-        <section className="flex-1 min-w-0 p-6 md:p-8">
+        <section className="relative flex-1 min-w-0 p-6 md:p-8">
           {/* Photos Tab */}
           {activeTab === 'photos' ? (
             <div className="space-y-6">
@@ -720,9 +731,6 @@ export default function EditProfilePage() {
                           <div className="flex items-center gap-2">
                             <button type="button" onClick={() => setViewDoc({ id: doc.id, type: doc.document_type })} className="px-2.5 py-1 rounded-lg border border-gray-200 font-bold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
                               View
-                            </button>
-                            <button type="button" onClick={() => deleteDocument(doc.id, doc.status)} disabled={busy} className="px-2.5 py-1 rounded-lg border border-red-200 font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 cursor-pointer">
-                              Delete
                             </button>
                             <span className={`px-2.5 py-1 rounded-full font-bold shrink-0 ${
                               doc.status === 'APPROVED' ? 'bg-green-100 text-green-700' :

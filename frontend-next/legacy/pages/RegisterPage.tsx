@@ -1,160 +1,397 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from '@/lib/router-compat';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
+  BadgeCheck,
+  Calendar,
   Check,
-  Heart,
-  LockKeyhole,
-  MapPin,
-  ShieldCheck,
-  UserRound,
+  ChevronDown,
   Eye,
   EyeOff,
-  AlertCircle,
-  Users,
-  Mail,
-  Phone,
-  Calendar,
   GraduationCap,
+  Heart,
+  Languages,
+  Lock,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
   Sparkles,
-  MessageCircle
+  UserRound,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-const stepNames = ['Identity', 'Life details', 'Secure account'];
+/* ------------------------------------------------------------------ */
+/* Types & constants                                                  */
+/* ------------------------------------------------------------------ */
 
-const validateName = (name: string, fieldName: string) => {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return `${fieldName} is required.`;
-  }
-  if (trimmed.length < 2) {
-    return `${fieldName} must contain at least 2 characters.`;
-  }
-  if (trimmed.length > 50) {
-    return `${fieldName} must contain at most 50 characters.`;
-  }
-  if (!/[a-zA-Z]/.test(trimmed)) {
-    return `${fieldName} contains invalid characters.`;
-  }
-  if (!/^[a-zA-Z\s'-]+$/.test(trimmed)) {
-    return `${fieldName} contains invalid characters.`;
-  }
-  return '';
+const STEP_NAMES = ['Identity', 'Life details', 'Secure account'];
+
+type FormState = {
+  firstName: string;
+  lastName: string;
+  profileFor: string;
+  gender: string;
+  birthDate: string;
+  city: string;
+  religion: string;
+  language: string;
+  education: string;
+  email: string;
+  countryCode: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+  acceptTerms: boolean;
 };
 
-const validateEmailFormat = (email: string) => {
-  if (!email) {
-    return 'Email address is required.';
-  }
-  if (/\s/.test(email)) {
-    return 'Email address cannot contain spaces.';
-  }
-  const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
-  if (!emailRegex.test(email)) {
-    return 'Enter a valid email address, for example name@gmail.com.';
-  }
-  return '';
+const INITIAL_FORM: FormState = {
+  firstName: '',
+  lastName: '',
+  profileFor: '',
+  gender: '',
+  birthDate: '',
+  city: '',
+  religion: '',
+  language: '',
+  education: '',
+  email: '',
+  countryCode: '+91',
+  phone: '',
+  password: '',
+  confirmPassword: '',
+  acceptTerms: false,
 };
 
-const validateMobileFormat = (mobile: string) => {
-  if (!mobile) {
-    return 'Mobile number is required.';
-  }
-  let normalized = mobile.replace(/[\s-]/g, '');
-  if (normalized.startsWith('+91')) {
-    normalized = normalized.slice(3);
-  } else if (normalized.startsWith('91') && normalized.length === 12) {
-    normalized = normalized.slice(2);
-  }
-  if (!normalized) {
-    return 'Mobile number is required.';
-  }
-  if (/[a-zA-Z]/.test(normalized)) {
-    return 'Mobile number must contain digits only.';
-  }
-  if (!/^\d+$/.test(normalized)) {
-    return 'Mobile number must contain digits only.';
-  }
-  if (normalized.length !== 10) {
-    return 'Enter a valid 10-digit mobile number.';
-  }
-  if (/^(\d)\1{9}$/.test(normalized)) {
-    return 'Enter a valid 10-digit mobile number.';
-  }
-  return '';
-};
-
-const validateDOB = (dobString: string) => {
-  if (!dobString) {
-    return 'Date of birth is required.';
-  }
-  const dob = new Date(dobString);
-  if (isNaN(dob.getTime())) {
-    return 'Enter a valid date of birth.';
-  }
-  const today = new Date();
-  if (dob > today) {
-    return 'Date of birth cannot be in the future.';
-  }
-  const age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  const dayDiff = today.getDate() - dob.getDate();
-  const isUnder18 = age < 18 || (age === 18 && (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)));
-  if (isUnder18) {
-    return 'You must be at least 18 years old to register.';
-  }
-  return '';
-};
-
-const checkPasswordRequirements = (password: string) => {
-  return {
-    length: password.length >= 8,
-    upper: /[A-Z]/.test(password),
-    lower: /[a-z]/.test(password),
-    number: /\d/.test(password),
-    special: /[^A-Za-z0-9]/.test(password),
-  };
-};
-
-const testimonials = [
-  {
-    quote: "We found each other through MyDearPartner. The privacy features made us feel completely secure.",
-    name: "Aditya & Ritu",
-    story: "Married in Dec 2025",
-    avatar: "/images/couple-sunset.jpg"
-  },
-  {
-    quote: "Creating a profile here was so straightforward, and within weeks we connected on shared values.",
-    name: "Sneha & Vivek",
-    story: "Engaged in March 2026",
-    avatar: "/images/wedding-rings.jpg"
-  },
-  {
-    quote: "Our families were very happy with the verification standard. It really keeps out non-serious profiles.",
-    name: "Karan & Meera",
-    story: "Matched in Feb 2026",
-    avatar: "/images/bride-portrait.jpg"
-  }
+const COUNTRIES: { code: string; label: string; dial: string }[] = [
+  { code: 'IN', label: 'India', dial: '+91' },
+  { code: 'US', label: 'United States', dial: '+1' },
+  { code: 'GB', label: 'United Kingdom', dial: '+44' },
+  { code: 'CA', label: 'Canada', dial: '+1' },
+  { code: 'AU', label: 'Australia', dial: '+61' },
+  { code: 'AE', label: 'UAE', dial: '+971' },
+  { code: 'SG', label: 'Singapore', dial: '+65' },
+  { code: 'LK', label: 'Sri Lanka', dial: '+94' },
 ];
 
-const profileOptions = [
+const PROFILE_OPTIONS = [
   { value: 'Self', label: 'Myself', icon: UserRound },
-  { value: 'Parent', label: 'Son/Daughter', icon: Users },
+  { value: 'Parent', label: 'Son / Daughter', icon: Users },
   { value: 'Sibling', label: 'Sibling', icon: Heart },
   { value: 'Relative', label: 'Relative', icon: ShieldCheck },
   { value: 'Friend', label: 'Friend', icon: Sparkles },
 ];
 
-const genderOptions = [
+const GENDER_OPTIONS = [
   { value: 'Female', label: 'Woman', icon: UserRound },
   { value: 'Male', label: 'Man', icon: UserRound },
   { value: 'Other', label: 'Other', icon: Sparkles },
 ];
+
+const RELIGIONS = ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Jain', 'Buddhist', 'Other'];
+const LANGUAGES = ['Hindi', 'English', 'Tamil', 'Telugu', 'Bengali', 'Marathi', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Urdu', 'Other'];
+const EDUCATION = ['High School', 'Diploma', "Bachelor's", "Master's", 'PhD', 'Other'];
+
+const TESTIMONIALS = [
+  {
+    quote: 'We found each other through MyDearPartner. The privacy-first design made us feel completely secure.',
+    name: 'Aditya & Ritu',
+    story: 'Married in Dec 2025',
+  },
+  {
+    quote: 'Creating a profile was effortless, and within weeks we connected over shared values and family traditions.',
+    name: 'Sneha & Vivek',
+    story: 'Engaged in Mar 2026',
+  },
+  {
+    quote: 'Our families trusted the verification standard. It keeps out non-serious profiles entirely.',
+    name: 'Karan & Meera',
+    story: 'Matched in Feb 2026',
+  },
+];
+
+const STATS = [
+  { value: '2.4M+', label: 'Verified members' },
+  { value: '98%', label: 'Success match rate' },
+  { value: '190+', label: 'Cities covered' },
+];
+
+/* ------------------------------------------------------------------ */
+/* Validation                                                         */
+/* ------------------------------------------------------------------ */
+
+const validateName = (name: string, fieldName: string) => {
+  const trimmed = name.trim();
+  if (!trimmed) return `${fieldName} is required.`;
+  if (trimmed.length < 2) return `${fieldName} must contain at least 2 characters.`;
+  if (trimmed.length > 50) return `${fieldName} must contain at most 50 characters.`;
+  if (!/^[a-zA-Z\s'-]+$/.test(trimmed)) return `${fieldName} contains invalid characters.`;
+  return '';
+};
+
+const validateEmailFormat = (email: string) => {
+  if (!email) return 'Email address is required.';
+  if (/\s/.test(email)) return 'Email address cannot contain spaces.';
+  if (!/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/.test(email))
+    return 'Enter a valid email address, for example name@example.com.';
+  return '';
+};
+
+const validateMobileFormat = (mobile: string) => {
+  if (!mobile) return 'Mobile number is required.';
+  const normalized = mobile.replace(/[\s-]/g, '');
+  if (/[a-zA-Z]/.test(normalized)) return 'Mobile number must contain digits only.';
+  if (!/^\d+$/.test(normalized)) return 'Mobile number must contain digits only.';
+  if (normalized.length < 6 || normalized.length > 14) return 'Enter a valid mobile number.';
+  if (/^(\d)\1+$/.test(normalized)) return 'Enter a valid mobile number.';
+  return '';
+};
+
+const validateDOB = (dobString: string) => {
+  if (!dobString) return 'Date of birth is required.';
+  const dob = new Date(dobString);
+  if (isNaN(dob.getTime())) return 'Enter a valid date of birth.';
+  const today = new Date();
+  if (dob > today) return 'Date of birth cannot be in the future.';
+  const age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  const dayDiff = today.getDate() - dob.getDate();
+  const isUnder18 = age < 18 || (age === 18 && (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)));
+  if (isUnder18) return 'You must be at least 18 years old to register.';
+  return '';
+};
+
+const checkPasswordRequirements = (password: string) => ({
+  length: password.length >= 8,
+  upper: /[A-Z]/.test(password),
+  lower: /[a-z]/.test(password),
+  number: /\d/.test(password),
+  special: /[^A-Za-z0-9]/.test(password),
+});
+
+/* ------------------------------------------------------------------ */
+/* Shared UI primitives                                               */
+/* ------------------------------------------------------------------ */
+
+const FOCUS_RING = 'focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10';
+
+function FloatingInput({
+  id,
+  label,
+  icon: Icon,
+  type = 'text',
+  value,
+  onChange,
+  onBlur,
+  error,
+  required,
+  autoComplete,
+  inputMode,
+  max,
+  rightSlot,
+}: {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  error?: string;
+  required?: boolean;
+  autoComplete?: string;
+  inputMode?: 'numeric' | 'text' | 'email' | 'tel';
+  max?: string;
+  rightSlot?: React.ReactNode;
+}) {
+  const errorId = `${id}-error`;
+  return (
+    <div className="w-full">
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-soft-muted">
+          <Icon size={18} />
+        </span>
+        <input
+          id={id}
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder=" "
+          required={required}
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          max={max}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          className={`peer w-full rounded-2xl border bg-cream-50/80 py-3.5 pl-11 pr-11 text-[15px] text-ink placeholder-transparent shadow-sm outline-none transition-all duration-200 ${FOCUS_RING} ${
+            error ? 'border-error/70 ring-4 ring-error/10' : 'border-line'
+          }`}
+        />
+        <label
+          htmlFor={id}
+          className="pointer-events-none absolute left-11 top-3.5 z-10 origin-[0] -translate-y-1/2 transform bg-cream-50 px-1 text-[15px] text-soft-muted transition-all duration-200 peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-[15px] peer-focus:top-0 peer-focus:text-xs peer-focus:text-rose-500"
+        >
+          {label}
+          {required && <span className="ml-0.5 text-rose-500">*</span>}
+        </label>
+        {rightSlot}
+      </div>
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            id={errorId}
+            role="alert"
+            initial={{ opacity: 0, height: 0, y: -4 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -4 }}
+            transition={{ duration: 0.2 }}
+            className="mt-1.5 flex items-center gap-1.5 px-1 text-[13px] font-medium text-error"
+          >
+            <span className="grid h-4 w-4 place-items-center rounded-full bg-error/10 text-[10px]">!</span>
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SelectionCard({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileTap={{ scale: 0.97 }}
+      aria-pressed={active}
+      className={`group relative flex flex-col items-center justify-center gap-2 rounded-2xl border p-4 text-center transition-all duration-200 ${
+        active
+          ? 'border-rose-500 bg-rose-500/5 shadow-rose'
+          : 'border-line bg-cream-50/70 hover:border-rose-400 hover:bg-cream-50'
+      }`}
+    >
+      <span
+        className={`grid h-11 w-11 place-items-center rounded-xl transition-colors duration-200 ${
+          active ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-500'
+        }`}
+      >
+        <Icon size={20} />
+      </span>
+      <span className={`text-[13px] font-bold ${active ? 'text-rose-600' : 'text-ink'}`}>{label}</span>
+      <AnimatePresence>
+        {active && (
+          <motion.span
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+            className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-white"
+          >
+            <Check size={12} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
+}
+
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="mb-2.5 block text-[11px] font-extrabold uppercase tracking-[0.12em] text-plum-700/80"
+    >
+      {children}
+    </label>
+  );
+}
+
+function PremiumSelect({
+  id,
+  label,
+  icon: Icon,
+  value,
+  options,
+  onChange,
+  error,
+  placeholder,
+}: {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  error?: string;
+  placeholder: string;
+}) {
+  const errorId = `${id}-error`;
+  return (
+    <div className="w-full">
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-soft-muted">
+          <Icon size={18} />
+        </span>
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          className={`w-full appearance-none rounded-2xl border bg-cream-50/80 py-3.5 pl-11 pr-10 text-[15px] outline-none transition-all duration-200 ${FOCUS_RING} ${
+            error ? 'border-error/70 ring-4 ring-error/10' : 'border-line'
+          } ${value ? 'text-ink' : 'text-soft-muted'}`}
+        >
+          <option value="" disabled>
+            {placeholder}
+          </option>
+          {options.map((opt) => (
+            <option key={opt} value={opt} className="text-ink">
+              {opt}
+            </option>
+          ))}
+        </select>
+        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-soft-muted">
+          <ChevronDown size={18} />
+        </span>
+      </div>
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            id={errorId}
+            role="alert"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-1.5 flex items-center gap-1.5 px-1 text-[13px] font-medium text-error"
+          >
+            <span className="grid h-4 w-4 place-items-center rounded-full bg-error/10 text-[10px]">!</span>
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Page                                                               */
+/* ------------------------------------------------------------------ */
 
 export default function RegisterPage() {
   const [step, setStep] = useState(0);
@@ -162,241 +399,193 @@ export default function RegisterPage() {
   const [backendErrors, setBackendErrors] = useState<Record<string, string[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [googleNotice, setGoogleNotice] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [testimonialIndex, setTestimonialIndex] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTestimonialIndex((prev) => (prev + 1) % testimonials.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    profileFor: '',
-    gender: '',
-    birthDate: '',
-    city: '',
-    religion: '',
-    language: '',
-    education: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    acceptTerms: false,
-  });
-
+  const [showConfirm, setShowConfirm] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [testimonialIndex, setTestimonialIndex] = useState(0);
+  const [countryOpen, setCountryOpen] = useState(false);
 
+  const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const { registerMember } = useAuth();
   const navigate = useNavigate();
 
-  // Maximum allowed date is today minus 18 years
   const today = new Date();
-  const maxDateString = new Date(
-    today.getFullYear() - 18,
-    today.getMonth(),
-    today.getDate()
-  ).toISOString().split('T')[0];
+  const maxDateString = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
+    .toISOString()
+    .split('T')[0];
 
-  const update = (key: keyof typeof form, value: string | boolean) => {
+  useEffect(() => {
+    const timer = setInterval(() => setTestimonialIndex((p) => (p + 1) % TESTIMONIALS.length), 6000);
+    return () => clearInterval(timer);
+  }, []);
+
+  /* Auto-save draft (excludes password fields) */
+  useEffect(() => {
+    const { password, confirmPassword, ...safe } = form;
+    try {
+      localStorage.setItem('register_draft', JSON.stringify(safe));
+    } catch {
+      /* ignore */
+    }
+  }, [form]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('register_draft');
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<FormState>;
+        setForm((f) => ({ ...f, ...saved }));
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const update = (key: keyof FormState, value: string | boolean) => {
     setForm((current) => ({ ...current, [key]: value }));
-    // Clear relevant backend error if any
-    if (backendErrors[key]) {
+    if (backendErrors[key as string]) {
       setBackendErrors((current) => {
         const copy = { ...current };
-        delete copy[key];
+        delete copy[key as string];
         return copy;
       });
     }
   };
 
-  // Run validation on a specific field
-  const validateField = (key: keyof typeof form, value: string | boolean) => {
-    const valString = typeof value === 'boolean' ? '' : value;
-    let errorMsg = '';
-
+  const validateField = (key: keyof FormState, value: string | boolean): string => {
+    const v = typeof value === 'boolean' ? '' : value;
+    let msg = '';
     switch (key) {
       case 'firstName':
-        errorMsg = validateName(valString, 'First name');
+        msg = validateName(v, 'First name');
         break;
       case 'lastName':
-        errorMsg = validateName(valString, 'Last name');
+        msg = validateName(v, 'Last name');
         break;
       case 'profileFor':
-        if (!valString) errorMsg = 'Please select who this profile is for.';
+        if (!v) msg = 'Please select who this profile is for.';
         break;
       case 'gender':
-        if (!valString) errorMsg = 'Please select your gender.';
+        if (!v) msg = 'Please select your gender.';
         break;
       case 'birthDate':
-        errorMsg = validateDOB(valString);
+        msg = validateDOB(v);
         break;
       case 'city':
-        if (!valString.trim()) errorMsg = 'Current city is required.';
+        if (!v.trim()) msg = 'Current city is required.';
         break;
       case 'religion':
-        if (!valString.trim()) errorMsg = 'Religion is required.';
+        if (!v.trim()) msg = 'Religion is required.';
         break;
       case 'language':
-        if (!valString.trim()) errorMsg = 'Mother tongue is required.';
+        if (!v.trim()) msg = 'Mother tongue is required.';
         break;
       case 'email':
-        errorMsg = validateEmailFormat(valString);
+        msg = validateEmailFormat(v);
         break;
       case 'phone':
-        errorMsg = validateMobileFormat(valString);
+        msg = validateMobileFormat(v);
         break;
       case 'password':
-        if (!valString) {
-          errorMsg = 'Password is required.';
+        if (!v) {
+          msg = 'Password is required.';
         } else {
-          const reqs = checkPasswordRequirements(valString);
-          if (!reqs.length) errorMsg = 'Password must contain at least 8 characters.';
-          else if (!reqs.upper) errorMsg = 'Password must contain at least one uppercase letter.';
-          else if (!reqs.lower) errorMsg = 'Password must contain at least one lowercase letter.';
-          else if (!reqs.number) errorMsg = 'Password must contain at least one number.';
-          else if (!reqs.special) errorMsg = 'Password must contain at least one special character.';
-          else if (form.email && valString.includes(form.email)) {
-            errorMsg = 'Password must not contain your email address or mobile number.';
-          } else if (form.phone && valString.includes(form.phone)) {
-            errorMsg = 'Password must not contain your email address or mobile number.';
-          }
+          const r = checkPasswordRequirements(v);
+          if (!r.length) msg = 'Password must contain at least 8 characters.';
+          else if (!r.upper) msg = 'Add at least one uppercase letter.';
+          else if (!r.lower) msg = 'Add at least one lowercase letter.';
+          else if (!r.number) msg = 'Add at least one number.';
+          else if (!r.special) msg = 'Add at least one special character.';
+          else if (form.email && v.includes(form.email)) msg = 'Password must not contain your email.';
+          else if (form.phone && v.includes(form.phone)) msg = 'Password must not contain your mobile number.';
         }
         break;
       case 'confirmPassword':
-        if (touched.confirmPassword || valString) {
-          if (!valString) {
-            errorMsg = 'Confirm your password.';
-          } else if (valString !== form.password) {
-            errorMsg = 'Passwords do not match.';
-          }
+        if (touched.confirmPassword || v) {
+          if (!v) msg = 'Confirm your password.';
+          else if (v !== form.password) msg = 'Passwords do not match.';
         }
         break;
       case 'acceptTerms':
-        if (!value) {
-          errorMsg = 'You must accept the Terms of Service and Privacy Policy to continue.';
-        }
+        if (!value) msg = 'You must accept the Terms of Service and Privacy Policy to continue.';
         break;
       default:
         break;
     }
-
-    setErrors((current) => {
-      const copy = { ...current };
-      if (errorMsg) {
-        copy[key] = errorMsg;
-      } else {
-        delete copy[key];
-      }
+    setErrors((prev) => {
+      const copy = { ...prev };
+      if (msg) copy[key as string] = msg;
+      else delete copy[key as string];
       return copy;
     });
-
-    return errorMsg;
+    return msg;
   };
 
-  // Perform validation for the current active step fields
-  const validateStep = (currentStep: number) => {
+  const validateStep = (currentStep: number): boolean => {
     const stepErrors: Record<string, string> = {};
-
     if (currentStep === 0) {
-      const e1 = validateName(form.firstName, 'First name');
-      const e2 = validateName(form.lastName, 'Last name');
-      const e3 = form.profileFor ? '' : 'Please select who this profile is for.';
-      const e4 = form.gender ? '' : 'Please select your gender.';
-      const e5 = validateDOB(form.birthDate);
-
-      if (e1) stepErrors.firstName = e1;
-      if (e2) stepErrors.lastName = e2;
-      if (e3) stepErrors.profileFor = e3;
-      if (e4) stepErrors.gender = e4;
-      if (e5) stepErrors.birthDate = e5;
+      stepErrors.firstName = validateName(form.firstName, 'First name');
+      stepErrors.lastName = validateName(form.lastName, 'Last name');
+      if (!form.profileFor) stepErrors.profileFor = 'Please select who this profile is for.';
+      if (!form.gender) stepErrors.gender = 'Please select your gender.';
+      stepErrors.birthDate = validateDOB(form.birthDate);
     } else if (currentStep === 1) {
       if (!form.city.trim()) stepErrors.city = 'Current city is required.';
       if (!form.religion.trim()) stepErrors.religion = 'Religion is required.';
       if (!form.language.trim()) stepErrors.language = 'Mother tongue is required.';
-    } else if (currentStep === 2) {
-      const e1 = validateEmailFormat(form.email);
-      const e2 = validateMobileFormat(form.phone);
-      
-      let e3 = '';
-      if (!form.password) {
-        e3 = 'Password is required.';
-      } else {
-        const reqs = checkPasswordRequirements(form.password);
-        if (!reqs.length) e3 = 'Password must contain at least 8 characters.';
-        else if (!reqs.upper) e3 = 'Password must contain at least one uppercase letter.';
-        else if (!reqs.lower) e3 = 'Password must contain at least one lowercase letter.';
-        else if (!reqs.number) e3 = 'Password must contain at least one number.';
-        else if (!reqs.special) e3 = 'Password must contain at least one special character.';
-        else if (form.email && form.password.includes(form.email)) {
-          e3 = 'Password must not contain your email address or mobile number.';
-        } else if (form.phone && form.password.includes(form.phone)) {
-          e3 = 'Password must not contain your email address or mobile number.';
-        }
-      }
-
-      let e4 = '';
-      if (!form.confirmPassword) {
-        e4 = 'Confirm your password.';
-      } else if (form.confirmPassword !== form.password) {
-        e4 = 'Passwords do not match.';
-      }
-
-      const e5 = form.acceptTerms ? '' : 'You must accept the Terms of Service and Privacy Policy to continue.';
-
-      if (e1) stepErrors.email = e1;
-      if (e2) stepErrors.phone = e2;
-      if (e3) stepErrors.password = e3;
-      if (e4) stepErrors.confirmPassword = e4;
-      if (e5) stepErrors.acceptTerms = e5;
+    } else {
+      stepErrors.email = validateEmailFormat(form.email);
+      stepErrors.phone = validateMobileFormat(form.phone);
+      const r = checkPasswordRequirements(form.password);
+      if (!form.password) stepErrors.password = 'Password is required.';
+      else if (!r.length) stepErrors.password = 'Password must contain at least 8 characters.';
+      else if (!r.upper) stepErrors.password = 'Add at least one uppercase letter.';
+      else if (!r.lower) stepErrors.password = 'Add at least one lowercase letter.';
+      else if (!r.number) stepErrors.password = 'Add at least one number.';
+      else if (!r.special) stepErrors.password = 'Add at least one special character.';
+      else if (form.email && form.password.includes(form.email))
+        stepErrors.password = 'Password must not contain your email.';
+      else if (form.phone && form.password.includes(form.phone))
+        stepErrors.password = 'Password must not contain your mobile number.';
+      if (!form.confirmPassword) stepErrors.confirmPassword = 'Confirm your password.';
+      else if (form.confirmPassword !== form.password) stepErrors.confirmPassword = 'Passwords do not match.';
+      if (!form.acceptTerms) stepErrors.acceptTerms = 'You must accept the Terms of Service and Privacy Policy.';
     }
 
-    setErrors((current) => ({ ...current, ...stepErrors }));
+    const cleaned = Object.fromEntries(Object.entries(stepErrors).filter(([, m]) => m));
+    setErrors((prev) => ({ ...prev, ...cleaned }));
 
-    // Focus first invalid element in this step
-    const keys = Object.keys(stepErrors);
+    const keys = Object.keys(cleaned);
     if (keys.length > 0) {
-      const firstKey = keys[0];
-      const element = document.getElementById(firstKey);
-      if (element) {
-        if (typeof element.scrollIntoView === 'function') {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        element.focus();
+      const el = document.getElementById(keys[0]);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (el as HTMLElement).focus?.();
       }
       return false;
     }
-
     return true;
   };
 
-  const next = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (validateStep(step)) {
-      setStep((current) => Math.min(current + 1, 2));
-    }
+  const next = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (validateStep(step)) setStep((s) => Math.min(s + 1, 2));
   };
 
-  const finish = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const back = () => setStep((s) => Math.max(s - 1, 0));
+
+  const finish = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (submitting) return;
-
-    if (!validateStep(2)) {
-      return;
-    }
-
+    if (!validateStep(2)) return;
     setSubmitting(true);
     setBackendErrors({});
-
     try {
       await registerMember({
         email: form.email.trim(),
-        mobile_number: form.phone.replace(/[\s-]/g, ''),
+        mobile_number: `${form.countryCode}${form.phone.replace(/[\s-]/g, '')}`,
         password: form.password,
         confirm_password: form.confirmPassword,
         accept_terms: form.acceptTerms,
@@ -410,60 +599,53 @@ export default function RegisterPage() {
         mother_tongue: form.language.trim(),
         highest_education: form.education.trim(),
       });
-
+      try {
+        localStorage.removeItem('register_draft');
+      } catch {
+        /* ignore */
+      }
       setSuccessMsg('Your account was created successfully.');
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 3500);
-    } catch (caught: any) {
-      // Map DRF structured validation errors to form fields
-      if (caught && typeof caught === 'object' && caught.errors) {
-        const fieldErrors: Record<string, string[]> = {};
-        Object.entries(caught.errors).forEach(([field, msgs]) => {
-          // Map backend field names to state values
-          const keyMap: Record<string, string> = {
-            first_name: 'firstName',
-            last_name: 'lastName',
-            profile_created_by: 'profileFor',
-            gender: 'gender',
-            date_of_birth: 'birthDate',
-            work_location: 'city',
-            religion: 'religion',
-            mother_tongue: 'language',
-            highest_education: 'education',
-            email: 'email',
-            mobile_number: 'phone',
-            password: 'password',
-            confirm_password: 'confirmPassword',
-            accept_terms: 'acceptTerms',
-          };
-          const mappedKey = keyMap[field] || field;
-          fieldErrors[mappedKey] = Array.isArray(msgs) ? msgs : [String(msgs)];
-        });
-        setBackendErrors(fieldErrors);
-
-        // Find the first step containing a backend validation error and switch to it
-        const firstErrorKey = Object.keys(fieldErrors)[0];
-        if (firstErrorKey) {
-          const step0Keys = ['firstName', 'lastName', 'profileFor', 'gender', 'birthDate'];
-          const step1Keys = ['city', 'religion', 'language', 'education'];
-          if (step0Keys.includes(firstErrorKey)) {
-            setStep(0);
-          } else if (step1Keys.includes(firstErrorKey)) {
-            setStep(1);
-          } else {
-            setStep(2);
+      setTimeout(() => navigate('/dashboard', { replace: true }), 3200);
+    } catch (caught: unknown) {
+      const err = caught as { errors?: Record<string, string | string[]> };
+      if (err && err.errors) {
+        const keyMap: Record<string, string> = {
+          first_name: 'firstName',
+          last_name: 'lastName',
+          profile_created_by: 'profileFor',
+          gender: 'gender',
+          date_of_birth: 'birthDate',
+          work_location: 'city',
+          religion: 'religion',
+          mother_tongue: 'language',
+          highest_education: 'education',
+          email: 'email',
+          mobile_number: 'phone',
+          password: 'password',
+          confirm_password: 'confirmPassword',
+          accept_terms: 'acceptTerms',
+        };
+        const mapped: Record<string, string[]> = {};
+        Object.entries(err.errors).forEach(([field, msgs]) => {
+          const k = keyMap[field] || field;
+          mapped[k] = Array.isArray(msgs) ? msgs : [String(msgs)];
+          if (k === 'phone') {
+            // mobile_number errors should attach to the phone field
           }
-          // Delay to allow DOM updating then scroll to first invalid field
+        });
+        setBackendErrors(mapped);
+        const firstKey = Object.keys(mapped)[0];
+        if (firstKey) {
+          if (['firstName', 'lastName', 'profileFor', 'gender', 'birthDate'].includes(firstKey)) setStep(0);
+          else if (['city', 'religion', 'language', 'education'].includes(firstKey)) setStep(1);
+          else setStep(2);
           setTimeout(() => {
-            const el = document.getElementById(firstErrorKey);
+            const el = document.getElementById(firstKey);
             if (el) {
-              if (typeof el.scrollIntoView === 'function') {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-              el.focus();
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              (el as HTMLElement).focus?.();
             }
-          }, 100);
+          }, 120);
         }
       } else {
         setErrors({ general: caught instanceof Error ? caught.message : 'Registration failed. Please try again.' });
@@ -473,737 +655,873 @@ export default function RegisterPage() {
     }
   };
 
-  const pwdRequirements = checkPasswordRequirements(form.password);
-  const requirementsMet = Object.values(pwdRequirements).filter(Boolean).length;
-  const pwdStrength = requirementsMet === 5 ? 'Strong' : requirementsMet >= 3 ? 'Medium' : 'Weak';
-  const strengthColorClass = pwdStrength === 'Strong' ? 'success' : pwdStrength === 'Medium' ? 'warning' : 'danger';
+  const pwdReqs = checkPasswordRequirements(form.password);
+  const metCount = Object.values(pwdReqs).filter(Boolean).length;
+  const strength = metCount === 5 ? 'Strong' : metCount >= 3 ? 'Medium' : metCount > 0 ? 'Weak' : '';
+  const strengthColor =
+    strength === 'Strong' ? 'bg-emerald-500' : strength === 'Medium' ? 'bg-gold-400' : 'bg-error';
+  const strengthText =
+    strength === 'Strong' ? 'text-emerald-600' : strength === 'Medium' ? 'text-gold-600' : 'text-error';
 
-  // Handle successful registration view
+  const progressPct = (step / (STEP_NAMES.length - 1)) * 100;
+
+  const fieldError = (k: string) => errors[k] || backendErrors[k]?.[0];
+
+  /* Success state */
   if (successMsg) {
     return (
-      <main className="neo-auth neo-register">
-        <div className="neo-auth-glow glow-one" /><div className="neo-auth-glow glow-two" />
-        <section className="neo-register-shell" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="neo-register-form-panel neo-success-card" style={{ maxWidth: '480px', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.8)' }}>
-            <div className="success-checkmark-glow">
-              <Check size={36} />
-            </div>
-            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#2b101d' }}>{successMsg}</h2>
-            <p className="neo-form-lead" style={{ marginTop: '14px', fontSize: '14px', color: '#7a6870' }}>
-              Your member account is ready. You can complete your profile and start browsing matches now.
-            </p>
-            <div className="loader-dots" style={{ margin: '24px auto 0' }}>
-              <span /><span /><span />
-            </div>
-            <p style={{ marginTop: '16px', color: '#a18e95', fontSize: '0.85rem', fontWeight: 600 }}>
-              Redirecting to your dashboard...
-            </p>
+      <main className="relative grid min-h-screen place-items-center overflow-hidden bg-cream-100 px-4 py-10">
+        <FloatingBackground />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+          className="relative z-10 w-full max-w-md rounded-[28px] border border-white/70 bg-white/70 p-10 text-center shadow-brand-lg backdrop-blur-xl"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 18 }}
+            className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-rose-500 to-plum-800 text-white shadow-rose"
+          >
+            <Check size={40} strokeWidth={3} />
+          </motion.div>
+          <h2 className="mt-6 font-display text-2xl font-extrabold text-plum-800">{successMsg}</h2>
+          <p className="mt-3 text-[15px] text-muted">
+            Your member account is ready. We are taking you to your dashboard.
+          </p>
+          <div className="mt-7 flex justify-center gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                className="h-2 w-2 rounded-full bg-rose-500"
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }}
+              />
+            ))}
           </div>
-        </section>
+        </motion.div>
       </main>
     );
   }
 
   return (
-    <main className="neo-auth neo-register">
-      <div className="neo-auth-glow glow-one" /><div className="neo-auth-glow glow-two" />
-      <section className="neo-register-shell">
-        <aside className="neo-register-aside">
-          {/* Brand mark */}
-          <div className="reg-aside-brand">
-            <span className="reg-brand-icon"><Heart fill="currentColor" size={16} /></span>
-            <b>My Dear Partner</b>
-          </div>
+    <main className="relative min-h-screen overflow-hidden bg-cream-100 lg:grid lg:grid-cols-[1.05fr_1fr]">
+      <FloatingBackground />
 
-          {/* Hero copy */}
-          <div className="reg-aside-copy">
-            <p className="reg-aside-eyebrow">Create your private profile</p>
-            <h1 className="reg-aside-headline">
-              Begin with<br />who you are.
-              <br />
-              <em className="reg-aside-italic">We'll help with<br />who you meet.</em>
-            </h1>
-            <p className="reg-aside-sub">
-              A considered profile gives us the context to make fewer, stronger introductions.
-            </p>
-          </div>
+      {/* ----------------------------- LEFT PANEL ----------------------------- */}
+      <aside className="relative z-10 hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-plum-800 via-plum-700 to-rose-600 p-10 text-white xl:p-14 lg:flex">
+        <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-gold-400/20 blur-3xl" />
+        <div className="absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-rose-400/25 blur-3xl" />
 
-          {/* Trust pills row */}
-          <div className="reg-trust-pills">
-            <div className="reg-trust-pill">
-              <span className="reg-trust-icon reg-trust-icon--green"><ShieldCheck size={13} /></span>
-              <div>
-                <span className="reg-trust-label">Verified Profiles</span>
-                <span className="reg-trust-sub">100% Secure</span>
-              </div>
+        {/* Brand */}
+        <div className="relative flex items-center gap-2.5">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/15 backdrop-blur">
+            <Heart size={20} className="text-gold-300" fill="currentColor" />
+          </span>
+          <span className="font-display text-xl font-extrabold tracking-tight">MyDearPartner</span>
+        </div>
+
+        {/* Hero + illustration */}
+        <div className="relative mt-8">
+          <CoupleIllustration />
+          <p className="mt-6 text-[13px] font-bold uppercase tracking-[0.22em] text-gold-300">
+            Begin your journey
+          </p>
+          <h1 className="mt-3 font-display text-[2.6rem] font-extrabold leading-[1.08]">
+            Find someone who
+            <span className="block bg-gradient-to-r from-gold-300 to-gold-100 bg-clip-text text-transparent">
+              feels like home.
+            </span>
+          </h1>
+          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-white/75">
+            A calm, considered space for meaningful matrimony. Verified members, private by design, and
+            introductions built around your values.
+          </p>
+        </div>
+
+        {/* Feature highlights */}
+        <div className="relative mt-8 space-y-3">
+          {[
+            { icon: BadgeCheck, text: '100% verified profiles with document checks' },
+            { icon: ShieldCheck, text: 'Private & secure — your data stays yours' },
+            { icon: Lock, text: 'Encrypted credentials and controlled visibility' },
+          ].map((f) => (
+            <div key={f.text} className="flex items-center gap-3 rounded-2xl bg-white/5 px-4 py-3 backdrop-blur-sm">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10 text-gold-300">
+                <f.icon size={18} />
+              </span>
+              <span className="text-[14px] font-medium text-white/85">{f.text}</span>
             </div>
-            <div className="reg-trust-pill">
-              <span className="reg-trust-icon reg-trust-icon--rose"><Heart fill="#f43f5e" size={11} /></span>
-              <div>
-                <span className="reg-trust-label">Curated Match</span>
-                <span className="reg-trust-sub">Value-based</span>
-              </div>
-            </div>
-          </div>
+          ))}
+        </div>
 
-          {/* Testimonial */}
-          <div className="reg-testimonial-card">
+        {/* Stats */}
+        <div className="relative mt-8 grid grid-cols-3 gap-3">
+          {STATS.map((s) => (
+            <div key={s.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center backdrop-blur-sm">
+              <p className="font-display text-2xl font-extrabold text-white">{s.value}</p>
+              <p className="mt-1 text-[11px] leading-tight text-white/60">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Testimonial */}
+        <div className="relative mt-8">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
             <AnimatePresence mode="wait">
               <motion.div
                 key={testimonialIndex}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.4 }}
               >
-                <p className="reg-testimonial-quote">
-                  "{testimonials[testimonialIndex].quote}"
+                <p className="text-[14px] italic leading-relaxed text-white/85">
+                  &ldquo;{TESTIMONIALS[testimonialIndex].quote}&rdquo;
                 </p>
-                <div className="reg-testimonial-author">
-                  <img
-                    src={testimonials[testimonialIndex].avatar}
-                    alt={testimonials[testimonialIndex].name}
-                    className="reg-testimonial-avatar"
-                  />
+                <div className="mt-3 flex items-center gap-3">
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-gold-300 to-rose-400 text-sm font-bold text-plum-800">
+                    {TESTIMONIALS[testimonialIndex].name.charAt(0)}
+                  </span>
                   <div>
-                    <span className="reg-testimonial-name">{testimonials[testimonialIndex].name}</span>
-                    <span className="reg-testimonial-story">{testimonials[testimonialIndex].story}</span>
+                    <p className="text-[13px] font-bold text-white">{TESTIMONIALS[testimonialIndex].name}</p>
+                    <p className="text-[11px] text-gold-300">{TESTIMONIALS[testimonialIndex].story}</p>
                   </div>
                 </div>
               </motion.div>
             </AnimatePresence>
           </div>
+        </div>
+      </aside>
 
-          {/* Bottom promises */}
-          <div className="reg-promises">
-            <span><ShieldCheck size={14} /> Reviewed profiles</span>
-            <span><LockKeyhole size={14} /> Private credentials</span>
-          </div>
-
-          {/* Decorative orbit */}
-          <div className="neo-aside-orbit" aria-hidden="true" style={{ zIndex: 1 }}><i /><i /></div>
-        </aside>
-
-        <div className="neo-register-form-panel">
-          <div className="neo-form-top">
-            <p>Free registration</p>
-            <Link to="/login">Already a member? <strong>Login</strong></Link>
-          </div>
-          
-          {/* Progress Indicator */}
-          <div style={{ marginTop: '24px' }}>
-            <div className="stepper-header-info">
-              <span>Step {step + 1} of 3</span>
-              <p>{stepNames[step]}</p>
+      {/* ----------------------------- RIGHT PANEL ----------------------------- */}
+      <section className="relative z-10 flex items-center justify-center px-4 py-10 sm:px-8 lg:py-14">
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="w-full max-w-xl"
+        >
+          {/* Top bar */}
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2 lg:hidden">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-rose-500 text-white">
+                <Heart size={18} fill="currentColor" />
+              </span>
+              <span className="font-display text-lg font-extrabold text-plum-800">MyDearPartner</span>
             </div>
-            <div className="neo-stepper" role="progressbar" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={3} style={{ marginTop: '8px' }}>
-              <div className="neo-stepper-progress" style={{ width: `${step * 50}%` }} />
-              {stepNames.map((name, index) => (
-                <div key={name} className={`neo-stepper-item ${index === step ? 'active' : index < step ? 'done' : ''}`}>
-                  <span className="neo-stepper-circle">{index < step ? <Check /> : index + 1}</span>
-                  <small className="neo-stepper-label">{name}</small>
-                </div>
-              ))}
-            </div>
+            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-line bg-white/70 px-3.5 py-1.5 text-[12px] font-bold text-plum-700 shadow-sm backdrop-blur">
+              <Sparkles size={14} className="text-gold-600" /> Free registration
+            </span>
           </div>
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              className="neo-register-step"
-              initial={{ opacity: 0, x: 15, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -15, scale: 0.98 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
+          {/* Glass card */}
+          <div className="rounded-[28px] border border-white/70 bg-white/70 p-6 shadow-brand-lg backdrop-blur-xl sm:p-9">
+            {/* Heading */}
+            <div className="mb-6">
+              <h2 className="font-display text-[1.9rem] font-extrabold leading-tight text-plum-800">
+                Create your profile
+              </h2>
+              <p className="mt-2 text-[14px] text-muted">
+                A few thoughtful details help us make stronger, safer introductions.
+              </p>
+            </div>
+
+            {/* Stepper */}
+            <div className="mb-7">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[13px] font-bold text-rose-600">
+                  Step {step + 1} of {STEP_NAMES.length}
+                </span>
+                <span className="text-[13px] font-semibold text-muted">{STEP_NAMES[step]}</span>
+              </div>
+              <div className="relative h-2 w-full overflow-hidden rounded-full bg-cream-200">
+                <motion.div
+                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-rose-500 to-plum-800"
+                  initial={false}
+                  animate={{ width: `${progressPct}%` }}
+                  transition={{ duration: 0.4, ease: 'easeInOut' }}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {STEP_NAMES.map((name, i) => (
+                  <div
+                    key={name}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold transition-colors duration-300 ${
+                      i === step
+                        ? 'border-rose-500 bg-rose-500/5 text-rose-600'
+                        : i < step
+                          ? 'border-gold-400/40 bg-gold-100/50 text-gold-600'
+                          : 'border-line bg-cream-50/60 text-soft-muted'
+                    }`}
+                  >
+                    <span
+                      className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] ${
+                        i < step ? 'bg-gold-400 text-plum-800' : i === step ? 'bg-rose-500 text-white' : 'bg-cream-200 text-soft-muted'
+                      }`}
+                    >
+                      {i < step ? <Check size={12} /> : i + 1}
+                    </span>
+                    <span className="truncate">{name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Google + divider */}
+            <button
+              type="button"
+              onClick={() => setGoogleNotice(true)}
+              className="mb-4 flex w-full items-center justify-center gap-3 rounded-2xl border border-line bg-white py-3.5 text-[14px] font-bold text-ink shadow-sm transition-all duration-200 hover:border-rose-400 hover:bg-cream-50 active:scale-[0.98]"
             >
-              
-              {/* STEP 1: IDENTITY */}
-              {step === 0 && (
-                <form onSubmit={next} noValidate>
-                  <span className="neo-icon-box"><UserRound /></span>
-                  <p className="neo-eyebrow dark">Step one</p>
-                  <h2>Tell us who this profile is for.</h2>
-                  <p className="neo-form-lead">Enter basic details to define the profile identity.</p>
-
-                  <div className="neo-field-grid two">
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="firstName"
-                          type="text"
-                          placeholder=" "
-                          value={form.firstName}
-                          onChange={(e) => {
-                            update('firstName', e.target.value);
-                            validateField('firstName', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, firstName: true }));
-                            validateField('firstName', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.firstName || backendErrors.firstName)}
-                          aria-describedby={(errors.firstName || backendErrors.firstName) ? "firstName-error" : undefined}
-                          className={(errors.firstName || backendErrors.firstName) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="firstName">First name *</label>
-                        <UserRound className="field-icon" size={16} />
-                      </div>
-                      {(errors.firstName || backendErrors.firstName) && (
-                        <p id="firstName-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.firstName || backendErrors.firstName?.[0]}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="lastName"
-                          type="text"
-                          placeholder=" "
-                          value={form.lastName}
-                          onChange={(e) => {
-                            update('lastName', e.target.value);
-                            validateField('lastName', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, lastName: true }));
-                            validateField('lastName', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.lastName || backendErrors.lastName)}
-                          aria-describedby={(errors.lastName || backendErrors.lastName) ? "lastName-error" : undefined}
-                          className={(errors.lastName || backendErrors.lastName) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="lastName">Last name *</label>
-                        <UserRound className="field-icon" size={16} />
-                      </div>
-                      {(errors.lastName || backendErrors.lastName) && (
-                        <p id="lastName-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.lastName || backendErrors.lastName?.[0]}
-                        </p>
-                      )}
-                    </div>
+              <GoogleIcon />
+              Continue with Google
+            </button>
+            <AnimatePresence>
+              {googleNotice && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-4 overflow-hidden"
+                >
+                  <div className="flex items-center gap-2 rounded-xl border border-gold-400/40 bg-gold-100/60 px-4 py-2.5 text-[13px] font-medium text-plum-800">
+                    <Sparkles size={15} className="text-gold-600" />
+                    Google sign-up is rolling out soon. Please continue with email for now.
                   </div>
-
-                  <div className="neo-field-grid">
-                    <div className="form-field">
-                      <label style={{ display: 'block', margin: '0 0 10px', color: '#5e4a52', fontSize: '9px', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                        Profile created for *
-                      </label>
-                      <div className="selection-card-grid five-cols" id="profileFor">
-                        {profileOptions.map((opt) => {
-                          const Icon = opt.icon;
-                          const isActive = form.profileFor === opt.value;
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              className={`selection-card ${isActive ? 'active' : ''}`}
-                              onClick={() => {
-                                update('profileFor', opt.value);
-                                validateField('profileFor', opt.value);
-                              }}
-                            >
-                              <div className="card-icon-wrapper">
-                                <Icon size={18} />
-                              </div>
-                              <span>{opt.label}</span>
-                              {isActive && (
-                                <span className="select-badge">
-                                  <Check />
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {(errors.profileFor || backendErrors.profileFor) && (
-                        <p id="profileFor-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.profileFor || backendErrors.profileFor?.[0]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="neo-field-grid">
-                    <div className="form-field">
-                      <label style={{ display: 'block', margin: '0 0 10px', color: '#5e4a52', fontSize: '9px', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                        Gender *
-                      </label>
-                      <div className="selection-card-grid three-cols" id="gender">
-                        {genderOptions.map((opt) => {
-                          const Icon = opt.icon;
-                          const isActive = form.gender === opt.value;
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              className={`selection-card ${isActive ? 'active' : ''}`}
-                              onClick={() => {
-                                update('gender', opt.value);
-                                validateField('gender', opt.value);
-                              }}
-                            >
-                              <div className="card-icon-wrapper">
-                                <Icon size={18} />
-                              </div>
-                              <span>{opt.label}</span>
-                              {isActive && (
-                                <span className="select-badge">
-                                  <Check />
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {(errors.gender || backendErrors.gender) && (
-                        <p id="gender-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.gender || backendErrors.gender?.[0]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="neo-field-grid">
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="birthDate"
-                          type="date"
-                          max={maxDateString}
-                          placeholder=" "
-                          value={form.birthDate}
-                          onChange={(e) => {
-                            update('birthDate', e.target.value);
-                            validateField('birthDate', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, birthDate: true }));
-                            validateField('birthDate', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.birthDate || backendErrors.birthDate)}
-                          aria-describedby={(errors.birthDate || backendErrors.birthDate) ? "birthDate-error" : undefined}
-                          className={(errors.birthDate || backendErrors.birthDate) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="birthDate">Date of birth *</label>
-                        <Calendar className="field-icon" size={16} />
-                      </div>
-                      {(errors.birthDate || backendErrors.birthDate) && (
-                        <p id="birthDate-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.birthDate || backendErrors.birthDate?.[0]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <button className="neo-primary-button" type="submit">Continue <ArrowRight /></button>
-                </form>
+                </motion.div>
               )}
+            </AnimatePresence>
 
-              {/* STEP 2: LIFE DETAILS */}
-              {step === 1 && (
-                <form onSubmit={next} noValidate>
-                  <span className="neo-icon-box"><MapPin /></span>
-                  <p className="neo-eyebrow dark">Step two</p>
-                  <h2>Add some life context.</h2>
-                  <p className="neo-form-lead">This context helps members learn more about your background.</p>
+            <div className="my-5 flex items-center gap-3 text-[12px] font-semibold text-soft-muted">
+              <span className="h-px flex-1 bg-line" /> or use your email
+              <span className="h-px flex-1 bg-line" />
+            </div>
 
-                  <div className="neo-field-grid two">
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="city"
-                          type="text"
-                          placeholder=" "
-                          value={form.city}
-                          onChange={(e) => {
-                            update('city', e.target.value);
-                            validateField('city', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, city: true }));
-                            validateField('city', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.city || backendErrors.city)}
-                          aria-describedby={(errors.city || backendErrors.city) ? "city-error" : undefined}
-                          className={(errors.city || backendErrors.city) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="city">Current city *</label>
-                        <MapPin className="field-icon" size={16} />
+            <AnimatePresence mode="wait">
+              <motion.form
+                key={step}
+                onSubmit={step === 2 ? finish : next}
+                noValidate
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -24 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="space-y-5"
+              >
+                {step === 0 && (
+                  <>
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                      <FloatingInput
+                        id="firstName"
+                        label="First name"
+                        icon={UserRound}
+                        value={form.firstName}
+                        onChange={(v) => {
+                          update('firstName', v);
+                          validateField('firstName', v);
+                        }}
+                        onBlur={() => {
+                          setTouched((t) => ({ ...t, firstName: true }));
+                          validateField('firstName', form.firstName);
+                        }}
+                        error={fieldError('firstName')}
+                        required
+                        autoComplete="given-name"
+                      />
+                      <FloatingInput
+                        id="lastName"
+                        label="Last name"
+                        icon={UserRound}
+                        value={form.lastName}
+                        onChange={(v) => {
+                          update('lastName', v);
+                          validateField('lastName', v);
+                        }}
+                        onBlur={() => {
+                          setTouched((t) => ({ ...t, lastName: true }));
+                          validateField('lastName', form.lastName);
+                        }}
+                        error={fieldError('lastName')}
+                        required
+                        autoComplete="family-name"
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>Profile created for *</FieldLabel>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                        {PROFILE_OPTIONS.map((o) => (
+                          <SelectionCard
+                            key={o.value}
+                            active={form.profileFor === o.value}
+                            icon={o.icon}
+                            label={o.label}
+                            onClick={() => {
+                              update('profileFor', o.value);
+                              validateField('profileFor', o.value);
+                            }}
+                          />
+                        ))}
                       </div>
-                      {(errors.city || backendErrors.city) && (
-                        <p id="city-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.city || backendErrors.city?.[0]}
+                      {fieldError('profileFor') && (
+                        <p role="alert" className="mt-2 px-1 text-[13px] font-medium text-error">
+                          {fieldError('profileFor')}
                         </p>
                       )}
                     </div>
 
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="religion"
-                          type="text"
-                          placeholder=" "
-                          value={form.religion}
-                          onChange={(e) => {
-                            update('religion', e.target.value);
-                            validateField('religion', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, religion: true }));
-                            validateField('religion', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.religion || backendErrors.religion)}
-                          aria-describedby={(errors.religion || backendErrors.religion) ? "religion-error" : undefined}
-                          className={(errors.religion || backendErrors.religion) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="religion">Religion *</label>
-                        <Sparkles className="field-icon" size={16} />
+                    <div>
+                      <FieldLabel>Gender *</FieldLabel>
+                      <div className="grid grid-cols-3 gap-3">
+                        {GENDER_OPTIONS.map((o) => (
+                          <SelectionCard
+                            key={o.value}
+                            active={form.gender === o.value}
+                            icon={o.icon}
+                            label={o.label}
+                            onClick={() => {
+                              update('gender', o.value);
+                              validateField('gender', o.value);
+                            }}
+                          />
+                        ))}
                       </div>
-                      {(errors.religion || backendErrors.religion) && (
-                        <p id="religion-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.religion || backendErrors.religion?.[0]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="neo-field-grid two">
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="language"
-                          type="text"
-                          placeholder=" "
-                          value={form.language}
-                          onChange={(e) => {
-                            update('language', e.target.value);
-                            validateField('language', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, language: true }));
-                            validateField('language', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.language || backendErrors.language)}
-                          aria-describedby={(errors.language || backendErrors.language) ? "language-error" : undefined}
-                          className={(errors.language || backendErrors.language) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="language">Mother tongue *</label>
-                        <MessageCircle className="field-icon" size={16} />
-                      </div>
-                      {(errors.language || backendErrors.language) && (
-                        <p id="language-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.language || backendErrors.language?.[0]}
+                      {fieldError('gender') && (
+                        <p role="alert" className="mt-2 px-1 text-[13px] font-medium text-error">
+                          {fieldError('gender')}
                         </p>
                       )}
                     </div>
 
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="education"
-                          type="text"
-                          placeholder=" "
-                          value={form.education}
-                          onChange={(e) => update('education', e.target.value)}
-                          aria-invalid={Boolean(errors.education || backendErrors.education)}
-                          aria-describedby={(errors.education || backendErrors.education) ? "education-error" : undefined}
-                          className={(errors.education || backendErrors.education) ? 'invalid' : ''}
-                        />
-                        <label htmlFor="education">Highest education</label>
-                        <GraduationCap className="field-icon" size={16} />
+                    <FloatingInput
+                      id="birthDate"
+                      label="Date of birth"
+                      icon={Calendar}
+                      type="date"
+                      max={maxDateString}
+                      value={form.birthDate}
+                      onChange={(v) => {
+                        update('birthDate', v);
+                        validateField('birthDate', v);
+                      }}
+                      onBlur={() => {
+                        setTouched((t) => ({ ...t, birthDate: true }));
+                        validateField('birthDate', form.birthDate);
+                      }}
+                      error={fieldError('birthDate')}
+                      required
+                    />
+                  </>
+                )}
+
+                {step === 1 && (
+                  <>
+                    <FloatingInput
+                      id="city"
+                      label="Current city"
+                      icon={MapPin}
+                      value={form.city}
+                      onChange={(v) => {
+                        update('city', v);
+                        validateField('city', v);
+                      }}
+                      onBlur={() => {
+                        setTouched((t) => ({ ...t, city: true }));
+                        validateField('city', form.city);
+                      }}
+                      error={fieldError('city')}
+                      required
+                    />
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                      <PremiumSelect
+                        id="religion"
+                        label="Religion"
+                        icon={Sparkles}
+                        value={form.religion}
+                        options={RELIGIONS}
+                        onChange={(v) => {
+                          update('religion', v);
+                          validateField('religion', v);
+                        }}
+                        error={fieldError('religion')}
+                        placeholder="Select religion"
+                      />
+                      <PremiumSelect
+                        id="language"
+                        label="Mother tongue"
+                        icon={Languages}
+                        value={form.language}
+                        options={LANGUAGES}
+                        onChange={(v) => {
+                          update('language', v);
+                          validateField('language', v);
+                        }}
+                        error={fieldError('language')}
+                        placeholder="Select language"
+                      />
+                    </div>
+                    <PremiumSelect
+                      id="education"
+                      label="Highest education"
+                      icon={GraduationCap}
+                      value={form.education}
+                      options={EDUCATION}
+                      onChange={(v) => update('education', v)}
+                      error={fieldError('education')}
+                      placeholder="Select education (optional)"
+                    />
+                  </>
+                )}
+
+                {step === 2 && (
+                  <>
+                    <FloatingInput
+                      id="email"
+                      label="Email address"
+                      icon={Mail}
+                      type="email"
+                      value={form.email}
+                      onChange={(v) => {
+                        update('email', v);
+                        validateField('email', v);
+                        if (touched.confirmPassword) validateField('confirmPassword', form.confirmPassword);
+                      }}
+                      onBlur={() => {
+                        setTouched((t) => ({ ...t, email: true }));
+                        validateField('email', form.email);
+                      }}
+                      error={fieldError('email')}
+                      required
+                      autoComplete="email"
+                    />
+
+                    {/* Phone with country selector */}
+                    <div className="w-full">
+                      <FieldLabel htmlFor="phone">Mobile number *</FieldLabel>
+                      <div className="relative flex">
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setCountryOpen((o) => !o)}
+                            aria-haspopup="listbox"
+                            aria-expanded={countryOpen}
+                            className="flex h-full items-center gap-1.5 rounded-l-2xl border border-r-0 border-line bg-cream-50/80 px-3.5 text-[15px] font-semibold text-ink outline-none transition-colors hover:border-rose-400"
+                          >
+                            {form.countryCode}
+                            <ChevronDown size={15} className="text-soft-muted" />
+                          </button>
+                          <AnimatePresence>
+                            {countryOpen && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="fixed inset-0 z-20 cursor-default"
+                                  aria-hidden="true"
+                                  onClick={() => setCountryOpen(false)}
+                                />
+                                <motion.ul
+                                  initial={{ opacity: 0, y: -6 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -6 }}
+                                  transition={{ duration: 0.18 }}
+                                  role="listbox"
+                                  className="absolute left-0 top-full z-30 mt-1 max-h-60 w-56 overflow-auto rounded-2xl border border-line bg-white p-1.5 shadow-brand-md"
+                                >
+                                  {COUNTRIES.map((c) => (
+                                    <li key={c.code}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          update('countryCode', c.dial);
+                                          setCountryOpen(false);
+                                        }}
+                                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[14px] transition-colors hover:bg-rose-500/5 ${
+                                          form.countryCode === c.dial ? 'font-bold text-rose-600' : 'text-ink'
+                                        }`}
+                                      >
+                                        <span>{c.label}</span>
+                                        <span className="text-soft-muted">{c.dial}</span>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </motion.ul>
+                              </>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                        <div className="relative flex-1">
+                          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-soft-muted">
+                            <Phone size={18} />
+                          </span>
+                          <input
+                            id="phone"
+                            type="tel"
+                            inputMode="numeric"
+                            value={form.phone}
+                            placeholder="Mobile number"
+                            onChange={(e) => {
+                              update('phone', e.target.value);
+                              validateField('phone', e.target.value);
+                            }}
+                            onBlur={() => {
+                              setTouched((t) => ({ ...t, phone: true }));
+                              validateField('phone', form.phone);
+                            }}
+                            aria-invalid={Boolean(fieldError('phone'))}
+                            aria-describedby={fieldError('phone') ? 'phone-error' : undefined}
+                            className={`w-full rounded-r-2xl border bg-cream-50/80 py-3.5 pl-11 pr-4 text-[15px] text-ink outline-none transition-all duration-200 ${FOCUS_RING} ${
+                              fieldError('phone') ? 'border-error/70 ring-4 ring-error/10' : 'border-line'
+                            }`}
+                          />
+                        </div>
                       </div>
-                      {(errors.education || backendErrors.education) && (
-                        <p id="education-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.education || backendErrors.education?.[0]}
+                      {fieldError('phone') && (
+                        <p id="phone-error" role="alert" className="mt-1.5 flex items-center gap-1.5 px-1 text-[13px] font-medium text-error">
+                          <span className="grid h-4 w-4 place-items-center rounded-full bg-error/10 text-[10px]">!</span>
+                          {fieldError('phone')}
                         </p>
                       )}
                     </div>
-                  </div>
 
-                  <div className="neo-form-actions">
-                    <button type="button" className="neo-secondary-button" onClick={() => setStep(0)}>
-                      <ArrowLeft /> Back
-                    </button>
-                    <button className="neo-primary-button" type="submit">
-                      Continue <ArrowRight />
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* STEP 3: SECURE ACCOUNT */}
-              {step === 2 && (
-                <form onSubmit={finish} noValidate>
-                  <span className="neo-icon-box"><LockKeyhole /></span>
-                  <p className="neo-eyebrow dark">Final step</p>
-                  <h2>Secure your member account.</h2>
-                  <p className="neo-form-lead">These credentials protect your profile. They cannot access administrative portals.</p>
-
-                  <div className="neo-field-grid">
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="email"
-                          type="email"
-                          autoComplete="email"
-                          placeholder=" "
-                          value={form.email}
-                          onChange={(e) => {
-                            update('email', e.target.value);
-                            validateField('email', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, email: true }));
-                            validateField('email', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.email || backendErrors.email)}
-                          aria-describedby={(errors.email || backendErrors.email) ? "email-error" : undefined}
-                          className={(errors.email || backendErrors.email) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="email">Email address *</label>
-                        <Mail className="field-icon" size={16} />
-                      </div>
-                      {(errors.email || backendErrors.email) && (
-                        <p id="email-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.email || backendErrors.email?.[0]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="neo-field-grid">
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="phone"
-                          type="tel"
-                          inputMode="numeric"
-                          placeholder=" "
-                          value={form.phone}
-                          onChange={(e) => {
-                            update('phone', e.target.value);
-                            validateField('phone', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, phone: true }));
-                            validateField('phone', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.phone || backendErrors.phone)}
-                          aria-describedby={(errors.phone || backendErrors.phone) ? "phone-error" : undefined}
-                          className={(errors.phone || backendErrors.phone) ? 'invalid' : ''}
-                          required
-                        />
-                        <label htmlFor="phone">Mobile number *</label>
-                        <Phone className="field-icon" size={16} />
-                      </div>
-                      {(errors.phone || backendErrors.phone) && (
-                        <p id="phone-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.phone || backendErrors.phone?.[0]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="neo-field-grid two">
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="password"
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          placeholder=" "
-                          value={form.password}
-                          onChange={(e) => {
-                            update('password', e.target.value);
-                            validateField('password', e.target.value);
-                            if (touched.confirmPassword) {
-                              validateField('confirmPassword', form.confirmPassword);
-                            }
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, password: true }));
-                            validateField('password', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.password || backendErrors.password)}
-                          aria-describedby={(errors.password || backendErrors.password) ? "password-error" : undefined}
-                          className={(errors.password || backendErrors.password) ? 'invalid' : ''}
-                          style={{ paddingRight: '44px' }}
-                          required
-                        />
-                        <label htmlFor="password">Password *</label>
-                        <LockKeyhole className="field-icon" size={16} />
+                    <FloatingInput
+                      id="password"
+                      label="Password"
+                      icon={Lock}
+                      type={showPassword ? 'text' : 'password'}
+                      value={form.password}
+                      onChange={(v) => {
+                        update('password', v);
+                        validateField('password', v);
+                        if (touched.confirmPassword) validateField('confirmPassword', form.confirmPassword);
+                      }}
+                      onBlur={() => {
+                        setTouched((t) => ({ ...t, password: true }));
+                        validateField('password', form.password);
+                      }}
+                      error={fieldError('password')}
+                      required
+                      autoComplete="new-password"
+                      rightSlot={
                         <button
                           type="button"
-                          onClick={() => setShowPassword(!showPassword)}
+                          onClick={() => setShowPassword((s) => !s)}
                           aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#a18e95' }}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-soft-muted transition-colors hover:text-rose-500"
                         >
                           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
-                      </div>
-                      {(errors.password || backendErrors.password) && (
-                        <p id="password-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.password || backendErrors.password?.[0]}
-                        </p>
-                      )}
-                    </div>
+                      }
+                    />
 
-                    <div className="form-field">
-                      <div className="floating-label-group">
-                        <input
-                          id="confirmPassword"
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          placeholder=" "
-                          value={form.confirmPassword}
-                          onChange={(e) => {
-                            update('confirmPassword', e.target.value);
-                            validateField('confirmPassword', e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            setTouched((t) => ({ ...t, confirmPassword: true }));
-                            validateField('confirmPassword', e.target.value);
-                          }}
-                          aria-invalid={Boolean(errors.confirmPassword || backendErrors.confirmPassword)}
-                          aria-describedby={(errors.confirmPassword || backendErrors.confirmPassword) ? "confirmPassword-error" : undefined}
-                          className={(errors.confirmPassword || backendErrors.confirmPassword) ? 'invalid' : ''}
-                          style={{ paddingRight: '44px' }}
-                          required
-                        />
-                        <label htmlFor="confirmPassword">Confirm password *</label>
-                        <LockKeyhole className="field-icon" size={16} />
+                    {/* Password strength */}
+                    <AnimatePresence>
+                      {form.password && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="rounded-2xl border border-line bg-cream-50/60 p-4">
+                            <div className="mb-2 flex items-center justify-between">
+                              <span className="text-[12px] font-bold text-plum-700">Password strength</span>
+                              <span className={`text-[12px] font-extrabold ${strengthText}`}>{strength}</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                              {[0, 1, 2, 3, 4].map((i) => (
+                                <span
+                                  key={i}
+                                  className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+                                    i < metCount ? strengthColor : 'bg-cream-200'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
+                              {[
+                                { ok: pwdReqs.length, label: '8+ characters' },
+                                { ok: pwdReqs.upper, label: 'Uppercase letter' },
+                                { ok: pwdReqs.lower, label: 'Lowercase letter' },
+                                { ok: pwdReqs.number, label: 'One number' },
+                                { ok: pwdReqs.special, label: 'One special character' },
+                              ].map((r) => (
+                                <li
+                                  key={r.label}
+                                  className={`flex items-center gap-1.5 ${r.ok ? 'text-emerald-600' : 'text-soft-muted'}`}
+                                >
+                                  <span
+                                    className={`grid h-4 w-4 place-items-center rounded-full ${
+                                      r.ok ? 'bg-emerald-500 text-white' : 'bg-cream-200'
+                                    }`}
+                                  >
+                                    {r.ok && <Check size={11} />}
+                                  </span>
+                                  {r.label}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <FloatingInput
+                      id="confirmPassword"
+                      label="Confirm password"
+                      icon={Lock}
+                      type={showConfirm ? 'text' : 'password'}
+                      value={form.confirmPassword}
+                      onChange={(v) => {
+                        update('confirmPassword', v);
+                        validateField('confirmPassword', v);
+                      }}
+                      onBlur={() => {
+                        setTouched((t) => ({ ...t, confirmPassword: true }));
+                        validateField('confirmPassword', form.confirmPassword);
+                      }}
+                      error={fieldError('confirmPassword')}
+                      required
+                      autoComplete="new-password"
+                      rightSlot={
                         <button
                           type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                          style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#a18e95' }}
+                          onClick={() => setShowConfirm((s) => !s)}
+                          aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-soft-muted transition-colors hover:text-rose-500"
                         >
-                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
-                      </div>
-                      {(errors.confirmPassword || backendErrors.confirmPassword) && (
-                        <p id="confirmPassword-error" className="field-error" role="alert">
-                          <AlertCircle size={14} className="inline-icon" /> {errors.confirmPassword || backendErrors.confirmPassword?.[0]}
+                      }
+                    />
+
+                    {/* Terms */}
+                    <div>
+                      <label
+                        htmlFor="acceptTerms"
+                        className="flex cursor-pointer items-start gap-3 text-[13.5px] leading-relaxed text-muted"
+                      >
+                        <input
+                          id="acceptTerms"
+                          type="checkbox"
+                          checked={form.acceptTerms}
+                          onChange={(e) => {
+                            update('acceptTerms', e.target.checked);
+                            validateField('acceptTerms', e.target.checked);
+                          }}
+                          className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded-md border-line text-rose-500 accent-rose-500"
+                        />
+                        <span>
+                          I accept the{' '}
+                          <Link to="/terms" className="font-bold text-rose-500 underline-offset-2 hover:underline">
+                            Terms of Service
+                          </Link>{' '}
+                          and{' '}
+                          <Link to="/privacy" className="font-bold text-rose-500 underline-offset-2 hover:underline">
+                            Privacy Policy
+                          </Link>
+                          .
+                        </span>
+                      </label>
+                      {fieldError('acceptTerms') && (
+                        <p role="alert" className="mt-1.5 px-1 text-[13px] font-medium text-error">
+                          {fieldError('acceptTerms')}
                         </p>
                       )}
                     </div>
+                  </>
+                )}
+
+                {/* General + summary error */}
+                {errors.general && (
+                  <p role="alert" className="rounded-xl border border-error/30 bg-error/5 px-4 py-2.5 text-[13px] font-medium text-error">
+                    {errors.general}
+                  </p>
+                )}
+                {Object.keys(backendErrors).length > 1 && (
+                  <div className="rounded-xl border border-error/30 bg-error/5 px-4 py-3 text-[13px] text-error">
+                    <p className="font-bold">Please correct the highlighted fields:</p>
+                    <ul className="ml-4 mt-1 list-disc">
+                      {Object.entries(backendErrors).map(([f, msgs]) => (
+                        <li key={f}>{msgs[0]}</li>
+                      ))}
+                    </ul>
                   </div>
+                )}
 
-                  {/* Live Password Checklist Redesign */}
-                  {form.password && (
-                    <div className="strength-meter-container">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#4b3d43' }}>Password Security</span>
-                        <span style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 800,
-                          color: pwdStrength === 'Strong' ? '#10b981' : pwdStrength === 'Medium' ? '#fbbf24' : '#f43f5e'
-                        }}>
-                          {pwdStrength}
-                        </span>
-                      </div>
-                      
-                      <div className="strength-progress-row">
-                        <div className={`strength-segment ${requirementsMet >= 1 ? (pwdStrength === 'Strong' ? 'active-strong' : pwdStrength === 'Medium' ? 'active-medium' : 'active-weak') : ''}`} />
-                        <div className={`strength-segment ${requirementsMet >= 3 ? (pwdStrength === 'Strong' ? 'active-strong' : pwdStrength === 'Medium' ? 'active-medium' : '') : ''}`} />
-                        <div className={`strength-segment ${requirementsMet === 5 ? 'active-strong' : ''}`} />
-                      </div>
-                      
-                      <ul className="checklist-list" style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.75rem', color: '#7a6870' }}>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.length ? '#10b981' : '#a18e95' }}>
-                          <Check size={12} /> 8+ Characters
-                        </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.upper ? '#10b981' : '#a18e95' }}>
-                          <Check size={12} /> Uppercase letter
-                        </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.lower ? '#10b981' : '#a18e95' }}>
-                          <Check size={12} /> Lowercase letter
-                        </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.number ? '#10b981' : '#a18e95' }}>
-                          <Check size={12} /> One number
-                        </li>
-                        <li style={{ display: 'flex', alignItems: 'center', gap: '6px', color: pwdRequirements.special ? '#10b981' : '#a18e95' }}>
-                          <Check size={12} /> Special char
-                        </li>
-                      </ul>
-                    </div>
+                {/* Actions */}
+                <div className={`flex gap-3 pt-1 ${step === 0 ? 'justify-end' : ''}`}>
+                  {step > 0 && (
+                    <button
+                      type="button"
+                      onClick={back}
+                      disabled={submitting}
+                      className="inline-flex h-12 items-center gap-2 rounded-full border border-line bg-white px-6 text-[14px] font-bold text-plum-700 transition-all duration-200 hover:border-rose-400 hover:bg-cream-50 active:scale-[0.98] disabled:opacity-50"
+                    >
+                      <ArrowLeft size={18} /> Back
+                    </button>
                   )}
-
-                  <div className="neo-field-grid" style={{ marginTop: '20px' }}>
-                    <div className="form-field checkbox-field" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                      <input
-                        id="acceptTerms"
-                        type="checkbox"
-                        checked={form.acceptTerms}
-                        onChange={(e) => {
-                          update('acceptTerms', e.target.checked);
-                          validateField('acceptTerms', e.target.checked);
-                        }}
-                        aria-invalid={Boolean(errors.acceptTerms || backendErrors.acceptTerms)}
-                        aria-describedby={(errors.acceptTerms || backendErrors.acceptTerms) ? "acceptTerms-error" : undefined}
-                        required
-                      />
-                      <label htmlFor="acceptTerms" style={{ fontSize: '0.875rem', cursor: 'pointer', userSelect: 'none' }}>
-                        I accept the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: '#2563eb' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: '#2563eb' }}>Privacy Policy</a> *
-                      </label>
-                    </div>
-                    {(errors.acceptTerms || backendErrors.acceptTerms) && (
-                      <p id="acceptTerms-error" className="field-error" role="alert" style={{ marginTop: '4px' }}>
-                        <AlertCircle size={14} className="inline-icon" /> {errors.acceptTerms || backendErrors.acceptTerms?.[0]}
-                      </p>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="group relative inline-flex h-12 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-rose-500 to-plum-800 px-8 text-[15px] font-bold text-white shadow-rose transition-all duration-200 hover:shadow-brand-lg active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {submitting ? (
+                      <>
+                        <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Creating account...
+                      </>
+                    ) : step === 2 ? (
+                      <>
+                        Create profile
+                        <ArrowRight size={18} className="transition-transform duration-200 group-hover:translate-x-1" />
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight size={18} className="transition-transform duration-200 group-hover:translate-x-1" />
+                      </>
                     )}
-                  </div>
+                    {!submitting && <Ripple />}
+                  </button>
+                </div>
+              </motion.form>
+            </AnimatePresence>
 
-                  {errors.general && (
-                    <p className="neo-error" role="alert" style={{ marginTop: '15px' }}>
-                      <AlertCircle size={16} className="inline-icon" /> {errors.general}
-                    </p>
-                  )}
+            {/* Already have account */}
+            <p className="mt-6 text-center text-[14px] text-muted">
+              Already have an account?{' '}
+              <Link to="/login" className="font-bold text-rose-500 underline-offset-2 hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </div>
 
-                  {/* Summary of backend errors if multiple exist */}
-                  {Object.keys(backendErrors).length > 1 && (
-                    <div className="error-summary-box" style={{ marginTop: '15px', padding: '12px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#991b1b', fontSize: '0.875rem' }}>
-                      <strong>Please correct the highlighted fields:</strong>
-                      <ul style={{ margin: '5px 0 0 15px', padding: 0 }}>
-                        {Object.entries(backendErrors).map(([field, msgs]) => (
-                          <li key={field}>{msgs[0]}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="neo-form-actions">
-                    <button type="button" className="neo-secondary-button" onClick={() => setStep(1)} disabled={submitting}>
-                      <ArrowLeft /> Back
-                    </button>
-                    <button className="neo-primary-button" type="submit" disabled={submitting}>
-                      {submitting ? (
-                        <>
-                          <span className="spinner-loader inline" /> Creating account...
-                        </>
-                      ) : (
-                        <>
-                          Create profile <ArrowRight />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-            </motion.div>
-          </AnimatePresence>
-        </div>
+          {/* Trust strip */}
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12px] font-semibold text-soft-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <BadgeCheck size={15} className="text-emerald-500" /> 100% Verified Profiles
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck size={15} className="text-rose-500" /> Private &amp; Secure
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Lock size={15} className="text-gold-600" /> Encrypted
+            </span>
+          </div>
+        </motion.div>
       </section>
     </main>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Decorative pieces                                                  */
+/* ------------------------------------------------------------------ */
+
+function FloatingBackground() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <motion.div
+        className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-rose-500/10 blur-3xl"
+        animate={{ y: [0, 24, 0], x: [0, 12, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute right-0 top-1/3 h-80 w-80 rounded-full bg-gold-400/10 blur-3xl"
+        animate={{ y: [0, -20, 0], x: [0, -16, 0] }}
+        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-plum-700/10 blur-3xl"
+        animate={{ y: [0, 18, 0] }}
+        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </div>
+  );
+}
+
+function CoupleIllustration() {
+  return (
+    <div className="relative mx-auto flex h-44 items-end justify-center">
+      {/* gradient stage */}
+      <div className="absolute inset-0 rounded-[36px] bg-gradient-to-tr from-rose-500/20 via-gold-300/10 to-white/0 blur-sm" />
+      <motion.div
+        className="absolute bottom-6 left-1/2 h-32 w-32 -translate-x-1/2 rounded-full bg-gradient-to-br from-gold-300 to-rose-400 opacity-30 blur-2xl"
+        animate={{ scale: [1, 1.12, 1] }}
+        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      {/* two figures */}
+      <motion.div
+        className="relative z-10 mr-2"
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <svg width="86" height="120" viewBox="0 0 86 120" fill="none">
+          <circle cx="43" cy="30" r="20" fill="#f3d9b8" />
+          <path d="M23 50c0-12 9-20 20-20s20 8 20 20v40c0 6-4 10-10 10H33c-6 0-10-4-10-10V50z" fill="#8e3d58" />
+          <path d="M23 60c6 8 14 12 20 12s14-4 20-12" stroke="#f8eed9" strokeWidth="3" fill="none" opacity="0.5" />
+        </svg>
+      </motion.div>
+      <motion.div
+        className="relative z-10 ml-2"
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }}
+      >
+        <svg width="86" height="120" viewBox="0 0 86 120" fill="none">
+          <circle cx="43" cy="30" r="20" fill="#e9c9a6" />
+          <path d="M23 50c0-12 9-20 20-20s20 8 20 20v40c0 6-4 10-10 10H33c-6 0-10-4-10-10V50z" fill="#c99b49" />
+          <path d="M23 60c6 8 14 12 20 12s14-4 20-12" stroke="#fffdf9" strokeWidth="3" fill="none" opacity="0.5" />
+        </svg>
+      </motion.div>
+      {/* connecting heart */}
+      <motion.div
+        className="absolute right-10 top-2 z-20 grid h-10 w-10 place-items-center rounded-full bg-white text-rose-500 shadow-gold"
+        animate={{ scale: [1, 1.15, 1] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <Heart size={20} fill="currentColor" />
+      </motion.div>
+    </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"
+      />
+    </svg>
+  );
+}
+
+function Ripple() {
+  return (
+    <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+      <motion.span
+        className="absolute left-1/2 top-1/2 h-0 w-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30"
+        initial={{ opacity: 0 }}
+        whileTap={{ opacity: [0.4, 0], scale: [0, 4] }}
+        style={{ width: 200, height: 200 }}
+      />
+    </span>
   );
 }

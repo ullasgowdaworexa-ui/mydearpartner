@@ -257,34 +257,13 @@ class AccountVerificationService:
         return 'Your documents are under review. We will notify you once the review is complete.'
     @staticmethod
     def is_account_verified(member: Member) -> bool:
-        """Check if account meets ALL verification requirements"""
-        # Check email and mobile verification
-        if not (member.is_email_verified and member.is_mobile_verified):
-            return False
-
-        # Check profile approval
-        if member.profile_status != AccountVerificationService.STATUS_APPROVED:
-            return False
-
-        # Check primary photo approval
-        from apps.profiles.models import ProfilePhoto
-        primary_photo_approved = ProfilePhoto.objects.filter(
-            user=member,
-            is_primary=True,
-            status=ProfilePhoto.Status.APPROVED,
-        ).exists()
-        if not primary_photo_approved:
-            return False
-
-        # Check document approval
-        if member.document_status != AccountVerificationService.STATUS_APPROVED:
-            return False
-
-        # Check account is active
+        """Check the lightweight "verified" requirement: both identity
+        contacts confirmed. This drives `is_verified`, `overall_status`, and
+        membership-unlock gating. The stricter all-steps state is
+        `are_verification_checks_passed` / `is_fully_verified`."""
         if member.account_status != Member.AccountStatus.ACTIVE or member.deleted_at is not None:
             return False
-
-        return True
+        return bool(member.is_email_verified and member.is_mobile_verified)
     @staticmethod
     @transaction.atomic
     def submit_profile_for_review(member: Member) -> bool:

@@ -42,6 +42,7 @@ from apps.accounts.models import (
 )
 from apps.accounts.serializers import MemberSerializer, administrative_account_payload
 from apps.accounts.services import permanently_delete_member
+from apps.accounts.verification_service import AccountVerificationService
 
 from .api_utils import audit, bad_request, create_ticket_attachment, notify, paginated_response
 from .models import (
@@ -1311,7 +1312,10 @@ class AdminUserActionView(ScopedAPIView):
             'document_status': member.document_status,
         }
         if action == 'approve_profile':
-            member.profile_status = Member.ProfileStatus.APPROVED
+            # Delegate to the verification service so the approval is applied
+            # consistently (profile_status, reviewed_at, and the linked
+            # ProfileVerificationRequest are all updated in one place).
+            AccountVerificationService.approve_profile(member, request.user, reason)
         elif action == 'verify':
             # An administrator's explicit verification must satisfy both
             # contact checks enforced by membership checkout.
@@ -1323,10 +1327,7 @@ class AdminUserActionView(ScopedAPIView):
         elif action == 'reject_profile':
             if not reason:
                 return bad_request('A rejection reason is required.')
-            member.profile_status = Member.ProfileStatus.REJECTED
-            if hasattr(member, 'profile'):
-                member.profile.rejection_reason = reason
-                member.profile.save(update_fields=('rejection_reason', 'updated_at'))
+            AccountVerificationService.reject_profile(member, request.user, reason)
         elif action == 'approve_photo':
             member.photo_status = Member.VerificationStatus.APPROVED
             from apps.profiles.models import ProfilePhoto

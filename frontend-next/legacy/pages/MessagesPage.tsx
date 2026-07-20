@@ -2,7 +2,7 @@
 
 import SmartImage from '@/components/shared/smart-image';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle, Send, Search, Check, CheckCheck, Lock, Crown
@@ -13,6 +13,7 @@ import { getConversations, getMessages, getProfile, sendMessage } from '../servi
 import { fetchApi } from '../services/apiClient';
 import { generateE2EKeyPair, deriveSharedKey, deriveFallbackKey, encryptMessage, decryptMessage } from '../utils/crypto';
 import { useChatSocket } from '../../hooks/use-chat-socket';
+import { usePresence } from '../../hooks/use-presence';
 
 export default function MessagesPage() {
   const { user } = useAuth();
@@ -34,6 +35,15 @@ export default function MessagesPage() {
   const [loadingChats, setLoadingChats] = useState(true);
   const [error, setError] = useState('');
   const [chatRestriction, setChatRestriction] = useState('');
+
+  // Live presence for the conversation partners currently on screen. The hook
+  // queries POST /api/v1/presence/bulk/ for these ids and patches from
+  // presence.changed WS events — no global online/offline broadcast.
+  const visiblePartnerIds = useMemo(
+    () => conversationsList.map((c) => c.id).concat(activeConversation?.id ? [activeConversation.id] : []),
+    [conversationsList, activeConversation],
+  );
+  const { isOnline } = usePresence(visiblePartnerIds);
 
   // ``is_premium`` is a display flag retained for older clients.  Messaging
   // must use the active membership entitlement so an expired or unapproved
@@ -395,7 +405,7 @@ export default function MessagesPage() {
                       alt={conv.profile.name}
                       className="w-12 h-12 rounded-full object-cover"
                     />
-                    {conv.online && (
+                    {isOnline(conv.id) && (
                       <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />
                     )}
                   </div>
@@ -436,14 +446,14 @@ export default function MessagesPage() {
                       alt={activeConversation.profile.name}
                       className="w-10 h-10 rounded-full object-cover"
                     />
-                    {activeConversation.online && (
+                    {isOnline(activeConversation.id) && (
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />
                     )}
                   </div>
                   <div>
                     <h4 className="font-semibold text-gray-900 text-sm">{activeConversation.profile.name}</h4>
                     <p className="text-xs text-green-500">
-                      {activeConversation.online ? 'Online' : 'Away'}
+                      {isOnline(activeConversation.id) ? 'Online' : 'Away'}
                     </p>
                   </div>
                 </div>

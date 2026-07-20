@@ -1,5 +1,39 @@
 @import "tailwindcss";
 @import "../legacy/index.css";
+
+@theme {
+  --color-plum-900: #160910;
+  --color-plum-800: #2b101d;
+  --color-plum-700: #3e1629;
+  --color-plum-600: #541e37;
+  --color-rose-600: #743047;
+  --color-rose-500: #8e3d58;
+  --color-rose-400: #ad627e;
+  --color-rose-300: #c98fa2;
+  --color-gold-600: #a9792e;
+  --color-gold-500: #c99b49;
+  --color-gold-400: #d9b36c;
+  --color-gold-300: #e8c892;
+  --color-gold-100: #f8eed9;
+  --color-cream-900: #2b1f1a;
+  --color-cream-200: #ede3d5;
+  --color-cream-100: #f7f1e8;
+  --color-cream-50: #fffdf9;
+  --color-ink: #24151c;
+  --color-muted: #77656d;
+  --color-soft-muted: #a29198;
+  --color-line: rgba(43, 16, 29, 0.12);
+  --color-surface: #fffdf9;
+  --color-surface-alt: #f7f1e8;
+  --color-app-bg: #f7f1e8;
+  --color-error: #c0392b;
+  --shadow-brand-sm: 0 4px 16px rgba(43, 16, 29, 0.08);
+  --shadow-brand-md: 0 14px 40px rgba(43, 16, 29, 0.12);
+  --shadow-brand-lg: 0 30px 80px rgba(43, 16, 29, 0.18);
+  --shadow-rose: 0 14px 36px rgba(142, 61, 88, 0.28);
+  --shadow-gold: 0 14px 36px rgba(217, 179, 108, 0.35);
+  --font-display: "Manrope", system-ui, sans-serif;
+}
 @import "../legacy/components/Footer.css";
 @import "../legacy/components/home/HeroSection.css";
 @import "../legacy/pages/HomePage.css";

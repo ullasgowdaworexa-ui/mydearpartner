@@ -204,6 +204,12 @@ class BaseAccount(AbstractBaseUser):
     token_version = models.PositiveIntegerField(default=0)
     password_changed_at = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(null=True, blank=True)
+    last_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Durable last-seen timestamp. Updated only on disconnect or at controlled intervals, never on every heartbeat.",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)

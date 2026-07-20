@@ -30,7 +30,7 @@ MemberPhotoSerializer = ProfilePhotoSerializer
 
 class MemberSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name', read_only=True)
-    is_verified = serializers.BooleanField(read_only=True)
+    is_verified = serializers.SerializerMethodField()
     is_fully_verified = serializers.SerializerMethodField()
     account_type = serializers.CharField(read_only=True)
     admin_role = serializers.SerializerMethodField()
@@ -64,6 +64,13 @@ class MemberSerializer(serializers.ModelSerializer):
 
     def get_admin_permissions(self, obj):
         return []
+
+    def get_is_verified(self, obj):
+        # "Verified" means the member's identity contacts are confirmed: both
+        # email and mobile must be verified. This is the lightweight check used
+        # for badges and membership-unlock gating. The stricter, all-steps
+        # state lives in `is_fully_verified` / `are_verification_checks_passed`.
+        return bool(obj.is_email_verified and obj.is_mobile_verified)
 
     def get_is_fully_verified(self, obj):
         return obj.are_verification_checks_passed

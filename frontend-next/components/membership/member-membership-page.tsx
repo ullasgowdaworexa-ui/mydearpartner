@@ -32,7 +32,13 @@ export default function MemberMembershipPage() {
   const { data: summary, refetch: refetchSummary } = useGetMembershipSummaryQuery();
   const [createOrder, { isLoading: isActivating }] = useCreateMembershipOrderMutation();
   const [verifyPayment] = useVerifyMembershipPaymentMutation();
-  const { data: verification } = useGetVerificationStatusQuery();
+  const { data: verification, refetch: refetchVerification } = useGetVerificationStatusQuery();
+
+  // Verification status can change out-of-band (e.g. an admin approves a
+  // document). Pull the latest snapshot whenever this page is shown.
+  useEffect(() => {
+    refetchVerification();
+  }, [refetchVerification]);
   
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<'select' | 'processing' | 'success' | 'error'>('select');

@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.conf import settings
 
-from .models import MemberDocument, AccountType
+from .models import Member, MemberDocument, AccountType
 from .permissions import HasAdminPermission, IsAdministrativeUser, IsSuperAdmin
 from .serializers import AdminDocumentSerializer
 from apps.core.responses import ApiResponse
@@ -186,6 +186,24 @@ class AdminDocumentApproveView(APIView):
                 doc.admin_comment = admin_comment
             doc.save()
 
+            # Keep the member-level document status in sync. Other document
+            # approval paths (verification queue, core admin actions) set
+            # member.document_status, but this admin-panel path previously
+            # did not, leaving the member's verification centre stuck on
+            # "draft" even after the document was approved.
+            member = doc.member
+            member.document_status = Member.VerificationStatus.APPROVED
+            member.document_reviewed_at = timezone.now()
+            member.document_rejection_reason = ''
+            member.save(
+                update_fields=[
+                    'document_status',
+                    'document_reviewed_at',
+                    'document_rejection_reason',
+                    'updated_at',
+                ]
+            )
+
             _log_audit(request, request.user, 'DOCUMENT_APPROVED', doc, old_status='PENDING', new_status=doc.status)
 
             _notify_member(
@@ -239,6 +257,21 @@ class AdminDocumentRejectView(APIView):
             if admin_comment:
                 doc.admin_comment = admin_comment
             doc.save()
+
+            # Keep the member-level document status in sync (mirrors the
+            # verification-queue reject path).
+            member = doc.member
+            member.document_status = Member.VerificationStatus.REJECTED
+            member.document_reviewed_at = timezone.now()
+            member.document_rejection_reason = reason
+            member.save(
+                update_fields=[
+                    'document_status',
+                    'document_reviewed_at',
+                    'document_rejection_reason',
+                    'updated_at',
+                ]
+            )
 
             _log_audit(request, request.user, 'DOCUMENT_REJECTED', doc, old_status='PENDING', new_status=doc.status, reason=reason)
 

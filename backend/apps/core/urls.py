@@ -94,8 +94,7 @@ from .role_views import (
     SuperAdminMembershipPlanActivateView,
     SuperAdminMembershipPlanDeactivateView,
 )
-from .old_views import VerificationDocumentDownloadView
-
+from apps.accounts.presence_views import PresenceBulkView
 from apps.accounts.document_admin_views import (
     AdminDocumentListView,
     AdminDocumentDetailView,
@@ -147,6 +146,9 @@ urlpatterns = [
     path('health/', HealthCheckView.as_view(), name='health_check'),
     path('health/database/', DatabaseHealthCheckView.as_view(), name='database_health_check'),
 
+    # Targeted presence lookup (no global broadcast).
+    path('presence/bulk/', PresenceBulkView.as_view(), name='presence_bulk'),
+
     # Public membership plans endpoint
     path('membership-plans/', PublicMembershipPlanListView.as_view(), name='public_membership_plans'),
     
@@ -185,7 +187,6 @@ urlpatterns = [
 
     path('support/tickets/', MemberSupportTicketListView.as_view(), name='member_support_tickets'),
     path('support/tickets/<uuid:pk>/', MemberSupportTicketDetailView.as_view(), name='member_support_ticket_detail'),
-    path('verification/documents/<uuid:document_id>/download/', VerificationDocumentDownloadView.as_view(), name='verification_document_download'),
     path('support/attachments/<uuid:attachment_id>/download/', SupportAttachmentDownloadView.as_view(), name='support_attachment_download'),
     path('notifications/', MemberNotificationListView.as_view(), name='member_notifications'),
     path('notifications/unread-count/', MemberNotificationUnreadCountView.as_view(), name='member_notifications_unread_count'),

@@ -175,7 +175,7 @@ export const photoApi = baseApi.injectEndpoints({
         body: createProfilePhotoFormData(photo),
       }),
       transformResponse: normalizePhotoResponse,
-      invalidatesTags: ['MemberPhotos', 'UserProfile'],
+      invalidatesTags: ['MemberPhotos', 'UserProfile', 'VerificationStatus'],
     }),
 
     replacePhoto: builder.mutation<MemberPhoto, ReplaceProfilePhotoInput>({
@@ -185,7 +185,7 @@ export const photoApi = baseApi.injectEndpoints({
         body: createProfilePhotoFormData(photo),
       }),
       transformResponse: normalizePhotoResponse,
-      invalidatesTags: ['MemberPhotos', 'UserProfile'],
+      invalidatesTags: ['MemberPhotos', 'UserProfile', 'VerificationStatus'],
     }),
 
     deletePhoto: builder.mutation<void, string>({
@@ -193,7 +193,7 @@ export const photoApi = baseApi.injectEndpoints({
         url: `/profile-photos/${encodeURIComponent(photoId)}/`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['MemberPhotos', 'UserProfile'],
+      invalidatesTags: ['MemberPhotos', 'UserProfile', 'VerificationStatus'],
     }),
 
     setPrimaryPhoto: builder.mutation<void, string>({
@@ -201,7 +201,7 @@ export const photoApi = baseApi.injectEndpoints({
         url: `/profile-photos/${encodeURIComponent(photoId)}/set-primary/`,
         method: 'POST',
       }),
-      invalidatesTags: ['MemberPhotos', 'UserProfile'],
+      invalidatesTags: ['MemberPhotos', 'UserProfile', 'VerificationStatus'],
     }),
 
     reorderPhotos: builder.mutation<void, string[]>({

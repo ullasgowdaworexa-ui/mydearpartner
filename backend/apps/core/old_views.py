@@ -748,68 +748,6 @@ class SupportAttachmentDownloadView(APIView):
         return response
 
 
-class VerificationDocumentDownloadView(APIView):
-    permission_classes = (permissions.IsAuthenticated,)
-
-    def get(self, request, document_id):
-        document = get_object_or_404(MemberDocument, pk=document_id)
-        account_type = str(request.user.account_type)
-        allowed = account_type == AccountType.MEMBER and document.member_id == request.user.pk
-        if account_type == AccountType.SUPER_ADMIN:
-            allowed = True
-        elif account_type == AccountType.ADMIN:
-            allowed = request.user.has_admin_permission('verification.view_all')
-        elif account_type == AccountType.STAFF:
-            allowed = (
-                request.user.has_admin_permission('verification.view_assigned')
-                and ProfileVerificationAssignment.objects.filter(
-                    assigned_to_staff=request.user,
-                    is_current=True,
-                    verification_request__member_id=document.member_id,
-                    verification_request__verification_documents__member_document=document,
-                ).exists()
-            )
-        if not allowed:
-            return ApiResponse(
-                success=False,
-                message='Verification document access denied.',
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if account_type != AccountType.MEMBER:
-            audit(
-                request,
-                request.user,
-                action='VERIFICATION_DOCUMENT_VIEWED',
-                module='verification',
-                target_type='MEMBER_DOCUMENT',
-                target_id=document.pk,
-                new_data={'member_id': str(document.member_id)},
-            )
-        if not document.file_data:
-            return ApiResponse(
-                success=False,
-                message='Document file not found.',
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        try:
-            raw_bytes = document.raw_file_bytes
-            if raw_bytes is None:
-                raise ValueError('Decompression failed')
-        except Exception:
-            return ApiResponse(
-                success=False,
-                message='Error reading document file.',
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        response = HttpResponse(raw_bytes, content_type=document.mime_type or 'application/octet-stream')
-        safe_filename = document.original_file_name.replace('"', '').replace('\\', '').replace('/', '')
-        response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
-        response['Content-Length'] = document.file_size
-        response['X-Content-Type-Options'] = 'nosniff'
-        response['Cache-Control'] = 'private, no-store'
-        return response
-
-
 class MemberNotificationListView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsMember)
 

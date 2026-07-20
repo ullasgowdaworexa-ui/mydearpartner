@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Upload, FileText, Trash2, RefreshCw, Download, AlertCircle, CheckCircle, Clock, XCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, RefreshCw, Download, AlertCircle, CheckCircle, Clock, XCircle, Loader2 } from 'lucide-react';
 import { fetchApi, ApiError } from '../services/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -64,7 +64,6 @@ export default function MemberDocumentsPage() {
   const [customName, setCustomName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [viewDoc, setViewDoc] = useState<{ id: string; type: string } | null>(null);
 
   const loadDocs = useCallback(async () => {
@@ -104,16 +103,6 @@ export default function MemberDocumentsPage() {
       setUploadError(err instanceof ApiError ? err.message : 'Upload failed.');
     } finally {
       setUploading(false);
-    }
-  };
-
-  const handleDelete = async (docId: string) => {
-    try {
-      await fetchApi(`/member-auth/me/documents/${docId}/`, { method: 'DELETE' });
-      setDeleteConfirm(null);
-      setDocuments((prev) => prev.filter((d) => d.id !== docId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed.');
     }
   };
 
@@ -333,61 +322,10 @@ export default function MemberDocumentsPage() {
                       Re-upload
                     </button>
                   )}
-                  {deleteConfirm === doc.id ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleDelete(doc.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                        title="Confirm delete"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm(null)}
-                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                        title="Cancel"
-                      >
-                        <XCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setDeleteConfirm(doc.id)}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete document"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-2">Delete this document permanently?</h3>
-            <p className="text-gray-600 mb-6">This action cannot be undone.</p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Delete Permanently
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

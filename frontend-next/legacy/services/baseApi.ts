@@ -61,6 +61,13 @@ const customBaseQuery: BaseQueryFn<
 export const baseApi = createApi({
   reducerPath: 'baseApi',
   baseQuery: customBaseQuery,
+  // Verification status can change out-of-band (e.g. an admin approves a
+  // document while the member keeps the app open), so always re-fetch the
+  // latest data when a cached query is (re)mounted or the tab regains focus
+  // rather than serving a stale snapshot that hides an approval.
+  refetchOnMountOrArgChange: true,
+  refetchOnFocus: true,
+  refetchOnReconnect: true,
   tagTypes: [
     'StaffDashboard',
     'CSDashboard',

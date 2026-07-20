@@ -32,6 +32,13 @@ export default function VerificationCenterPage() {
   const { data: verification, isLoading, error, refetch } = useGetVerificationStatusQuery();
   const [steps, setSteps] = useState<VerificationStep[]>([]);
 
+  // Verification status can change out-of-band (e.g. an admin approves a
+  // document while the member keeps the app open). Refetch on mount so the
+  // step list always reflects the latest server state.
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
   useEffect(() => {
     if (verification) {
       setSteps([
@@ -157,8 +164,10 @@ export default function VerificationCenterPage() {
     );
   }
 
-  const allApproved = steps.every((s) => s.status === 'approved');
   const anyRejected = steps.some((s) => s.status === 'rejected');
+  // The account is "verified" once the lightweight requirement is met
+  // (email + mobile confirmed). This drives the overall verified banner.
+  const isVerified = Boolean(verification?.is_verified);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white py-12 px-4">
@@ -179,7 +188,7 @@ export default function VerificationCenterPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className={`mb-8 p-6 rounded-lg border-2 ${
-            allApproved
+            isVerified
               ? 'bg-green-50 border-green-200'
               : anyRejected
               ? 'bg-red-50 border-red-200'
@@ -190,7 +199,7 @@ export default function VerificationCenterPage() {
         >
           <div className="flex items-start gap-4">
             <div className="mt-1">
-              {allApproved ? (
+              {isVerified ? (
                 <Check className="w-6 h-6 text-green-600" />
               ) : anyRejected ? (
                 <AlertCircle className="w-6 h-6 text-red-600" />
@@ -202,7 +211,7 @@ export default function VerificationCenterPage() {
             </div>
             <div className="flex-1">
               <h2 className="font-bold text-lg mb-1">
-                {allApproved
+                {isVerified
                   ? 'Your account is fully verified!'
                   : anyRejected
                   ? 'Some items need resubmission'

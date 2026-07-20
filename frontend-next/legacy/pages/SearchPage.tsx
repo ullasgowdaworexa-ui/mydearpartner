@@ -1,7 +1,7 @@
 'use client';
 
 import SmartImage from '@/components/shared/smart-image';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams } from '@/lib/router-compat';
 import {
@@ -10,6 +10,7 @@ import {
 import type { Profile } from '../types/domain';
 import { getProfiles, sendInterest } from '../services/dataService';
 import { useAuth } from '../contexts/AuthContext';
+import { usePresence } from '../../hooks/use-presence';
 import { useMembership } from '@/components/member/membership-provider';
 import UpgradeModal from '@/components/member/upgrade-modal';
 
@@ -28,6 +29,15 @@ export default function SearchPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const PAGE_SIZE = 12;
+
+  // Live presence for the profiles currently visible in search results. We only
+  // query the ids on screen via POST /api/v1/presence/bulk/ and patch from
+  // presence.changed WS events — no global online/offline firehose.
+  const visibleProfileIds = useMemo(
+    () => profilesList.map((p) => p.id),
+    [profilesList],
+  );
+  const { isOnline } = usePresence(visibleProfileIds);
 
   // Filter States
   const [keyword, setKeyword] = useState('');
@@ -351,6 +361,9 @@ export default function SearchPage() {
                             Photo pending approval
                           </div>
                         ) : null}
+                        {isOnline(profile.id) && (
+                          <div className="absolute bottom-3 right-3 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white shadow-sm" title="Online now" />
+                        )}
                         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-xl shadow text-xs font-black text-rose-500 flex items-center gap-1">
                           <Star className="w-3.5 h-3.5 fill-rose-500 stroke-none" /> {profile.compatibility}%
                         </div>
