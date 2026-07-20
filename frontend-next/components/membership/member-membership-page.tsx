@@ -389,15 +389,17 @@ export default function MemberMembershipPage() {
                       </button>
                     ) : isUpgradable ? (
                       <button
-                        onClick={() => handleUpgrade(plan.slug)}
-                        disabled={isUpgrading}
-                        className="w-full py-3 px-4 rounded-lg font-bold bg-gradient-to-r from-rose-500 to-pink-500 text-white hover:from-rose-600 hover:to-pink-600 shadow-lg transition-all disabled:opacity-50"
+                        onClick={() => handleSelectPlan(plan)}
+                        disabled={isActivating || (plan.slug !== 'free' && verification?.is_verified === false)}
+                        className="w-full py-3 px-4 rounded-lg font-bold bg-gradient-to-r from-rose-500 to-pink-500 text-white hover:from-rose-600 hover:to-pink-600 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {isUpgrading ? (
+                        {isActivating ? (
                           <span className="flex items-center justify-center gap-2">
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Upgrading...
+                            Activating...
                           </span>
+                        ) : verification?.is_verified === false ? (
+                          'Complete verification to upgrade'
                         ) : (
                           <span className="flex items-center justify-center gap-2">
                             <ArrowUpCircle className="w-4 h-4" />

@@ -139,6 +139,71 @@ def test_unverified_member_order_forbidden(mock_urlopen, authenticated_client, m
 
 
 @RAZORPAY_PATCH
+def test_cannot_purchase_lower_or_equal_rank_plan(authenticated_client, verified_member, plan):
+    from django.utils import timezone
+    from datetime import timedelta
+    from apps.core.models import MemberMembership
+    
+    # Give the member an active gold membership
+    MemberMembership.objects.create(
+        member=verified_member,
+        plan=plan,
+        status=MemberMembership.MembershipStatus.ACTIVE,
+        is_active=True,
+        start_date=timezone.now(),
+        end_date=timezone.now() + timedelta(days=30),
+        expires_at=timezone.now() + timedelta(days=30),
+    )
+    
+    # Attempting to buy Gold again (equal rank) should fail
+    response = authenticated_client(verified_member).post(
+        '/api/v1/payments/orders/',
+        {'membership_plan_id': str(plan.pk)},
+        format='json'
+    )
+    assert response.status_code == 400
+    assert response.json()['code'] == 'INVALID_UPGRADE_OR_DOWNGRADE'
+    
+    # Attempting to buy a lower rank plan (e.g. Free or dummy with lower rank) should fail
+    lower_plan = MembershipPlan.objects.create(
+        slug='silver_dummy',
+        name='Silver Dummy',
+        price=Decimal('199.00'),
+        currency='INR',
+        duration_days=30,
+        is_active=True,
+        rank=1,  # Lower than gold (2)
+    )
+    response_lower = authenticated_client(verified_member).post(
+        '/api/v1/payments/orders/',
+        {'membership_plan_id': str(lower_plan.pk)},
+        format='json'
+    )
+    assert response_lower.status_code == 400
+    assert response_lower.json()['code'] == 'INVALID_UPGRADE_OR_DOWNGRADE'
+    
+    # Attempting to buy a higher rank plan (e.g. Elite) should succeed
+    elite_plan = MembershipPlan.objects.create(
+        slug='elite_dummy',
+        name='Elite Dummy',
+        price=Decimal('9999.00'),
+        currency='INR',
+        duration_days=30,
+        is_active=True,
+        rank=4,  # Higher than gold (2)
+    )
+    with patch.object(rz_module, 'urlopen') as mock_urlopen:
+        mock_urlopen.return_value = _order_ctx()
+        response_higher = authenticated_client(verified_member).post(
+            '/api/v1/payments/orders/',
+            {'membership_plan_id': str(elite_plan.pk)},
+            format='json'
+        )
+        assert response_higher.status_code == 201
+        
+
+
+@RAZORPAY_PATCH
 @patch.object(rz_module, 'urlopen')
 def test_verify_payment_details_activates_membership(mock_urlopen, authenticated_client, verified_member, plan):
     mock_urlopen.return_value = _order_ctx()
@@ -168,6 +233,13 @@ def test_verify_payment_details_activates_membership(mock_urlopen, authenticated
     purchase = MembershipPurchase.objects.get(user=verified_member, status='active')
     assert purchase.membership_plan == plan
     assert purchase.price_snapshot == plan.price
+
+    # Verify MemberMembership is also successfully stored
+    membership = MemberMembership.objects.get(member=verified_member, is_active=True)
+    assert membership.plan == plan
+    assert membership.status == MemberMembership.MembershipStatus.ACTIVE
+    assert membership.razorpay_order_id == order.razorpay_order_id
+    assert membership.razorpay_payment_id == payment_id
 
     verified_member.refresh_from_db()
     assert verified_member.is_premium is True

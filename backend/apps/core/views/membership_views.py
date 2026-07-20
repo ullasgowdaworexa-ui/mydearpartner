@@ -316,6 +316,20 @@ class PaymentOrderCreateView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Prevent downgrades or buying the same active plan
+        from apps.core.services.membership_lifecycle_service import MembershipLifecycleService
+        current_slug = MembershipLifecycleService.get_current_plan_slug(request.user)
+        if current_slug and current_slug != 'free':
+            current_rank = MembershipLifecycleService.get_plan_rank(current_slug)
+            target_rank = plan.rank if plan.rank and plan.rank != 99 else MembershipLifecycleService.get_plan_rank(plan.slug)
+            if target_rank <= current_rank:
+                return ApiErrorResponse(
+                    code='INVALID_UPGRADE_OR_DOWNGRADE',
+                    message='You already have an active plan. You can only purchase a higher-tier plan.',
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        
         if plan.price <= 0:
             return ApiErrorResponse(
                 code='PAID_PLAN_REQUIRED',
